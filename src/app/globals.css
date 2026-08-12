@@ -1,0 +1,41 @@
+@import "tailwindcss";
+
+:root {
+  --bg: #0b1229;
+  --surf: #121a38;
+  --surf2: #1a2447;
+  --bdr: #2a3559;
+  --amber: #f2a93b;
+  --amber-dim: #8a6522;
+  --cyan: #5eead4;
+  --white: #f4f6fb;
+  --muted: #8b93b0;
+  --green: #4ade80;
+  --red: #fb7185;
+}
+
+@theme inline {
+  --color-bg: var(--bg);
+  --color-surf: var(--surf);
+  --color-surf2: var(--surf2);
+  --color-bdr: var(--bdr);
+  --color-amber: var(--amber);
+  --color-amber-dim: var(--amber-dim);
+  --color-cyan: var(--cyan);
+  --color-white: var(--white);
+  --color-muted: var(--muted);
+  --color-green: var(--green);
+  --color-red: var(--red);
+  --font-sans: var(--font-space-grotesk);
+  --font-mono: var(--font-jetbrains-mono);
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  background: var(--bg);
+  color: var(--white);
+  min-height: 100vh;
+}
