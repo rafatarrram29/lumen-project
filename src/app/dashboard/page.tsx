@@ -13,15 +13,5 @@ export default async function DashboardPage() {
     redirect("/login");
   }
 
-  const { data: datasets } = await supabase
-    .from("datasets")
-    .select("id, name, row_count, created_at")
-    .order("created_at", { ascending: false });
-
-  return (
-    <DashboardClient
-      userEmail={user.email ?? ""}
-      initialDatasets={datasets ?? []}
-    />
-  );
+  return <DashboardClient userEmail={user.email ?? ""} />;
 }

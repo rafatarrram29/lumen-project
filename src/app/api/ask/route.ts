@@ -2,8 +2,10 @@ import { NextResponse } from "next/server";
 import Anthropic from "@anthropic-ai/sdk";
 import { createClient } from "@/lib/supabase/server";
 import { summarizeDataset } from "@/lib/dataStats";
+import { CATEGORIES, isCategoryId } from "@/lib/categories";
 
 const MODEL = process.env.ANTHROPIC_MODEL || "claude-sonnet-5";
+const MAX_ROWS_FOR_STATS = 3000;
 
 export async function POST(request: Request) {
   const supabase = await createClient();
@@ -25,37 +27,43 @@ export async function POST(request: Request) {
 
   const body = await request.json().catch(() => null);
   const question = typeof body?.question === "string" ? body.question.trim() : "";
-  const datasetId = typeof body?.datasetId === "string" ? body.datasetId : "";
+  const categoryRaw = typeof body?.category === "string" ? body.category : "";
   const history = Array.isArray(body?.history) ? body.history : [];
 
-  if (!question || !datasetId) {
-    return NextResponse.json({ error: "Missing question or datasetId" }, { status: 400 });
+  if (!question || !isCategoryId(categoryRaw)) {
+    return NextResponse.json({ error: "Missing question or category" }, { status: 400 });
   }
 
-  const { data: dataset, error: fetchError } = await supabase
-    .from("datasets")
-    .select("id, name, columns, rows, row_count")
-    .eq("id", datasetId)
-    .single();
+  const def = CATEGORIES[categoryRaw];
+  const fieldKeys = def.fields.map((f) => f.key);
 
-  if (fetchError || !dataset) {
-    return NextResponse.json({ error: "Dataset not found" }, { status: 404 });
+  const { data: rows, error: fetchError } = await supabase
+    .from(def.table)
+    .select(fieldKeys.join(","))
+    .order("updated_at", { ascending: false })
+    .limit(MAX_ROWS_FOR_STATS);
+
+  if (fetchError) {
+    return NextResponse.json({ error: fetchError.message }, { status: 500 });
   }
 
-  const summary = summarizeDataset(
-    dataset.columns as string[],
-    dataset.rows as Record<string, unknown>[],
-  );
+  if (!rows || rows.length === 0) {
+    return NextResponse.json({
+      answer: `There's no ${def.label} data yet -- upload a file for this category first.`,
+    });
+  }
 
-  const systemPrompt = `You are Lumen, an AI data analyst helping a sales manager understand their spreadsheet. \
-You are given the dataset's schema, per-column statistics, and a sample of rows (not the full dataset). \
+  const summary = summarizeDataset(fieldKeys, rows as unknown as Record<string, unknown>[]);
+
+  const systemPrompt = `You are the New Vision data assistant, helping a sales manager understand their ${def.label} data. \
+You are given the dataset's schema, per-field statistics, and a sample of rows (not the full dataset). \
 Answer the user's question in plain, concise natural language. Use numbers from the statistics when possible. \
 If the sample rows aren't enough to answer precisely, say so and give your best estimate from the aggregate stats. \
 Never invent data that isn't present. Keep answers focused and skimmable (short paragraphs or bullet points).
 
-Dataset name: ${dataset.name}
+Category: ${def.label}
 Total rows: ${summary.rowCount}
-Columns and stats: ${JSON.stringify(summary.columns)}
+Fields and stats: ${JSON.stringify(summary.columns)}
 Sample rows (first ${summary.sampleRows.length}): ${JSON.stringify(summary.sampleRows)}`;
 
   const messages: Anthropic.MessageParam[] = [
@@ -83,7 +91,7 @@ Sample rows (first ${summary.sampleRows.length}): ${JSON.stringify(summary.sampl
 
     await supabase.from("queries").insert({
       user_id: user.id,
-      dataset_id: dataset.id,
+      category: categoryRaw,
       question,
       answer,
     });
