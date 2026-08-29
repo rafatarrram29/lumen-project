@@ -65,6 +65,19 @@ sign in, upload a `.csv` file, and start asking questions.
    **Site URL** to your Vercel URL so email confirmation links redirect
    correctly.
 
+## Lumen Territory Decision Engine (`/lumen`)
+
+A separate, self-contained page — does not touch the dataset/query flow above.
+Upload a monthly sales export (`.xls`/`.xlsx`) and see per-area cards with the
+5 territory decision rules (trend, systemic check, root cause by product
+family, transfer opportunities, and a concrete decision per finding).
+
+Before using it, run `supabase/lumen_schema.sql` once in the Supabase SQL
+Editor — it only adds the new `lumen_sales_records` table and does not
+change `datasets` / `queries` or their policies. No new environment
+variables are needed; it reuses the same Supabase project and requires the
+same sign-in as the rest of the app.
+
 ## Notes on current scope (v1)
 
 - Only `.csv` uploads are supported for now. Excel (`.xlsx`) support can be
