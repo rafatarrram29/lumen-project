@@ -1,6 +1,7 @@
 "use client";
 
 import { useRef, useState } from "react";
+import Link from "next/link";
 import Papa from "papaparse";
 import { createClient } from "@/lib/supabase/client";
 
@@ -128,6 +129,13 @@ export default function DashboardClient({
           </div>
           <div className="font-semibold">Lumen</div>
         </div>
+
+        <Link
+          href="/lumen"
+          className="mb-4 block rounded-lg border border-bdr bg-surf2 px-3 py-2.5 text-center text-sm font-medium text-amber transition-colors hover:border-amber"
+        >
+          → Territory Decision Engine
+        </Link>
 
         <input
           ref={fileInputRef}
