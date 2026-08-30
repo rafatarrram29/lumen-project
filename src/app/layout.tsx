@@ -15,8 +15,8 @@ const jetbrainsMono = JetBrains_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Lumen — Ask Your Data",
-  description: "Sales insight, no analyst required.",
+  title: "Lumen — Territory Decision Engine",
+  description: "Upload your monthly sales export, get territory-level decisions.",
 };
 
 export default function RootLayout({ children }: LayoutProps<"/">) {

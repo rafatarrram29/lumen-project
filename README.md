@@ -1,10 +1,11 @@
-# Lumen
+# Lumen — Territory Decision Engine
 
-AI-powered sales data analysis for SMB sales managers. Upload a spreadsheet,
-ask questions in plain English, get answers from Claude.
+Upload a monthly sales export and get territory-level decisions, not just
+numbers: which areas really moved, whether a drop is one area's problem or
+a cluster-wide pattern, which product family is driving it, and a concrete
+action for each finding.
 
-Stack: Next.js (App Router) on Vercel, Supabase (Postgres + Auth) for users
-and per-user data storage, Anthropic API for natural-language analysis.
+Stack: Next.js (App Router) on Vercel, Supabase (Postgres + Auth).
 
 The original static prototype is kept at `reference/Lumen_Prototype.html` for
 design reference only — it is not part of the running app.
@@ -13,9 +14,9 @@ design reference only — it is not part of the running app.
 
 1. Go to [supabase.com](https://supabase.com), sign up, and create a new project.
 2. In the project dashboard, open **SQL Editor -> New query**, paste the
-   contents of `supabase/schema.sql`, and run it. This creates the
-   `datasets` and `queries` tables with Row Level Security so each user can
-   only ever see their own data.
+   contents of `supabase/lumen_schema.sql`, and run it. This creates the
+   `lumen_sales_records` table with Row Level Security so only signed-in
+   users can read or write it.
 3. Open **Settings -> API** and copy the **Project URL** and the **anon
    public** key.
 4. Open **Authentication -> Sign In / Providers** and make sure **Email**
@@ -23,23 +24,16 @@ design reference only — it is not part of the running app.
    **Authentication -> URL Configuration**, you can leave the defaults —
    we'll add your real domain there once deployed.
 
-## 2. Get an Anthropic API key
-
-This is separate from a claude.ai subscription. Go to
-[console.anthropic.com](https://console.anthropic.com), create an account,
-add a small amount of billing credit (pay-as-you-go), and generate an API
-key under **API Keys**.
-
-## 3. Configure environment variables
+## 2. Configure environment variables
 
 ```bash
 cp .env.local.example .env.local
 ```
 
-Fill in `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`, and
-`ANTHROPIC_API_KEY` with the values from steps 1 and 2.
+Fill in `NEXT_PUBLIC_SUPABASE_URL` and `NEXT_PUBLIC_SUPABASE_ANON_KEY` with
+the values from step 1.
 
-## 4. Run locally
+## 3. Run locally
 
 ```bash
 npm install
@@ -47,16 +41,16 @@ npm run dev
 ```
 
 Open [http://localhost:3000](http://localhost:3000). Sign up with an email
-and password, confirm the email (Supabase sends a confirmation link), then
-sign in, upload a `.csv` file, and start asking questions.
+and password, confirm the email (Supabase sends a confirmation link), sign
+in, then upload a monthly `.xls`/`.xlsx` sales export and see the analysis.
 
-## 5. Deploy to Vercel (free, permanent URL)
+## 4. Deploy to Vercel (free, permanent URL)
 
 1. Push this repository to GitHub (already done if you're reading this on
    the deployed branch).
 2. Go to [vercel.com](https://vercel.com), sign up, and click **Add New ->
    Project**, then import this GitHub repo.
-3. In the project's **Environment Variables** settings, add the same three
+3. In the project's **Environment Variables** settings, add the same two
    variables from your `.env.local`.
 4. Click **Deploy**. Vercel gives you a free `your-project.vercel.app` URL
    immediately. A custom domain can be added later under **Settings ->
@@ -65,31 +59,34 @@ sign in, upload a `.csv` file, and start asking questions.
    **Site URL** to your Vercel URL so email confirmation links redirect
    correctly.
 
-## Lumen Territory Decision Engine (`/lumen`)
+## The 5 decision rules
 
-A separate, self-contained page — does not touch the dataset/query flow above.
-Upload a monthly sales export (`.xls`/`.xlsx`) and see per-area cards with the
-5 territory decision rules (trend, systemic check, root cause by product
-family, transfer opportunities, and a concrete decision per finding).
+1. **Trend** — compare against the last 3 months, not just one, before
+   calling anything a real move.
+2. **Systemic check** — if most areas moved the same direction together,
+   the cause is cluster-wide, not one area's fault.
+3. **Root cause** — break the change down by product family to find what's
+   actually driving it.
+4. **Transfer opportunity** — flag a family growing unusually well in one
+   area, as a candidate to replicate elsewhere.
+5. **Decision, not description** — every finding ends in one concrete
+   action, never a bare observation.
 
-Before using it, run `supabase/lumen_schema.sql` once in the Supabase SQL
-Editor — it only adds the new `lumen_sales_records` table and does not
-change `datasets` / `queries` or their policies. No new environment
-variables are needed; it reuses the same Supabase project and requires the
-same sign-in as the rest of the app.
+## Troubleshooting
 
-If you already created the table before the DELETE policy was added, also
-run `supabase/lumen_add_delete_policy.sql` once (needed for re-uploading a
-month to work). If numbers look inflated (e.g. an implausible % growth),
-you likely have duplicate rows from re-uploading the same file before that
-protection existed — run `supabase/lumen_dedupe.sql` to check for and
-remove them.
+- **Re-uploading a month you already uploaded** now asks for confirmation
+  before replacing that month's rows, instead of silently duplicating them.
+  If you already have duplicate rows from before this existed (numbers look
+  implausibly large, e.g. an area showing +250% growth), run
+  `supabase/lumen_dedupe.sql` in the Supabase SQL Editor to check for and
+  remove them.
+- If you created the `lumen_sales_records` table before the DELETE policy
+  was added to `lumen_schema.sql`, run `supabase/lumen_add_delete_policy.sql`
+  once — without it, re-uploading a month fails silently.
 
-## Notes on current scope (v1)
+## Notes on current scope
 
-- Only `.csv` uploads are supported for now. Excel (`.xlsx`) support can be
-  added later via SheetJS's official (security-patched) package.
-- Each uploaded file is capped at 5,000 rows / 100 columns to keep storage
-  and API costs predictable.
-- Claude answers from column statistics plus a data sample, not the full
-  raw file on every request — this keeps API costs low as datasets grow.
+- Excel parsing uses the `xlsx` npm package, which carries a known
+  high-severity advisory (Prototype Pollution / ReDoS) with no fix
+  published to the npm registry — mitigated by the app being sign-in gated
+  (internal use only). SheetJS's own patched build is a good follow-up.

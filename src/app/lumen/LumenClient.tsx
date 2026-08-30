@@ -176,7 +176,7 @@ export default function LumenClient({
 
   return (
     <div className="flex min-h-screen flex-col bg-bg sm:flex-row">
-      <Sidebar userEmail={userEmail} active="/lumen">
+      <Sidebar userEmail={userEmail}>
         <input
           ref={fileInputRef}
           type="file"
