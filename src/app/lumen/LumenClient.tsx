@@ -5,7 +5,12 @@ import Link from "next/link";
 import { parseSalesFile } from "@/lib/lumen/parseSalesFile";
 import type { Finding, Report } from "@/lib/lumen/engine";
 import { StatTile, AreaChangeBars, FamilyChangeBars } from "./charts";
+import { TrendChart } from "./TrendChart";
 import { colorForFamily } from "@/lib/lumen/familyColors";
+
+function areaCardId(area: string): string {
+  return `area-card-${encodeURIComponent(area)}`;
+}
 
 const UPLOAD_BATCH_SIZE = 1000;
 
@@ -24,8 +29,8 @@ function Badge({ pctChange }: { pctChange: number | null }) {
   const positive = pctChange > 0;
   return (
     <span
-      className={`rounded-full px-2.5 py-1 font-mono text-xs font-semibold ${
-        positive ? "bg-green/15 text-green" : "bg-red/15 text-red"
+      className={`rounded-full border px-2.5 py-1 font-mono text-xs font-bold ${
+        positive ? "border-green/40 bg-green/20 text-green" : "border-red/40 bg-red/20 text-red"
       }`}
     >
       {positive ? "+" : ""}
@@ -107,6 +112,13 @@ export default function LumenClient({
       if (next.has(area)) next.delete(area);
       else next.add(area);
       return next;
+    });
+  }
+
+  function selectArea(area: string) {
+    setExpanded((prev) => new Set(prev).add(area));
+    requestAnimationFrame(() => {
+      document.getElementById(areaCardId(area))?.scrollIntoView({ behavior: "smooth", block: "center" });
     });
   }
 
@@ -242,7 +254,7 @@ export default function LumenClient({
           )}
 
           <div className="mb-5">
-            <AreaChangeBars areas={areas} />
+            <AreaChangeBars areas={areas} onSelectArea={selectArea} />
           </div>
 
           <div className="mb-5">
@@ -261,8 +273,19 @@ export default function LumenClient({
                     ? "Part of the cluster-wide drop — see the systemic finding above."
                     : "No significant change this month.";
 
+              const clusterLast = report.clusterMonthlySeries[report.clusterMonthlySeries.length - 1];
+              const clusterPrev = report.clusterMonthlySeries[report.clusterMonthlySeries.length - 2];
+              const clusterPct =
+                clusterPrev && clusterPrev.avgValue !== 0
+                  ? Math.round(((clusterLast.avgValue - clusterPrev.avgValue) / clusterPrev.avgValue) * 1000) / 10
+                  : null;
+
               return (
-                <div key={area} className="rounded-2xl border border-bdr bg-surf p-4">
+                <div
+                  key={area}
+                  id={areaCardId(area)}
+                  className="scroll-mt-4 rounded-2xl border border-bdr bg-surf p-5 transition-colors"
+                >
                   <button
                     onClick={() => toggle(area)}
                     className="flex w-full items-center justify-between gap-3 text-left"
@@ -278,26 +301,28 @@ export default function LumenClient({
                   </button>
 
                   {isOpen && (
-                    <div className="mt-4 space-y-4 border-t border-bdr pt-4 text-sm">
+                    <div className="mt-4 space-y-5 border-t border-bdr pt-4 text-sm">
                       <div>
+                        <p className="mb-2">
+                          Sales value: <span className="font-mono text-white">{formatNumber(d.prevValue)}</span>{" "}
+                          (previous month) →{" "}
+                          <span className="font-mono text-white">{formatNumber(d.currValue)}</span> (this month).
+                          Units sold: <span className="font-mono text-white">{formatNumber(d.prevQty)}</span> →{" "}
+                          <span className="font-mono text-white">{formatNumber(d.currQty)}</span>.
+                        </p>
+                        {clusterPct !== null && (
+                          <p className="mb-2 text-xs text-muted">
+                            This area moved{" "}
+                            <span className={d.pctChange !== null && d.pctChange < 0 ? "text-red" : "text-green"}>
+                              {d.pctChange}%
+                            </span>{" "}
+                            vs the cluster average of{" "}
+                            <span className={clusterPct < 0 ? "text-red" : "text-green"}>{clusterPct}%</span> over
+                            the same month.
+                          </p>
+                        )}
                         <table className="w-full text-left">
                           <tbody>
-                            <tr className="text-muted">
-                              <td className="py-1 pr-4">Sales value — previous month</td>
-                              <td className="py-1 font-mono text-white">{formatNumber(d.prevValue)}</td>
-                            </tr>
-                            <tr className="text-muted">
-                              <td className="py-1 pr-4">Sales value — current month</td>
-                              <td className="py-1 font-mono text-white">{formatNumber(d.currValue)}</td>
-                            </tr>
-                            <tr className="text-muted">
-                              <td className="py-1 pr-4">Units sold — previous month</td>
-                              <td className="py-1 font-mono text-white">{formatNumber(d.prevQty)}</td>
-                            </tr>
-                            <tr className="text-muted">
-                              <td className="py-1 pr-4">Units sold — current month</td>
-                              <td className="py-1 font-mono text-white">{formatNumber(d.currQty)}</td>
-                            </tr>
                             <tr className="text-muted">
                               <td className="py-1 pr-4">3-month declining streak</td>
                               <td className="py-1 text-white">{d.decliningStreak ? "Yes" : "No"}</td>
@@ -310,6 +335,19 @@ export default function LumenClient({
                           the sum of the Sales Qty column for the same area and month.
                         </p>
                       </div>
+
+                      {d.monthlySeries.length >= 2 && (
+                        <div>
+                          <div className="mb-2 text-xs font-semibold text-white">
+                            Trend — last {d.monthlySeries.length} months
+                          </div>
+                          <TrendChart
+                            areaLabel={area}
+                            areaSeries={d.monthlySeries}
+                            clusterSeries={report.clusterMonthlySeries}
+                          />
+                        </div>
+                      )}
 
                       {(() => {
                         const familyEntries = Object.entries(report.areaFamilyChanges[area] ?? {}).sort(

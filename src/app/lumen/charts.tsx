@@ -43,7 +43,15 @@ export function StatTile({
 
 type BarRow = { key: string; label: string; pctChange: number };
 
-function DivergingBarChart({ rows, maxRows }: { rows: BarRow[]; maxRows: number }) {
+function DivergingBarChart({
+  rows,
+  maxRows,
+  onRowClick,
+}: {
+  rows: BarRow[];
+  maxRows: number;
+  onRowClick?: (key: string) => void;
+}) {
   const [mounted, setMounted] = useState(false);
   useEffect(() => {
     const id = requestAnimationFrame(() => setMounted(true));
@@ -63,8 +71,17 @@ function DivergingBarChart({ rows, maxRows }: { rows: BarRow[]; maxRows: number 
           const isDrop = row.pctChange < 0;
           const targetWidthPct = (Math.abs(row.pctChange) / maxAbs) * 50;
 
+          const Row = onRowClick ? "button" : "div";
+
           return (
-            <div key={row.key} className="flex items-center gap-2 text-xs">
+            <Row
+              key={row.key}
+              type={onRowClick ? "button" : undefined}
+              onClick={onRowClick ? () => onRowClick(row.key) : undefined}
+              className={`flex w-full items-center gap-2 text-left text-xs ${
+                onRowClick ? "cursor-pointer rounded-lg transition-colors hover:bg-surf2/60" : ""
+              }`}
+            >
               <div className="w-24 shrink-0 truncate text-muted sm:w-36" title={row.label}>
                 {row.label}
               </div>
@@ -87,7 +104,7 @@ function DivergingBarChart({ rows, maxRows }: { rows: BarRow[]; maxRows: number 
                 {isDrop ? "" : "+"}
                 {row.pctChange}%
               </div>
-            </div>
+            </Row>
           );
         })}
       </div>
@@ -103,8 +120,10 @@ function DivergingBarChart({ rows, maxRows }: { rows: BarRow[]; maxRows: number 
 
 export function AreaChangeBars({
   areas,
+  onSelectArea,
 }: {
   areas: [string, { pctChange: number | null }][];
+  onSelectArea?: (area: string) => void;
 }) {
   const rows: BarRow[] = areas
     .filter(([, d]) => d.pctChange !== null)
@@ -114,11 +133,12 @@ export function AreaChangeBars({
 
   return (
     <div className="rounded-2xl border border-bdr bg-surf p-4 sm:p-5">
-      <div className="mb-3 flex items-center justify-between gap-2">
+      <div className="mb-1 flex items-center justify-between gap-2">
         <h2 className="text-sm font-semibold text-white">Biggest movers</h2>
         <Legend />
       </div>
-      <DivergingBarChart rows={rows} maxRows={12} />
+      <p className="mb-3 text-xs text-muted">Tap an area to see its full breakdown below.</p>
+      <DivergingBarChart rows={rows} maxRows={12} onRowClick={onSelectArea} />
     </div>
   );
 }

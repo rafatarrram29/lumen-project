@@ -32,6 +32,7 @@ export function toFamily(itemName: string): string {
 const SYSTEMIC_DROP_THRESHOLD = -15.0;
 const SYSTEMIC_AREA_FRACTION = 0.6;
 const TREND_DROP_STREAK = 3;
+const TREND_CHART_MONTHS = 6;
 
 export type SalesRecord = {
   area: string;
@@ -41,6 +42,8 @@ export type SalesRecord = {
   month: number;
 };
 
+export type MonthPoint = { month: number; value: number; qty: number };
+
 type AreaChange = {
   prevValue: number;
   currValue: number;
@@ -49,6 +52,7 @@ type AreaChange = {
   pctChange: number | null;
   decliningStreak: boolean;
   monthsInStreak: number;
+  monthlySeries: MonthPoint[];
 };
 
 export type FamilyChange = {
@@ -97,6 +101,7 @@ export type Report =
       areas: Record<string, AreaChange>;
       familyChanges: Record<string, FamilyChange>;
       areaFamilyChanges: Record<string, Record<string, FamilyChange>>;
+      clusterMonthlySeries: { month: number; avgValue: number }[];
       findings: Finding[];
     };
 
@@ -157,6 +162,10 @@ export function buildReport(records: SalesRecord[], year: number): Report {
     allMonths.length >= TREND_DROP_STREAK
       ? allMonths.slice(allMonths.length - TREND_DROP_STREAK)
       : allMonths;
+  const chartMonths =
+    allMonths.length >= TREND_CHART_MONTHS
+      ? allMonths.slice(allMonths.length - TREND_CHART_MONTHS)
+      : allMonths;
 
   // --- Rule 1 + area-level change ---
   const areaChanges: Record<string, AreaChange> = {};
@@ -171,6 +180,13 @@ export function buildReport(records: SalesRecord[], year: number): Report {
       trendVals.length >= 2 &&
       trendVals.every((v, i) => i === trendVals.length - 1 || v > trendVals[i + 1]);
 
+    const monthlySeries: MonthPoint[] = chartMonths
+      .filter((m) => months.has(m))
+      .map((m) => {
+        const t = months.get(m)!;
+        return { month: m, value: Math.round(t.value), qty: Math.round(t.qty) };
+      });
+
     areaChanges[area] = {
       prevValue: Math.round(prevTotal.value),
       currValue: Math.round(curr.value),
@@ -179,8 +195,22 @@ export function buildReport(records: SalesRecord[], year: number): Report {
       pctChange: change,
       decliningStreak,
       monthsInStreak: trendVals.length,
+      monthlySeries,
     };
   }
+
+  // Cluster-wide average monthly value, for the same chart window — lets
+  // the UI plot any single area's trend against the cluster as a baseline.
+  const clusterMonthlySeries = chartMonths.map((m) => {
+    const valuesForMonth = Array.from(areaTotals.values())
+      .map((months) => months.get(m)?.value)
+      .filter((v): v is number => v !== undefined);
+    const avgValue =
+      valuesForMonth.length > 0
+        ? Math.round(valuesForMonth.reduce((sum, v) => sum + v, 0) / valuesForMonth.length)
+        : 0;
+    return { month: m, avgValue };
+  });
 
   // --- Rule 2: systemic check ---
   const droppingAreas = Object.entries(areaChanges)
@@ -316,6 +346,7 @@ export function buildReport(records: SalesRecord[], year: number): Report {
     areas: areaChanges,
     familyChanges,
     areaFamilyChanges,
+    clusterMonthlySeries,
     findings,
   };
 }
