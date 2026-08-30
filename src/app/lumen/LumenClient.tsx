@@ -368,26 +368,28 @@ export default function LumenClient({
                         return (
                         <div>
                           <div className="mb-2 text-xs font-semibold text-white">By product family</div>
-                          <div className="space-y-1.5">
+                          <div className="space-y-2">
                             {familyEntries.map(([fam, fc]) => (
-                              <div key={fam} className="flex items-center gap-2 text-xs">
-                                <span
-                                  className="h-2 w-2 shrink-0 rounded-full"
-                                  style={{ backgroundColor: colorForFamily(fam) }}
-                                />
-                                <span className="min-w-0 flex-1 truncate text-muted">{fam}</span>
-                                <span className="shrink-0 font-mono text-muted">
+                              <div key={fam} className="text-xs">
+                                <div className="flex items-center gap-2">
+                                  <span
+                                    className="h-2 w-2 shrink-0 rounded-full"
+                                    style={{ backgroundColor: colorForFamily(fam) }}
+                                  />
+                                  <span className="min-w-0 flex-1 truncate text-muted">{fam}</span>
+                                  <span
+                                    className={`shrink-0 font-mono ${
+                                      fc.pctChange !== null && fc.pctChange < 0 ? "text-red" : "text-green"
+                                    }`}
+                                  >
+                                    {fc.pctChange !== null && fc.pctChange > 0 ? "+" : ""}
+                                    {fc.pctChange ?? "—"}
+                                    {fc.pctChange !== null ? "%" : ""}
+                                  </span>
+                                </div>
+                                <div className="pl-4 font-mono text-[11px] break-words text-muted">
                                   {formatNumber(fc.prevValue)} → {formatNumber(fc.currValue)}
-                                </span>
-                                <span
-                                  className={`w-14 shrink-0 text-right font-mono ${
-                                    fc.pctChange !== null && fc.pctChange < 0 ? "text-red" : "text-green"
-                                  }`}
-                                >
-                                  {fc.pctChange !== null && fc.pctChange > 0 ? "+" : ""}
-                                  {fc.pctChange ?? "—"}
-                                  {fc.pctChange !== null ? "%" : ""}
-                                </span>
+                                </div>
                               </div>
                             ))}
                           </div>
