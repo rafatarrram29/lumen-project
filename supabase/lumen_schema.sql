@@ -37,3 +37,8 @@ create policy "Authenticated users can insert lumen sales records"
   on public.lumen_sales_records for insert
   to authenticated
   with check (true);
+
+create policy "Authenticated users can delete lumen sales records"
+  on public.lumen_sales_records for delete
+  to authenticated
+  using (true);

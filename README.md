@@ -78,6 +78,13 @@ change `datasets` / `queries` or their policies. No new environment
 variables are needed; it reuses the same Supabase project and requires the
 same sign-in as the rest of the app.
 
+If you already created the table before the DELETE policy was added, also
+run `supabase/lumen_add_delete_policy.sql` once (needed for re-uploading a
+month to work). If numbers look inflated (e.g. an implausible % growth),
+you likely have duplicate rows from re-uploading the same file before that
+protection existed — run `supabase/lumen_dedupe.sql` to check for and
+remove them.
+
 ## Notes on current scope (v1)
 
 - Only `.csv` uploads are supported for now. Excel (`.xlsx`) support can be

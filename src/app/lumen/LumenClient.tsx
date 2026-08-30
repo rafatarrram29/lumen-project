@@ -78,6 +78,35 @@ export default function LumenClient({
 
     try {
       const rows = await parseSalesFile(file);
+      const monthsInFile = Array.from(new Set(rows.map((r) => r.month))).sort((a, b) => a - b);
+
+      const overlapRes = await fetch(
+        `/api/lumen/check-overlap?year=${year}&months=${monthsInFile.join(",")}`,
+      );
+      const overlapJson = await overlapRes.json();
+      if (!overlapRes.ok) throw new Error(overlapJson.error || "Could not check for existing months");
+
+      const overlappingMonths: number[] = overlapJson.overlappingMonths ?? [];
+      if (overlappingMonths.length > 0) {
+        const proceed = window.confirm(
+          `Month(s) ${overlappingMonths.join(", ")} already have data for ${year}. ` +
+            `Continuing will delete the existing rows for those months and replace them with ` +
+            `this file. This cannot be undone. Continue?`,
+        );
+        if (!proceed) {
+          setUploading(false);
+          return;
+        }
+
+        const replaceRes = await fetch("/api/lumen/replace-months", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ year, months: overlappingMonths }),
+        });
+        const replaceJson = await replaceRes.json();
+        if (!replaceRes.ok) throw new Error(replaceJson.error || "Could not clear the old months");
+      }
+
       const batches = [];
       for (let i = 0; i < rows.length; i += UPLOAD_BATCH_SIZE) {
         batches.push(rows.slice(i, i + UPLOAD_BATCH_SIZE));
