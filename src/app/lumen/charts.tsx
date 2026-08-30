@@ -1,14 +1,24 @@
-import { colorForFamily } from "@/lib/lumen/familyColors";
+"use client";
+
+import { useEffect, useState } from "react";
 
 export function StatTile({
   label,
   value,
   tone = "default",
+  delayMs = 0,
 }: {
   label: string;
   value: string;
   tone?: "default" | "red" | "amber" | "green";
+  delayMs?: number;
 }) {
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => {
+    const id = requestAnimationFrame(() => setMounted(true));
+    return () => cancelAnimationFrame(id);
+  }, []);
+
   const toneClass = {
     default: "text-white",
     red: "text-red",
@@ -17,71 +27,65 @@ export function StatTile({
   }[tone];
 
   return (
-    <div className="rounded-xl border border-bdr bg-surf p-3.5">
+    <div
+      className="rounded-xl border border-bdr bg-surf p-3.5 transition-all duration-500 ease-out"
+      style={{
+        opacity: mounted ? 1 : 0,
+        transform: mounted ? "translateY(0)" : "translateY(6px)",
+        transitionDelay: `${delayMs}ms`,
+      }}
+    >
       <div className="mb-1 text-xs text-muted">{label}</div>
       <div className={`truncate font-mono text-xl font-semibold ${toneClass}`}>{value}</div>
     </div>
   );
 }
 
-const MAX_BAR_ROWS = 12;
+type BarRow = { key: string; label: string; pctChange: number };
 
-export function AreaChangeBars({
-  areas,
-}: {
-  areas: [string, { pctChange: number | null }][];
-}) {
-  const plotted = areas
-    .filter(([, d]) => d.pctChange !== null)
-    .sort((a, b) => Math.abs(b[1].pctChange!) - Math.abs(a[1].pctChange!))
-    .slice(0, MAX_BAR_ROWS);
+function DivergingBarChart({ rows, maxRows }: { rows: BarRow[]; maxRows: number }) {
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => {
+    const id = requestAnimationFrame(() => setMounted(true));
+    return () => cancelAnimationFrame(id);
+  }, []);
 
+  const plotted = rows.sort((a, b) => Math.abs(b.pctChange) - Math.abs(a.pctChange)).slice(0, maxRows);
   if (plotted.length === 0) return null;
 
-  const maxAbs = Math.max(...plotted.map(([, d]) => Math.abs(d.pctChange!)), 1);
-  const remaining = areas.length - plotted.length;
+  const maxAbs = Math.max(...plotted.map((r) => Math.abs(r.pctChange)), 1);
+  const remaining = rows.length - plotted.length;
 
   return (
-    <div className="rounded-2xl border border-bdr bg-surf p-4 sm:p-5">
-      <div className="mb-3 flex items-center justify-between gap-2">
-        <h2 className="text-sm font-semibold text-white">Biggest movers</h2>
-        <div className="flex items-center gap-3 text-xs text-muted">
-          <span className="flex items-center gap-1.5">
-            <span className="h-2 w-2 rounded-full bg-red" /> Decline
-          </span>
-          <span className="flex items-center gap-1.5">
-            <span className="h-2 w-2 rounded-full bg-green" /> Growth
-          </span>
-        </div>
-      </div>
-
-      <div className="space-y-2">
-        {plotted.map(([area, d]) => {
-          const pct = d.pctChange!;
-          const isDrop = pct < 0;
-          const widthPct = (Math.abs(pct) / maxAbs) * 50;
+    <>
+      <div className="space-y-2.5">
+        {plotted.map((row, i) => {
+          const isDrop = row.pctChange < 0;
+          const targetWidthPct = (Math.abs(row.pctChange) / maxAbs) * 50;
 
           return (
-            <div key={area} className="flex items-center gap-2 text-xs">
-              <div className="w-24 shrink-0 truncate text-muted sm:w-36" title={area}>
-                {area}
+            <div key={row.key} className="flex items-center gap-2 text-xs">
+              <div className="w-24 shrink-0 truncate text-muted sm:w-36" title={row.label}>
+                {row.label}
               </div>
-              <div className="relative h-2 min-w-0 flex-1 rounded-full bg-surf2">
+              <div className="relative h-2.5 min-w-0 flex-1 rounded-full bg-surf2">
                 <div className="absolute inset-y-0 left-1/2 w-px bg-bdr" />
                 <div
-                  className={`absolute inset-y-0 rounded-full ${isDrop ? "bg-red" : "bg-green"}`}
-                  style={
-                    isDrop
-                      ? { right: "50%", width: `${widthPct}%` }
-                      : { left: "50%", width: `${widthPct}%` }
-                  }
+                  className="absolute inset-y-0 rounded-full transition-[width] ease-out"
+                  style={{
+                    ...(isDrop ? { right: "50%" } : { left: "50%" }),
+                    width: mounted ? `${targetWidthPct}%` : "0%",
+                    transitionDuration: "700ms",
+                    transitionDelay: `${i * 40}ms`,
+                    background: isDrop
+                      ? "linear-gradient(90deg, #fb7185, #f43f5e)"
+                      : "linear-gradient(90deg, #4ade80, #22c55e)",
+                  }}
                 />
               </div>
-              <div
-                className={`w-14 shrink-0 text-right font-mono ${isDrop ? "text-red" : "text-green"}`}
-              >
+              <div className={`w-16 shrink-0 text-right font-mono ${isDrop ? "text-red" : "text-green"}`}>
                 {isDrop ? "" : "+"}
-                {pct}%
+                {row.pctChange}%
               </div>
             </div>
           );
@@ -90,81 +94,66 @@ export function AreaChangeBars({
 
       {remaining > 0 && (
         <p className="mt-3 text-xs text-muted">
-          +{remaining} more area{remaining === 1 ? "" : "s"} in the list below.
+          +{remaining} more in the list below.
         </p>
       )}
+    </>
+  );
+}
+
+export function AreaChangeBars({
+  areas,
+}: {
+  areas: [string, { pctChange: number | null }][];
+}) {
+  const rows: BarRow[] = areas
+    .filter(([, d]) => d.pctChange !== null)
+    .map(([area, d]) => ({ key: area, label: area, pctChange: d.pctChange! }));
+
+  if (rows.length === 0) return null;
+
+  return (
+    <div className="rounded-2xl border border-bdr bg-surf p-4 sm:p-5">
+      <div className="mb-3 flex items-center justify-between gap-2">
+        <h2 className="text-sm font-semibold text-white">Biggest movers</h2>
+        <Legend />
+      </div>
+      <DivergingBarChart rows={rows} maxRows={12} />
     </div>
   );
 }
 
-export function FamilyDonut({
+export function FamilyChangeBars({
   families,
 }: {
-  families: Record<string, { absDrop: number }>;
+  families: Record<string, { pctChange: number | null }>;
 }) {
-  const segments = Object.entries(families)
-    .filter(([, v]) => v.absDrop > 0)
-    .sort((a, b) => b[1].absDrop - a[1].absDrop);
+  const rows: BarRow[] = Object.entries(families)
+    .filter(([, d]) => d.pctChange !== null)
+    .map(([family, d]) => ({ key: family, label: family, pctChange: d.pctChange! }));
 
-  const total = segments.reduce((sum, [, v]) => sum + v.absDrop, 0);
-  if (total <= 0) return null;
-
-  const r = 40;
-  const strokeWidth = 16;
-  const circumference = 2 * Math.PI * r;
-
-  const arcs = segments.reduce<{ family: string; dash: number; gap: number; offset: number }[]>(
-    (acc, [family, v]) => {
-      const pct = (v.absDrop / total) * 100;
-      const runningPct = acc.reduce((sum, a) => sum + (a.dash / circumference) * 100, 0);
-      return [
-        ...acc,
-        {
-          family,
-          dash: (pct / 100) * circumference,
-          gap: circumference - (pct / 100) * circumference,
-          offset: (runningPct / 100) * circumference,
-        },
-      ];
-    },
-    [],
-  );
+  if (rows.length === 0) return null;
 
   return (
     <div className="rounded-2xl border border-bdr bg-surf p-4 sm:p-5">
-      <h2 className="mb-4 text-sm font-semibold text-white">Decline by product family</h2>
-      <div className="flex flex-col items-center gap-5 sm:flex-row sm:items-center">
-        <svg viewBox="0 0 100 100" className="h-36 w-36 shrink-0 -rotate-90">
-          {arcs.map(({ family, dash, gap, offset }) => (
-            <circle
-              key={family}
-              cx="50"
-              cy="50"
-              r={r}
-              fill="none"
-              stroke={colorForFamily(family)}
-              strokeWidth={strokeWidth}
-              strokeDasharray={`${dash} ${gap}`}
-              strokeDashoffset={-offset}
-            />
-          ))}
-        </svg>
-
-        <div className="w-full min-w-0 space-y-1.5">
-          {segments.map(([family, v]) => (
-            <div key={family} className="flex items-center gap-2 text-sm">
-              <span
-                className="h-2.5 w-2.5 shrink-0 rounded-full"
-                style={{ backgroundColor: colorForFamily(family) }}
-              />
-              <span className="min-w-0 flex-1 truncate">{family}</span>
-              <span className="shrink-0 font-mono text-xs text-muted">
-                {((v.absDrop / total) * 100).toFixed(0)}%
-              </span>
-            </div>
-          ))}
-        </div>
+      <div className="mb-3 flex items-center justify-between gap-2">
+        <h2 className="text-sm font-semibold text-white">Product family comparison</h2>
+        <Legend />
       </div>
+      <DivergingBarChart rows={rows} maxRows={10} />
+    </div>
+  );
+}
+
+function Legend() {
+  return (
+    <div className="flex items-center gap-3 text-xs text-muted">
+      <span className="flex items-center gap-1.5">
+        <span className="h-2 w-2 rounded-full bg-red" /> Decline
+      </span>
+      <span className="flex items-center gap-1.5">
+        <span className="h-2 w-2 rounded-full bg-green" /> Growth
+      </span>
     </div>
   );
 }

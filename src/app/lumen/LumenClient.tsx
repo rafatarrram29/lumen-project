@@ -4,7 +4,8 @@ import { useRef, useState } from "react";
 import Link from "next/link";
 import { parseSalesFile } from "@/lib/lumen/parseSalesFile";
 import type { Finding, Report } from "@/lib/lumen/engine";
-import { StatTile, AreaChangeBars, FamilyDonut } from "./charts";
+import { StatTile, AreaChangeBars, FamilyChangeBars } from "./charts";
+import { colorForFamily } from "@/lib/lumen/familyColors";
 
 const UPLOAD_BATCH_SIZE = 1000;
 
@@ -201,20 +202,22 @@ export default function LumenClient({
       )}
 
       {report && !hasError && (
-        <>
+        <div key={`${report.year}-${report.comparedToMonth}-${report.latestMonth}-${areas.length}`}>
           <div className="mb-5 grid grid-cols-2 gap-3 sm:grid-cols-4">
-            <StatTile label="Areas analyzed" value={String(areas.length)} />
+            <StatTile label="Areas analyzed" value={String(areas.length)} delayMs={0} />
             <StatTile
               label="In decline"
               value={String(areas.filter(([, d]) => d.pctChange !== null && d.pctChange < 0).length)}
               tone="red"
+              delayMs={60}
             />
             <StatTile
               label="Pattern"
               value={report.isSystemicDrop ? "Cluster-wide" : findingsByArea.size > 0 ? "Localized" : "Stable"}
               tone={report.isSystemicDrop ? "red" : findingsByArea.size > 0 ? "amber" : "green"}
+              delayMs={120}
             />
-            <StatTile label="Decisions raised" value={String(report.findings.length)} tone="amber" />
+            <StatTile label="Decisions raised" value={String(report.findings.length)} tone="amber" delayMs={180} />
           </div>
 
           <div className="mb-4 text-sm text-muted">
@@ -242,11 +245,9 @@ export default function LumenClient({
             <AreaChangeBars areas={areas} />
           </div>
 
-          {systemicFinding && systemicFinding.type === "systemic_drop" && (
-            <div className="mb-5">
-              <FamilyDonut families={systemicFinding.allFamilies} />
-            </div>
-          )}
+          <div className="mb-5">
+            <FamilyChangeBars families={report.familyChanges} />
+          </div>
 
           <h2 className="mb-3 text-sm font-semibold text-white">All areas</h2>
           <div className="space-y-3">
@@ -277,32 +278,86 @@ export default function LumenClient({
                   </button>
 
                   {isOpen && (
-                    <div className="mt-4 space-y-3 border-t border-bdr pt-4 text-sm">
-                      <table className="w-full text-left">
-                        <tbody>
-                          <tr className="text-muted">
-                            <td className="py-1 pr-4">Previous month</td>
-                            <td className="py-1 font-mono">{formatNumber(d.prevValue)}</td>
-                          </tr>
-                          <tr className="text-muted">
-                            <td className="py-1 pr-4">Current month</td>
-                            <td className="py-1 font-mono">{formatNumber(d.currValue)}</td>
-                          </tr>
-                          <tr className="text-muted">
-                            <td className="py-1 pr-4">3-month declining streak</td>
-                            <td className="py-1">{d.decliningStreak ? "Yes" : "No"}</td>
-                          </tr>
-                        </tbody>
-                      </table>
+                    <div className="mt-4 space-y-4 border-t border-bdr pt-4 text-sm">
+                      <div>
+                        <table className="w-full text-left">
+                          <tbody>
+                            <tr className="text-muted">
+                              <td className="py-1 pr-4">Sales value — previous month</td>
+                              <td className="py-1 font-mono text-white">{formatNumber(d.prevValue)}</td>
+                            </tr>
+                            <tr className="text-muted">
+                              <td className="py-1 pr-4">Sales value — current month</td>
+                              <td className="py-1 font-mono text-white">{formatNumber(d.currValue)}</td>
+                            </tr>
+                            <tr className="text-muted">
+                              <td className="py-1 pr-4">Units sold — previous month</td>
+                              <td className="py-1 font-mono text-white">{formatNumber(d.prevQty)}</td>
+                            </tr>
+                            <tr className="text-muted">
+                              <td className="py-1 pr-4">Units sold — current month</td>
+                              <td className="py-1 font-mono text-white">{formatNumber(d.currQty)}</td>
+                            </tr>
+                            <tr className="text-muted">
+                              <td className="py-1 pr-4">3-month declining streak</td>
+                              <td className="py-1 text-white">{d.decliningStreak ? "Yes" : "No"}</td>
+                            </tr>
+                          </tbody>
+                        </table>
+                        <p className="mt-1.5 text-xs text-muted">
+                          &quot;Sales value&quot; is the sum of the Sales Value column from your uploaded
+                          file (all products combined, no currency conversion). &quot;Units sold&quot; is
+                          the sum of the Sales Qty column for the same area and month.
+                        </p>
+                      </div>
+
+                      {(() => {
+                        const familyEntries = Object.entries(report.areaFamilyChanges[area] ?? {}).sort(
+                          (a, b) => b[1].absDrop - a[1].absDrop,
+                        );
+                        if (familyEntries.length === 0) return null;
+                        return (
+                        <div>
+                          <div className="mb-2 text-xs font-semibold text-white">By product family</div>
+                          <div className="space-y-1.5">
+                            {familyEntries.map(([fam, fc]) => (
+                              <div key={fam} className="flex items-center gap-2 text-xs">
+                                <span
+                                  className="h-2 w-2 shrink-0 rounded-full"
+                                  style={{ backgroundColor: colorForFamily(fam) }}
+                                />
+                                <span className="min-w-0 flex-1 truncate text-muted">{fam}</span>
+                                <span className="shrink-0 font-mono text-muted">
+                                  {formatNumber(fc.prevValue)} → {formatNumber(fc.currValue)}
+                                </span>
+                                <span
+                                  className={`w-14 shrink-0 text-right font-mono ${
+                                    fc.pctChange !== null && fc.pctChange < 0 ? "text-red" : "text-green"
+                                  }`}
+                                >
+                                  {fc.pctChange !== null && fc.pctChange > 0 ? "+" : ""}
+                                  {fc.pctChange ?? "—"}
+                                  {fc.pctChange !== null ? "%" : ""}
+                                </span>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                        );
+                      })()}
 
                       {areaFindings.map((f, i) => (
                         <div key={i} className="break-words rounded-lg bg-surf2 px-3 py-2.5">
                           <p className="mb-1.5">{f.summary}</p>
                           {"rootCauseFamily" in f && (
                             <p className="mb-1.5 text-xs text-muted">
-                              Root cause family: <span className="text-white">{f.rootCauseFamily}</span>
+                              Root cause family:{" "}
+                              <span className="font-semibold" style={{ color: colorForFamily(f.rootCauseFamily) }}>
+                                {f.rootCauseFamily}
+                              </span>
                               {" · "}
-                              {f.rootCauseDetail.pctChange}% ({formatNumber(f.rootCauseDetail.absDrop)} abs.)
+                              {f.rootCauseDetail.pctChange}% ({formatNumber(f.rootCauseDetail.absDrop)} sales
+                              value drop)
                             </p>
                           )}
                           <p className="text-xs">
@@ -317,7 +372,7 @@ export default function LumenClient({
               );
             })}
           </div>
-        </>
+        </div>
       )}
     </div>
   );
