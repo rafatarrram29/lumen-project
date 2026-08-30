@@ -1,12 +1,12 @@
 "use client";
 
 import { useRef, useState } from "react";
-import Link from "next/link";
 import { parseSalesFile } from "@/lib/lumen/parseSalesFile";
 import type { Finding, Report } from "@/lib/lumen/engine";
 import { StatTile, AreaChangeBars, FamilyChangeBars } from "./charts";
 import { TrendChart } from "./TrendChart";
 import { colorForFamily } from "@/lib/lumen/familyColors";
+import Sidebar from "@/components/Sidebar";
 
 function areaCardId(area: string): string {
   return `area-card-${encodeURIComponent(area)}`;
@@ -175,67 +175,49 @@ export default function LumenClient({
     report && !hasError ? report.findings.find((f) => f.type === "systemic_drop") : undefined;
 
   return (
-    <div className="mx-auto min-w-0 w-full max-w-3xl min-h-screen overflow-x-hidden px-4 py-10">
-      <div className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <div className="flex min-w-0 items-center gap-2">
-          <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-gradient-to-br from-amber to-[#d68820] font-bold text-bg">
-            L
-          </div>
-          <div className="min-w-0">
-            <div className="truncate text-lg font-semibold">Lumen — Territory Decision Engine</div>
-            <div className="truncate text-xs text-muted">{userEmail}</div>
-          </div>
-        </div>
-        <Link
-          href="/dashboard"
-          className="self-start rounded-lg border border-bdr px-3 py-2 text-sm text-muted transition-colors hover:border-amber hover:text-white sm:self-auto"
+    <div className="flex min-h-screen flex-col bg-bg sm:flex-row">
+      <Sidebar userEmail={userEmail} active="/lumen">
+        <input
+          ref={fileInputRef}
+          type="file"
+          accept=".xls,.xlsx"
+          className="hidden"
+          onChange={(e) => {
+            const file = e.target.files?.[0];
+            if (file) handleFile(file);
+            e.target.value = "";
+          }}
+        />
+        <button
+          onClick={() => fileInputRef.current?.click()}
+          disabled={uploading}
+          className="mb-2 w-full rounded-lg border border-dashed border-bdr px-3 py-2.5 text-sm text-muted transition-colors hover:border-amber hover:text-white disabled:opacity-60"
         >
-          ← Dashboard
-        </Link>
-      </div>
+          {uploading ? uploadProgress ?? "Uploading…" : "+ Upload monthly file"}
+        </button>
+        {uploadError && <p className="mb-2 text-xs text-red">{uploadError}</p>}
+        {uploadMessage && <p className="mb-2 text-xs text-green">{uploadMessage}</p>}
 
-      <div className="mb-6 rounded-2xl border border-bdr bg-surf p-5">
-        <div className="mb-3 flex flex-wrap items-center gap-3">
+        <label className="mb-2 flex items-center justify-between gap-2 text-sm text-muted">
+          Year
           <input
-            ref={fileInputRef}
-            type="file"
-            accept=".xls,.xlsx"
-            className="hidden"
-            onChange={(e) => {
-              const file = e.target.files?.[0];
-              if (file) handleFile(file);
-              e.target.value = "";
-            }}
+            type="number"
+            value={year}
+            onChange={(e) => setYear(Number(e.target.value))}
+            className="w-20 rounded-lg border border-bdr bg-surf2 px-2 py-1.5 font-mono text-sm text-white outline-none focus:border-amber"
           />
-          <button
-            onClick={() => fileInputRef.current?.click()}
-            disabled={uploading}
-            className="rounded-lg border border-dashed border-bdr px-3 py-2.5 text-sm text-muted transition-colors hover:border-amber hover:text-white disabled:opacity-60"
-          >
-            {uploading ? uploadProgress ?? "Uploading…" : "+ Upload monthly file"}
-          </button>
+        </label>
+        <button
+          onClick={() => fetchReport(year)}
+          disabled={loadingReport}
+          className="w-full rounded-lg bg-gradient-to-br from-amber to-[#d68820] px-4 py-2 text-sm font-semibold text-bg disabled:opacity-50"
+        >
+          {loadingReport ? "Loading…" : "Analyze"}
+        </button>
+      </Sidebar>
 
-          <label className="flex items-center gap-2 text-sm text-muted">
-            Year
-            <input
-              type="number"
-              value={year}
-              onChange={(e) => setYear(Number(e.target.value))}
-              className="w-24 rounded-lg border border-bdr bg-surf2 px-2 py-1.5 font-mono text-sm text-white outline-none focus:border-amber"
-            />
-          </label>
-          <button
-            onClick={() => fetchReport(year)}
-            disabled={loadingReport}
-            className="rounded-lg bg-gradient-to-br from-amber to-[#d68820] px-4 py-2 text-sm font-semibold text-bg disabled:opacity-50"
-          >
-            {loadingReport ? "Loading…" : "Analyze"}
-          </button>
-        </div>
-        {uploadError && <p className="text-sm text-red">{uploadError}</p>}
-        {uploadMessage && <p className="text-sm text-green">{uploadMessage}</p>}
-      </div>
-
+      <main className="min-w-0 flex-1 overflow-y-auto px-6 py-6">
+      <div className="mx-auto max-w-4xl">
       {hasError && (
         <div className="rounded-2xl border border-bdr bg-surf p-5 text-sm text-muted">
           {report && "error" in report ? report.error : null}
@@ -386,26 +368,28 @@ export default function LumenClient({
                         return (
                         <div>
                           <div className="mb-2 text-xs font-semibold text-white">By product family</div>
-                          <div className="space-y-1.5">
+                          <div className="space-y-2">
                             {familyEntries.map(([fam, fc]) => (
-                              <div key={fam} className="flex items-center gap-2 text-xs">
-                                <span
-                                  className="h-2 w-2 shrink-0 rounded-full"
-                                  style={{ backgroundColor: colorForFamily(fam) }}
-                                />
-                                <span className="min-w-0 flex-1 truncate text-muted">{fam}</span>
-                                <span className="shrink-0 font-mono text-muted">
+                              <div key={fam} className="text-xs">
+                                <div className="flex items-center gap-2">
+                                  <span
+                                    className="h-2 w-2 shrink-0 rounded-full"
+                                    style={{ backgroundColor: colorForFamily(fam) }}
+                                  />
+                                  <span className="min-w-0 flex-1 truncate text-muted">{fam}</span>
+                                  <span
+                                    className={`shrink-0 font-mono ${
+                                      fc.pctChange !== null && fc.pctChange < 0 ? "text-red" : "text-green"
+                                    }`}
+                                  >
+                                    {fc.pctChange !== null && fc.pctChange > 0 ? "+" : ""}
+                                    {fc.pctChange ?? "—"}
+                                    {fc.pctChange !== null ? "%" : ""}
+                                  </span>
+                                </div>
+                                <div className="pl-4 font-mono text-[11px] break-words text-muted">
                                   {formatNumber(fc.prevValue)} → {formatNumber(fc.currValue)}
-                                </span>
-                                <span
-                                  className={`w-14 shrink-0 text-right font-mono ${
-                                    fc.pctChange !== null && fc.pctChange < 0 ? "text-red" : "text-green"
-                                  }`}
-                                >
-                                  {fc.pctChange !== null && fc.pctChange > 0 ? "+" : ""}
-                                  {fc.pctChange ?? "—"}
-                                  {fc.pctChange !== null ? "%" : ""}
-                                </span>
+                                </div>
                               </div>
                             ))}
                           </div>
@@ -441,6 +425,8 @@ export default function LumenClient({
           </div>
         </div>
       )}
+      </div>
+      </main>
     </div>
   );
 }

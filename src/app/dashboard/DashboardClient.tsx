@@ -1,9 +1,8 @@
 "use client";
 
 import { useRef, useState } from "react";
-import Link from "next/link";
 import Papa from "papaparse";
-import { createClient } from "@/lib/supabase/client";
+import Sidebar from "@/components/Sidebar";
 
 type Dataset = {
   id: string;
@@ -41,12 +40,6 @@ export default function DashboardClient({
 
   const selectedDataset = datasets.find((d) => d.id === selectedId) ?? null;
   const currentConversation = selectedId ? (conversation[selectedId] ?? []) : [];
-
-  async function handleLogout() {
-    const supabase = createClient();
-    await supabase.auth.signOut();
-    window.location.href = "/login";
-  }
 
   function handleFile(file: File) {
     setUploadError(null);
@@ -121,22 +114,8 @@ export default function DashboardClient({
   }
 
   return (
-    <div className="flex min-h-screen bg-bg">
-      <aside className="flex w-72 shrink-0 flex-col border-r border-bdr bg-surf p-4">
-        <div className="mb-6 flex items-center gap-2">
-          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-gradient-to-br from-amber to-[#d68820] font-bold text-bg">
-            L
-          </div>
-          <div className="font-semibold">Lumen</div>
-        </div>
-
-        <Link
-          href="/lumen"
-          className="mb-4 block rounded-lg border border-bdr bg-surf2 px-3 py-2.5 text-center text-sm font-medium text-amber transition-colors hover:border-amber"
-        >
-          → Territory Decision Engine
-        </Link>
-
+    <div className="flex min-h-screen flex-col bg-bg sm:flex-row">
+      <Sidebar userEmail={userEmail} active="/dashboard">
         <input
           ref={fileInputRef}
           type="file"
@@ -179,17 +158,7 @@ export default function DashboardClient({
             </button>
           ))}
         </div>
-
-        <div className="mt-4 border-t border-bdr pt-4">
-          <div className="mb-2 truncate text-xs text-muted">{userEmail}</div>
-          <button
-            onClick={handleLogout}
-            className="text-sm text-muted hover:text-red"
-          >
-            Sign out
-          </button>
-        </div>
-      </aside>
+      </Sidebar>
 
       <main className="flex flex-1 flex-col">
         {!selectedDataset ? (
