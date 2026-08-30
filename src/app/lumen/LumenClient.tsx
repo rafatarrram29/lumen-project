@@ -4,6 +4,7 @@ import { useRef, useState } from "react";
 import Link from "next/link";
 import { parseSalesFile } from "@/lib/lumen/parseSalesFile";
 import type { Finding, Report } from "@/lib/lumen/engine";
+import { StatTile, AreaChangeBars, FamilyDonut } from "./charts";
 
 const UPLOAD_BATCH_SIZE = 1000;
 
@@ -132,20 +133,20 @@ export default function LumenClient({
     report && !hasError ? report.findings.find((f) => f.type === "systemic_drop") : undefined;
 
   return (
-    <div className="mx-auto min-h-screen max-w-3xl px-4 py-10">
-      <div className="mb-6 flex items-center justify-between gap-2">
-        <div className="flex items-center gap-2">
-          <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-gradient-to-br from-amber to-[#d68820] font-bold text-bg">
+    <div className="mx-auto min-w-0 w-full max-w-3xl min-h-screen overflow-x-hidden px-4 py-10">
+      <div className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <div className="flex min-w-0 items-center gap-2">
+          <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-gradient-to-br from-amber to-[#d68820] font-bold text-bg">
             L
           </div>
-          <div>
-            <div className="text-lg font-semibold">Lumen — Territory Decision Engine</div>
-            <div className="text-xs text-muted">{userEmail}</div>
+          <div className="min-w-0">
+            <div className="truncate text-lg font-semibold">Lumen — Territory Decision Engine</div>
+            <div className="truncate text-xs text-muted">{userEmail}</div>
           </div>
         </div>
         <Link
           href="/dashboard"
-          className="rounded-lg border border-bdr px-3 py-2 text-sm text-muted transition-colors hover:border-amber hover:text-white"
+          className="self-start rounded-lg border border-bdr px-3 py-2 text-sm text-muted transition-colors hover:border-amber hover:text-white sm:self-auto"
         >
           ← Dashboard
         </Link>
@@ -201,6 +202,21 @@ export default function LumenClient({
 
       {report && !hasError && (
         <>
+          <div className="mb-5 grid grid-cols-2 gap-3 sm:grid-cols-4">
+            <StatTile label="Areas analyzed" value={String(areas.length)} />
+            <StatTile
+              label="In decline"
+              value={String(areas.filter(([, d]) => d.pctChange !== null && d.pctChange < 0).length)}
+              tone="red"
+            />
+            <StatTile
+              label="Pattern"
+              value={report.isSystemicDrop ? "Cluster-wide" : findingsByArea.size > 0 ? "Localized" : "Stable"}
+              tone={report.isSystemicDrop ? "red" : findingsByArea.size > 0 ? "amber" : "green"}
+            />
+            <StatTile label="Decisions raised" value={String(report.findings.length)} tone="amber" />
+          </div>
+
           <div className="mb-4 text-sm text-muted">
             Comparing month <span className="font-mono text-white">{report.comparedToMonth}</span>{" "}
             → <span className="font-mono text-white">{report.latestMonth}</span>
@@ -214,14 +230,25 @@ export default function LumenClient({
 
           {systemicFinding && systemicFinding.type === "systemic_drop" && (
             <div className="mb-5 rounded-2xl border border-red/40 bg-red/10 p-5">
-              <p className="mb-2 text-sm">{systemicFinding.summary}</p>
-              <div className="rounded-lg bg-surf2 px-3 py-2 text-sm">
+              <p className="mb-2 break-words text-sm">{systemicFinding.summary}</p>
+              <div className="break-words rounded-lg bg-surf2 px-3 py-2 text-sm">
                 <span className="font-semibold text-amber">Decision: </span>
                 {systemicFinding.decision}
               </div>
             </div>
           )}
 
+          <div className="mb-5">
+            <AreaChangeBars areas={areas} />
+          </div>
+
+          {systemicFinding && systemicFinding.type === "systemic_drop" && (
+            <div className="mb-5">
+              <FamilyDonut families={systemicFinding.allFamilies} />
+            </div>
+          )}
+
+          <h2 className="mb-3 text-sm font-semibold text-white">All areas</h2>
           <div className="space-y-3">
             {areas.map(([area, d]) => {
               const areaFindings = findingsByArea.get(area) ?? [];
@@ -269,7 +296,7 @@ export default function LumenClient({
                       </table>
 
                       {areaFindings.map((f, i) => (
-                        <div key={i} className="rounded-lg bg-surf2 px-3 py-2.5">
+                        <div key={i} className="break-words rounded-lg bg-surf2 px-3 py-2.5">
                           <p className="mb-1.5">{f.summary}</p>
                           {"rootCauseFamily" in f && (
                             <p className="mb-1.5 text-xs text-muted">
