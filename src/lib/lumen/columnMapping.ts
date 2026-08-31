@@ -84,13 +84,13 @@ type GuessRule = { field: keyof ColumnMapping; keywords: string[] };
 // Best-effort pre-fill for the mapping step, so most files just need a
 // glance and confirm rather than mapping six columns by hand every time.
 const GUESS_RULES: GuessRule[] = [
-  { field: "area", keywords: ["area", "region", "territory", "zone"] },
+  { field: "area", keywords: ["area", "region", "territory"] },
   { field: "item", keywords: ["item", "product", "sku", "material"] },
   { field: "value", keywords: ["sales value", "value", "revenue", "amount", "sales"] },
   { field: "qty", keywords: ["sales qty", "quantity", "qty", "units"] },
   { field: "month", keywords: ["month", "period"] },
   { field: "rep", keywords: ["rep", "representative", "salesperson", "agent"] },
-  { field: "cluster", keywords: ["cluster", "group", "district"] },
+  { field: "cluster", keywords: ["cluster", "group", "district", "zone"] },
 ];
 
 export function guessMapping(headers: string[]): Partial<Record<keyof ColumnMapping, string>> {
@@ -104,14 +104,10 @@ export function guessMapping(headers: string[]): Partial<Record<keyof ColumnMapp
       if (used.has(header)) continue;
       const normalized = header.trim().toLowerCase();
       for (const keyword of rule.keywords) {
-        if (normalized === keyword) {
+        const score = normalized === keyword ? keyword.length + 1000 : normalized.includes(keyword) ? keyword.length : 0;
+        if (score > bestScore) {
           best = header;
-          bestScore = keyword.length + 1000;
-          break;
-        }
-        if (normalized.includes(keyword) && keyword.length > bestScore) {
-          best = header;
-          bestScore = keyword.length;
+          bestScore = score;
         }
       }
     }
