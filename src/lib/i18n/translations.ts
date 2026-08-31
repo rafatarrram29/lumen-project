@@ -257,7 +257,7 @@ const en: Translations = {
 
 const ar: Translations = {
   common: {
-    appName: "لومن",
+    appName: "Lumen",
     tagline: "محرك قرارات المناطق",
     signOut: "تسجيل الخروج",
     cancel: "إلغاء",
