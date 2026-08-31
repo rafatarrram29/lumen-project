@@ -27,6 +27,12 @@ export function StatTile({
     green: "text-green",
   }[tone];
 
+  // The value is usually a short number, but a few tiles (like "Pattern")
+  // show a word or two instead — those need a smaller size to fit the
+  // tile at all; break-words is a last-resort safety net so nothing gets
+  // silently cut off if a value is longer than any size class expects.
+  const sizeClass = value.length > 10 ? "text-base" : value.length > 6 ? "text-lg" : "text-xl";
+
   return (
     <div
       className="rounded-xl border border-bdr bg-surf p-3.5 transition-all duration-500 ease-out"
@@ -37,7 +43,7 @@ export function StatTile({
       }}
     >
       <div className="mb-1 text-xs text-muted">{label}</div>
-      <div className={`truncate font-mono text-xl font-semibold ${toneClass}`}>{value}</div>
+      <div className={`break-words font-mono font-semibold leading-tight ${sizeClass} ${toneClass}`}>{value}</div>
     </div>
   );
 }
