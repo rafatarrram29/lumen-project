@@ -322,7 +322,7 @@ const ar: Translations = {
     areasAnalyzed: "المناطق المحللة",
     inDecline: "في انخفاض",
     pattern: "النمط",
-    clusterWide: "على مستوى الكلستر",
+    clusterWide: "جماعي",
     localized: "محلي",
     stable: "مستقر",
     decisionsRaised: "القرارات المطروحة",
