@@ -56,7 +56,8 @@ npm run dev
 
 Open [http://localhost:3000](http://localhost:3000). Sign up with an email
 and password, confirm the email (Supabase sends a confirmation link), sign
-in, then upload a monthly `.xls`/`.xlsx` sales export and see the analysis.
+in, then upload a monthly sales export — `.xlsx`, `.xls`, `.xlsm`, `.csv`,
+`.tsv`, `.txt`, or `.ods` — and see the analysis.
 
 ## 4. Deploy to Vercel (free, permanent URL)
 

@@ -300,7 +300,7 @@ export default function LumenClient({
         <input
           ref={fileInputRef}
           type="file"
-          accept=".xls,.xlsx"
+          accept=".xlsx,.xls,.xlsm,.csv,.tsv,.txt,.ods"
           className="hidden"
           onChange={(e) => {
             const file = e.target.files?.[0];
