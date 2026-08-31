@@ -10,6 +10,8 @@ type IncomingRow = {
   salesQty: number | null;
   salesValue: number;
   month: number;
+  rep: string | null;
+  cluster: string | null;
 };
 
 export async function POST(request: Request) {
@@ -25,11 +27,15 @@ export async function POST(request: Request) {
 
   const body = await request.json().catch(() => null);
   const year = Number(body?.year);
+  const datasetId = typeof body?.datasetId === "string" ? body.datasetId : null;
   const sourceFile = typeof body?.sourceFile === "string" ? body.sourceFile.slice(0, 300) : null;
   const rows: IncomingRow[] = Array.isArray(body?.rows) ? body.rows : [];
 
   if (!Number.isInteger(year) || year < 2000 || year > 2100) {
     return NextResponse.json({ error: "Invalid year" }, { status: 400 });
+  }
+  if (!datasetId) {
+    return NextResponse.json({ error: "Missing datasetId" }, { status: 400 });
   }
   if (rows.length === 0) {
     return NextResponse.json({ error: "No rows to insert" }, { status: 400 });
@@ -62,6 +68,9 @@ export async function POST(request: Request) {
       year,
       uploaded_at: uploadedAt,
       source_file: sourceFile,
+      dataset_id: datasetId,
+      rep: typeof r.rep === "string" ? r.rep : null,
+      cluster: typeof r.cluster === "string" ? r.cluster : null,
     }));
 
   if (records.length === 0) {

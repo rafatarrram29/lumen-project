@@ -1,5 +1,3 @@
-import { FAMILY_PREFIXES } from "./engine";
-
 // Fixed hue order (validated for the app's dark surface #121a38 — see
 // dataviz skill's validate_palette.js). Deliberately excludes red/green,
 // which are reserved as the app's decline/growth status colors elsewhere
@@ -13,12 +11,18 @@ const CATEGORICAL_HUES = [
   "#9085e9", // violet
 ];
 
-const FAMILY_COLOR_MAP: Record<string, string> = Object.fromEntries(
-  FAMILY_PREFIXES.map((family, i) => [family, CATEGORICAL_HUES[i % CATEGORICAL_HUES.length]]),
-);
-
-const OTHER_COLOR = "#8b93b0"; // muted — anything outside the known family list
+// Item/family names are arbitrary per dataset (no fixed known list), so
+// colors are assigned deterministically by hashing the name instead of a
+// static lookup table — the same name always gets the same color within a
+// session, without needing to know every possible name up front.
+function hashString(value: string): number {
+  let hash = 0;
+  for (let i = 0; i < value.length; i++) {
+    hash = (hash * 31 + value.charCodeAt(i)) | 0;
+  }
+  return Math.abs(hash);
+}
 
 export function colorForFamily(family: string): string {
-  return FAMILY_COLOR_MAP[family] ?? OTHER_COLOR;
+  return CATEGORICAL_HUES[hashString(family) % CATEGORICAL_HUES.length];
 }
