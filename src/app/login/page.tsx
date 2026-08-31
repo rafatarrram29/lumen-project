@@ -29,7 +29,7 @@ export default function LoginPage() {
         setLoading(false);
         return;
       }
-      window.location.href = "/dashboard";
+      window.location.href = "/";
     } else {
       const { error } = await supabase.auth.signUp({
         email,
@@ -59,10 +59,10 @@ export default function LoginPage() {
         </div>
 
         <h1 className="mb-1 text-xl font-semibold">
-          Sales insight, no analyst required
+          Territory Decision Engine
         </h1>
         <p className="mb-6 text-sm text-muted">
-          Upload your spreadsheet, ask in plain English, get the answer.
+          Upload your monthly sales export, get territory-level decisions.
         </p>
 
         <form onSubmit={handleSubmit} className="space-y-3.5">

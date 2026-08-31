@@ -1,10 +1,10 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 
-// Deletes existing rows for the given year/months before a re-upload, so
-// re-ingesting a corrected file replaces the old data instead of stacking
-// a duplicate copy on top of it (see supabase/lumen_dedupe.sql for the
-// one-time cleanup of duplicates created before this existed).
+// Deletes existing rows for the given dataset/year/months before a
+// re-upload, so re-ingesting a corrected file replaces the old data
+// instead of stacking a duplicate copy on top of it. Scoped to a single
+// dataset_id — re-uploading into one dataset never touches another.
 export async function POST(request: Request) {
   const supabase = await createClient();
 
@@ -18,6 +18,7 @@ export async function POST(request: Request) {
 
   const body = await request.json().catch(() => null);
   const year = Number(body?.year);
+  const datasetId = typeof body?.datasetId === "string" ? body.datasetId : null;
   const months: number[] = Array.isArray(body?.months)
     ? body.months.filter((m: unknown) => Number.isInteger(m))
     : [];
@@ -25,11 +26,15 @@ export async function POST(request: Request) {
   if (!Number.isInteger(year) || year < 2000 || year > 2100 || months.length === 0) {
     return NextResponse.json({ error: "Invalid year or months" }, { status: 400 });
   }
+  if (!datasetId) {
+    return NextResponse.json({ error: "Missing datasetId" }, { status: 400 });
+  }
 
   const { error, count } = await supabase
     .from("lumen_sales_records")
     .delete({ count: "exact" })
     .eq("year", year)
+    .eq("dataset_id", datasetId)
     .in("month", months);
 
   if (error) {

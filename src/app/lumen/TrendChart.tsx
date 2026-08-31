@@ -84,7 +84,7 @@ export function TrendChart({
       </div>
       <div className="h-56 w-full">
         <ResponsiveContainer width="100%" height="100%">
-          <LineChart data={data} margin={{ top: 8, right: 8, left: -20, bottom: 0 }}>
+          <LineChart data={data} margin={{ top: 8, right: 8, left: -4, bottom: 0 }}>
             <CartesianGrid stroke="#2a3559" strokeDasharray="3 3" vertical={false} />
             <XAxis
               dataKey="month"
@@ -94,7 +94,7 @@ export function TrendChart({
               axisLine={{ stroke: "#2a3559" }}
               tickFormatter={(v: string) => v.replace("Month ", "M")}
             />
-            <YAxis stroke="#8b93b0" fontSize={11} tickLine={false} axisLine={false} width={36} />
+            <YAxis stroke="#8b93b0" fontSize={11} tickLine={false} axisLine={false} width={40} />
             <Tooltip content={CustomTooltip} />
             <Legend wrapperStyle={{ fontSize: 11 }} />
             <Line

@@ -157,7 +157,7 @@ export function FamilyChangeBars({
   return (
     <div className="rounded-2xl border border-bdr bg-surf p-4 sm:p-5">
       <div className="mb-3 flex items-center justify-between gap-2">
-        <h2 className="text-sm font-semibold text-white">Product family comparison</h2>
+        <h2 className="text-sm font-semibold text-white">Item comparison</h2>
         <Legend />
       </div>
       <DivergingBarChart rows={rows} maxRows={10} />
