@@ -5,6 +5,7 @@ import { readWorkbookSheet, applyColumnMapping, type ColumnMapping, type Dataset
 import type { Finding, Report } from "@/lib/lumen/engine";
 import { StatTile, AreaChangeBars, FamilyChangeBars } from "./charts";
 import { TrendChart } from "./TrendChart";
+import { ItemTrendChart } from "./ItemTrendChart";
 import { colorForFamily } from "@/lib/lumen/familyColors";
 import Sidebar from "@/components/Sidebar";
 import { UploadWizardModal, type WizardChoice } from "./UploadWizardModal";
@@ -63,6 +64,7 @@ export default function LumenClient({
   const [uploadError, setUploadError] = useState<string | null>(null);
   const [uploadMessage, setUploadMessage] = useState<string | null>(null);
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
+  const [expandedItems, setExpandedItems] = useState<Set<string>>(new Set());
   const [pendingFile, setPendingFile] = useState<File | null>(null);
   const [pendingSheet, setPendingSheet] = useState<RawSheet | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -214,6 +216,26 @@ export default function LumenClient({
     requestAnimationFrame(() => {
       document.getElementById(areaCardId(area))?.scrollIntoView({ behavior: "smooth", block: "center" });
     });
+  }
+
+  function toggleItem(item: string) {
+    setExpandedItems((prev) => {
+      const next = new Set(prev);
+      if (next.has(item)) next.delete(item);
+      else next.add(item);
+      return next;
+    });
+  }
+
+  function findingsForItem(item: string): { areas: string[]; clusters: string[] } {
+    const areasForItem: string[] = [];
+    const clustersForItem: string[] = [];
+    if (!report || "error" in report) return { areas: areasForItem, clusters: clustersForItem };
+    for (const f of report.findings) {
+      if (f.type === "local_drop" && f.rootCauseFamily === item) areasForItem.push(f.area);
+      if (f.type === "systemic_drop" && f.rootCauseFamily === item) clustersForItem.push(f.cluster);
+    }
+    return { areas: areasForItem, clusters: clustersForItem };
   }
 
   const hasError = report && "error" in report;
@@ -431,11 +453,12 @@ export default function LumenClient({
                     <div className="mt-4 space-y-5 border-t border-bdr pt-4 text-sm">
                       <div>
                         <p className="mb-2">
-                          Value: <span className="font-mono text-white">{formatNumber(d.prevValue)}</span>{" "}
-                          (previous month) →{" "}
-                          <span className="font-mono text-white">{formatNumber(d.currValue)}</span> (this month).
-                          Quantity: <span className="font-mono text-white">{formatNumber(d.prevQty)}</span> →{" "}
-                          <span className="font-mono text-white">{formatNumber(d.currQty)}</span>.
+                          Value: Month {report.comparedToMonth}:{" "}
+                          <span className="font-mono text-white">{formatNumber(d.prevValue)}</span> → Month{" "}
+                          {report.latestMonth}: <span className="font-mono text-white">{formatNumber(d.currValue)}</span>.
+                          Quantity: Month {report.comparedToMonth}:{" "}
+                          <span className="font-mono text-white">{formatNumber(d.prevQty)}</span> → Month{" "}
+                          {report.latestMonth}: <span className="font-mono text-white">{formatNumber(d.currQty)}</span>.
                         </p>
                         {clusterPct !== null && (
                           <p className="mb-2 text-xs text-muted">
@@ -485,9 +508,21 @@ export default function LumenClient({
                         <div>
                           <div className="mb-2 text-xs font-semibold text-white">By item</div>
                           <div className="space-y-2">
-                            {familyEntries.map(([fam, fc]) => (
+                            {familyEntries.map(([fam, fc]) => {
+                              const itemOpen = expandedItems.has(fam);
+                              const itemSeries = report.itemMonthlySeries[fam] ?? [];
+                              const areaRanking = Object.entries(report.areaFamilyChanges)
+                                .map(([a, changes]) => [a, changes[fam]] as const)
+                                .filter((entry): entry is [string, (typeof report.areaFamilyChanges)[string][string]] => entry[1] !== undefined)
+                                .sort((a, b) => b[1].currValue - a[1].currValue);
+                              const { areas: rootCauseAreas, clusters: rootCauseClusters } = findingsForItem(fam);
+
+                              return (
                               <div key={fam} className="text-xs">
-                                <div className="flex items-center gap-2">
+                                <button
+                                  onClick={() => toggleItem(fam)}
+                                  className="flex w-full items-center gap-2 rounded-lg text-left transition-colors hover:bg-surf2/60"
+                                >
                                   <span
                                     className="h-2 w-2 shrink-0 rounded-full"
                                     style={{ backgroundColor: colorForFamily(fam) }}
@@ -502,12 +537,70 @@ export default function LumenClient({
                                     {fc.pctChange ?? "—"}
                                     {fc.pctChange !== null ? "%" : ""}
                                   </span>
-                                </div>
+                                  <span className="shrink-0 text-[10px] text-muted">{itemOpen ? "Hide" : "Details"}</span>
+                                </button>
                                 <div className="pl-4 font-mono text-[11px] break-words text-muted">
-                                  {formatNumber(fc.prevValue)} → {formatNumber(fc.currValue)}
+                                  Month {report.comparedToMonth}: {formatNumber(fc.prevValue)} → Month{" "}
+                                  {report.latestMonth}: {formatNumber(fc.currValue)}
                                 </div>
+
+                                {itemOpen && (
+                                  <div className="ml-4 mt-2 space-y-3 rounded-lg bg-surf2/60 p-3">
+                                    {itemSeries.length >= 2 && (
+                                      <div>
+                                        <div className="mb-1 text-[11px] font-semibold text-white">
+                                          Trend — last {itemSeries.length} months
+                                        </div>
+                                        <ItemTrendChart label={fam} series={itemSeries} />
+                                      </div>
+                                    )}
+
+                                    {areaRanking.length > 0 && (
+                                      <div>
+                                        <div className="mb-1 text-[11px] font-semibold text-white">
+                                          By area — Month {report.latestMonth}
+                                        </div>
+                                        <div className="space-y-1">
+                                          {areaRanking.map(([a, changes], i) => (
+                                            <div key={a} className="flex items-center justify-between gap-2 text-[11px]">
+                                              <span className="min-w-0 flex-1 truncate text-muted">
+                                                {a}
+                                                {i === 0 && areaRanking.length > 1 && (
+                                                  <span className="ml-1.5 rounded-full border border-green/40 px-1.5 py-0.5 text-[9px] text-green">
+                                                    Top
+                                                  </span>
+                                                )}
+                                                {i === areaRanking.length - 1 && areaRanking.length > 1 && (
+                                                  <span className="ml-1.5 rounded-full border border-red/40 px-1.5 py-0.5 text-[9px] text-red">
+                                                    Lowest
+                                                  </span>
+                                                )}
+                                              </span>
+                                              <span className="shrink-0 font-mono text-white">
+                                                {formatNumber(changes.currValue)}
+                                              </span>
+                                            </div>
+                                          ))}
+                                        </div>
+                                      </div>
+                                    )}
+
+                                    {(rootCauseAreas.length > 0 || rootCauseClusters.length > 0) && (
+                                      <div className="text-[11px] text-muted">
+                                        <span className="font-semibold text-amber">Root cause for: </span>
+                                        {[
+                                          ...rootCauseAreas,
+                                          ...rootCauseClusters.map((c) =>
+                                            c === "All areas" ? "the cluster-wide drop" : `the cluster-wide drop in ${c}`,
+                                          ),
+                                        ].join(", ")}
+                                      </div>
+                                    )}
+                                  </div>
+                                )}
                               </div>
-                            ))}
+                              );
+                            })}
                           </div>
                         </div>
                         );

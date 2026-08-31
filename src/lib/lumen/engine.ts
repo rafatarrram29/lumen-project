@@ -103,6 +103,7 @@ export type Report =
       clusters: Record<string, ClusterSummary>;
       familyChanges: Record<string, FamilyChange>;
       areaFamilyChanges: Record<string, Record<string, FamilyChange>>;
+      itemMonthlySeries: Record<string, MonthPoint[]>;
       findings: Finding[];
     };
 
@@ -122,6 +123,20 @@ function groupAreaMonthTotals(records: SalesRecord[]): Map<string, Map<number, M
   for (const r of records) {
     if (!data.has(r.area)) data.set(r.area, new Map());
     const months = data.get(r.area)!;
+    const existing = months.get(r.month) ?? { value: 0, qty: 0 };
+    months.set(r.month, {
+      value: existing.value + r.salesValue,
+      qty: existing.qty + (r.salesQty ?? 0),
+    });
+  }
+  return data;
+}
+
+function groupFamilyMonthTotals(records: SalesRecord[]): Map<string, Map<number, MonthTotal>> {
+  const data = new Map<string, Map<number, MonthTotal>>();
+  for (const r of records) {
+    if (!data.has(r.family)) data.set(r.family, new Map());
+    const months = data.get(r.family)!;
     const existing = months.get(r.month) ?? { value: 0, qty: 0 };
     months.set(r.month, {
       value: existing.value + r.salesValue,
@@ -375,6 +390,21 @@ export function buildReport(records: SalesRecord[], year: number): Report {
     }
   }
 
+  // Per-item monthly series, across all areas — lets the UI show an
+  // item's own trend line independent of which area's breakdown it was
+  // clicked from.
+  const familyMonthTotals = groupFamilyMonthTotals(records);
+  const itemMonthlySeries: Record<string, MonthPoint[]> = {};
+  for (const [fam, months] of familyMonthTotals) {
+    const series = chartMonths
+      .filter((m) => months.has(m))
+      .map((m) => {
+        const t = months.get(m)!;
+        return { month: m, value: Math.round(t.value), qty: Math.round(t.qty) };
+      });
+    if (series.length > 0) itemMonthlySeries[fam] = series;
+  }
+
   // --- Rule 4: transfer opportunity ---
   for (const area of risingAreas) {
     const famData = familyTotals.get(area);
@@ -407,6 +437,7 @@ export function buildReport(records: SalesRecord[], year: number): Report {
     clusters,
     familyChanges,
     areaFamilyChanges,
+    itemMonthlySeries,
     findings,
   };
 }
