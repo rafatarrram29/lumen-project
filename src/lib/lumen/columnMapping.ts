@@ -36,6 +36,7 @@ export type Dataset = {
   name: string;
   columnMapping: ColumnMapping;
   createdAt: string;
+  userId: string | null;
 };
 
 const MAX_HEADER_SCAN_ROWS = 10;

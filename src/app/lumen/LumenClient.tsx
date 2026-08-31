@@ -45,12 +45,14 @@ function Badge({ pctChange }: { pctChange: number | null }) {
 
 export default function LumenClient({
   userEmail,
+  userId,
   initialYear,
   initialDatasets,
   initialDatasetId,
   initialReport,
 }: {
   userEmail: string;
+  userId: string;
   initialYear: number;
   initialDatasets: Dataset[];
   initialDatasetId: string | null;
@@ -355,7 +357,7 @@ export default function LumenClient({
                     >
                       {d.name}
                     </button>
-                    {isSelected && (
+                    {isSelected && d.userId === userId && (
                       <button
                         onClick={() => handleDeleteDataset(d)}
                         title={t.sidebar.deleteDataset(d.name)}

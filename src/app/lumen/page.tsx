@@ -18,7 +18,7 @@ export default async function LumenPage() {
 
   const { data: datasetRows } = await supabase
     .from("lumen_datasets")
-    .select("id, name, column_mapping, created_at")
+    .select("id, name, column_mapping, created_at, user_id")
     .order("created_at", { ascending: false });
 
   const datasets: Dataset[] = (datasetRows ?? []).map((d) => ({
@@ -26,6 +26,7 @@ export default async function LumenPage() {
     name: d.name as string,
     columnMapping: d.column_mapping as ColumnMapping,
     createdAt: d.created_at as string,
+    userId: d.user_id as string | null,
   }));
 
   const year = new Date().getFullYear();
@@ -58,6 +59,7 @@ export default async function LumenPage() {
   return (
     <LumenClient
       userEmail={user.email ?? ""}
+      userId={user.id}
       initialYear={year}
       initialDatasets={datasets}
       initialDatasetId={initialDatasetId}

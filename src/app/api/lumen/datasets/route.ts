@@ -15,7 +15,7 @@ export async function GET() {
 
   const { data, error } = await supabase
     .from("lumen_datasets")
-    .select("id, name, column_mapping, created_at")
+    .select("id, name, column_mapping, created_at, user_id")
     .order("created_at", { ascending: false });
 
   if (error) {
@@ -28,6 +28,7 @@ export async function GET() {
       name: d.name as string,
       columnMapping: d.column_mapping as ColumnMapping,
       createdAt: d.created_at as string,
+      userId: d.user_id as string | null,
     })),
   });
 }
@@ -73,8 +74,8 @@ export async function POST(request: Request) {
 
   const { data, error } = await supabase
     .from("lumen_datasets")
-    .insert({ name, column_mapping: columnMapping })
-    .select("id, name, column_mapping, created_at")
+    .insert({ name, column_mapping: columnMapping, user_id: user.id })
+    .select("id, name, column_mapping, created_at, user_id")
     .single();
 
   if (error) {
@@ -87,6 +88,7 @@ export async function POST(request: Request) {
       name: data.name as string,
       columnMapping: data.column_mapping as ColumnMapping,
       createdAt: data.created_at as string,
+      userId: data.user_id as string | null,
     },
   });
 }
