@@ -22,7 +22,7 @@ const SYSTEMIC_DROP_THRESHOLD = -15.0;
 const SYSTEMIC_AREA_FRACTION = 0.6;
 const TREND_DROP_STREAK = 3;
 const TREND_CHART_MONTHS = 6;
-const DEFAULT_CLUSTER = "All areas";
+export const DEFAULT_CLUSTER = "All areas";
 
 export type SalesRecord = {
   area: string;
@@ -64,6 +64,8 @@ export type ClusterSummary = {
 type SystemicDropFinding = {
   type: "systemic_drop";
   cluster: string;
+  droppingCount: number;
+  totalAreas: number;
   summary: string;
   rootCauseFamily: string;
   rootCauseDetail: FamilyChange;
@@ -74,6 +76,7 @@ type SystemicDropFinding = {
 type LocalDropFinding = {
   type: "local_drop";
   area: string;
+  pctChange: number | null;
   summary: string;
   rootCauseFamily: string;
   rootCauseDetail: { pctChange: number | null; absDrop: number };
@@ -356,6 +359,8 @@ export function buildReport(records: SalesRecord[], year: number): Report {
       findings.push({
         type: "systemic_drop",
         cluster: clusterLabel,
+        droppingCount: dropping.length,
+        totalAreas: summary.totalAreas,
         summary:
           `${dropping.length} of ${summary.totalAreas} areas` +
           (clusterLabel === DEFAULT_CLUSTER ? "" : ` in ${clusterLabel}`) +
@@ -381,6 +386,7 @@ export function buildReport(records: SalesRecord[], year: number): Report {
         findings.push({
           type: "local_drop",
           area,
+          pctChange: areaChanges[area].pctChange,
           summary: `${area} dropped ${areaChanges[area].pctChange}% and did not move with the rest of the cluster.`,
           rootCauseFamily: worst[0],
           rootCauseDetail: worst[1],

@@ -9,6 +9,8 @@ import { ItemTrendChart } from "./ItemTrendChart";
 import { colorForFamily } from "@/lib/lumen/familyColors";
 import Sidebar from "@/components/Sidebar";
 import { UploadWizardModal, type WizardChoice } from "./UploadWizardModal";
+import { useLanguage } from "@/lib/i18n/LanguageProvider";
+import { findingSummary, findingDecision } from "@/lib/i18n/findingText";
 
 function areaCardId(area: string): string {
   return `area-card-${encodeURIComponent(area)}`;
@@ -17,7 +19,7 @@ function areaCardId(area: string): string {
 const UPLOAD_BATCH_SIZE = 1000;
 
 function formatNumber(n: number): string {
-  return n.toLocaleString();
+  return n.toLocaleString("en-US");
 }
 
 function Badge({ pctChange }: { pctChange: number | null }) {
@@ -54,6 +56,7 @@ export default function LumenClient({
   initialDatasetId: string | null;
   initialReport: Report;
 }) {
+  const { t } = useLanguage();
   const [year, setYear] = useState(initialYear);
   const [datasets, setDatasets] = useState<Dataset[]>(initialDatasets);
   const [selectedDatasetId, setSelectedDatasetId] = useState<string | null>(initialDatasetId);
@@ -76,7 +79,7 @@ export default function LumenClient({
       const json = await res.json();
       setReport(json);
     } catch {
-      setReport({ error: "Could not load the report." });
+      setReport({ error: t.dashboard.couldNotLoad });
     } finally {
       setLoadingReport(false);
     }
@@ -89,9 +92,7 @@ export default function LumenClient({
   }
 
   async function handleDeleteDataset(dataset: Dataset) {
-    const proceed = window.confirm(
-      `Delete "${dataset.name}"? This permanently removes all of its uploaded data. This cannot be undone.`,
-    );
+    const proceed = window.confirm(t.dashboard.deleteDatasetConfirm(dataset.name));
     if (!proceed) return;
 
     setUploadError(null);
@@ -110,7 +111,7 @@ export default function LumenClient({
         if (next) {
           await fetchReport(next, year);
         } else {
-          setReport({ error: "No datasets yet — upload a file to get started." });
+          setReport({ error: t.dashboard.noDatasets });
         }
       }
     } catch (err) {
@@ -312,13 +313,13 @@ export default function LumenClient({
           disabled={uploading}
           className="mb-2 w-full rounded-lg border border-dashed border-bdr px-3 py-2.5 text-sm text-muted transition-colors hover:border-amber hover:text-white disabled:opacity-60"
         >
-          {uploading ? uploadProgress ?? "Uploading…" : "+ Upload monthly file"}
+          {uploading ? uploadProgress ?? t.sidebar.uploading : t.sidebar.upload}
         </button>
         {uploadError && <p className="mb-2 break-words text-xs text-red">{uploadError}</p>}
         {uploadMessage && <p className="mb-2 break-words text-xs text-green">{uploadMessage}</p>}
 
         <label className="mb-2 flex items-center justify-between gap-2 text-sm text-muted">
-          Year
+          {t.sidebar.year}
           <input
             type="number"
             value={year}
@@ -331,12 +332,12 @@ export default function LumenClient({
           disabled={loadingReport || !selectedDatasetId}
           className="w-full rounded-lg bg-gradient-to-br from-amber to-[#d68820] px-4 py-2 text-sm font-semibold text-bg disabled:opacity-50"
         >
-          {loadingReport ? "Loading…" : "Analyze"}
+          {loadingReport ? t.sidebar.loading : t.sidebar.analyze}
         </button>
 
         {datasets.length > 0 && (
           <div className="mt-4 border-t border-bdr pt-4">
-            <div className="mb-2 text-xs font-semibold text-muted">Datasets</div>
+            <div className="mb-2 text-xs font-semibold text-muted">{t.sidebar.datasets}</div>
             <div className="flex flex-col gap-1.5">
               {datasets.map((d) => {
                 const isSelected = d.id === selectedDatasetId;
@@ -345,7 +346,8 @@ export default function LumenClient({
                     <button
                       onClick={() => selectDataset(d.id)}
                       title={d.name}
-                      className={`min-w-0 flex-1 truncate rounded-lg border px-3 py-1.5 text-left text-sm transition-colors ${
+                      dir="auto"
+                      className={`min-w-0 flex-1 truncate rounded-lg border px-3 py-1.5 text-start text-sm transition-colors ${
                         isSelected
                           ? "border-amber bg-amber/10 text-white"
                           : "border-bdr text-muted hover:text-white"
@@ -356,8 +358,8 @@ export default function LumenClient({
                     {isSelected && (
                       <button
                         onClick={() => handleDeleteDataset(d)}
-                        title={`Delete ${d.name}`}
-                        aria-label={`Delete ${d.name}`}
+                        title={t.sidebar.deleteDataset(d.name)}
+                        aria-label={t.sidebar.deleteDataset(d.name)}
                         className="shrink-0 rounded-lg border border-bdr px-2.5 py-1.5 text-muted transition-colors hover:border-red hover:text-red"
                       >
                         ×
@@ -396,30 +398,29 @@ export default function LumenClient({
       {report && !hasError && (
         <div key={`${selectedDatasetId}-${report.year}-${report.comparedToMonth}-${report.latestMonth}-${areas.length}`}>
           <div className="mb-5 grid grid-cols-2 gap-3 sm:grid-cols-4">
-            <StatTile label="Areas analyzed" value={String(areas.length)} delayMs={0} />
+            <StatTile label={t.dashboard.areasAnalyzed} value={String(areas.length)} delayMs={0} />
             <StatTile
-              label="In decline"
+              label={t.dashboard.inDecline}
               value={String(areas.filter(([, d]) => d.pctChange !== null && d.pctChange < 0).length)}
               tone="red"
               delayMs={60}
             />
             <StatTile
-              label="Pattern"
-              value={report.isSystemicDrop ? "Cluster-wide" : findingsByArea.size > 0 ? "Localized" : "Stable"}
+              label={t.dashboard.pattern}
+              value={report.isSystemicDrop ? t.dashboard.clusterWide : findingsByArea.size > 0 ? t.dashboard.localized : t.dashboard.stable}
               tone={report.isSystemicDrop ? "red" : findingsByArea.size > 0 ? "amber" : "green"}
               delayMs={120}
             />
-            <StatTile label="Decisions raised" value={String(report.findings.length)} tone="amber" delayMs={180} />
+            <StatTile label={t.dashboard.decisionsRaised} value={String(report.findings.length)} tone="amber" delayMs={180} />
           </div>
 
           <div className="mb-4 text-sm text-muted">
-            Comparing month <span className="font-mono text-white">{report.comparedToMonth}</span>{" "}
-            → <span className="font-mono text-white">{report.latestMonth}</span>
+            {t.dashboard.comparingMonth(report.comparedToMonth, report.latestMonth)}
             {" — "}
             {report.isSystemicDrop ? (
-              <span className="font-semibold text-red">cluster-wide drop detected</span>
+              <span className="font-semibold text-red">{t.dashboard.systemicDetected}</span>
             ) : (
-              <span className="text-green">no systemic pattern</span>
+              <span className="text-green">{t.dashboard.noSystemicPattern}</span>
             )}
           </div>
 
@@ -427,11 +428,11 @@ export default function LumenClient({
             <div key={i} className="mb-5 rounded-2xl border border-red/40 bg-red/10 p-5">
               <p className="mb-2 break-words text-sm">
                 {report.hasClusters && <span className="font-semibold text-white">{f.cluster}: </span>}
-                {f.summary}
+                {findingSummary(f, report, t)}
               </p>
               <div className="break-words rounded-lg bg-surf2 px-3 py-2 text-sm">
-                <span className="font-semibold text-amber">Decision: </span>
-                {f.decision}
+                <span className="font-semibold text-amber">{t.dashboard.decision} </span>
+                {findingDecision(f, t)}
               </div>
             </div>
           ))}
@@ -444,7 +445,7 @@ export default function LumenClient({
             <FamilyChangeBars families={report.familyChanges} />
           </div>
 
-          <h2 className="mb-3 text-sm font-semibold text-white">All areas</h2>
+          <h2 className="mb-3 text-sm font-semibold text-white">{t.dashboard.allAreas}</h2>
           <div className="space-y-3">
             {areas.map(([area, d]) => {
               const areaFindings = findingsByArea.get(area) ?? [];
@@ -453,10 +454,10 @@ export default function LumenClient({
               const areaClusterSystemic = clusterSummary?.isSystemicDrop ?? false;
               const causeLine =
                 areaFindings.length > 0
-                  ? areaFindings[0].summary
+                  ? findingSummary(areaFindings[0], report, t)
                   : areaClusterSystemic && d.pctChange !== null && d.pctChange <= -15
-                    ? "Part of the cluster-wide drop — see the systemic finding above."
-                    : "No significant change this month.";
+                    ? t.dashboard.partOfClusterDrop
+                    : t.dashboard.noChangeThisMonth;
 
               const clusterSeries = clusterSummary?.monthlySeries ?? [];
               const clusterLast = clusterSeries[clusterSeries.length - 1];
@@ -474,13 +475,13 @@ export default function LumenClient({
                 >
                   <button
                     onClick={() => toggle(area)}
-                    className="flex w-full items-center justify-between gap-3 text-left"
+                    className="flex w-full items-center justify-between gap-3 text-start"
                   >
                     <div className="min-w-0">
                       <div className="flex items-center gap-2">
-                        <span className="truncate font-medium">{area}</span>
+                        <span className="truncate font-medium" dir="auto">{area}</span>
                         {report.hasClusters && (
-                          <span className="shrink-0 rounded-full border border-bdr px-1.5 py-0.5 text-[10px] text-muted">
+                          <span className="shrink-0 rounded-full border border-bdr px-1.5 py-0.5 text-[10px] text-muted" dir="auto">
                             {d.cluster}
                           </span>
                         )}
@@ -489,7 +490,7 @@ export default function LumenClient({
                     </div>
                     <div className="flex shrink-0 items-center gap-3">
                       <Badge pctChange={d.pctChange} />
-                      <span className="text-xs text-muted">{isOpen ? "Hide" : "Details"}</span>
+                      <span className="text-xs text-muted">{isOpen ? t.common.hide : t.common.details}</span>
                     </div>
                   </button>
 
@@ -497,43 +498,39 @@ export default function LumenClient({
                     <div className="mt-4 space-y-5 border-t border-bdr pt-4 text-sm">
                       <div>
                         <p className="mb-2">
-                          Value: Month {report.comparedToMonth}:{" "}
-                          <span className="font-mono text-white">{formatNumber(d.prevValue)}</span> → Month{" "}
-                          {report.latestMonth}: <span className="font-mono text-white">{formatNumber(d.currValue)}</span>.
-                          Quantity: Month {report.comparedToMonth}:{" "}
-                          <span className="font-mono text-white">{formatNumber(d.prevQty)}</span> → Month{" "}
-                          {report.latestMonth}: <span className="font-mono text-white">{formatNumber(d.currQty)}</span>.
+                          {t.dashboard.valueLabel} {t.common.month(report.comparedToMonth)}:{" "}
+                          <span className="font-mono text-white">{formatNumber(d.prevValue)}</span> →{" "}
+                          {t.common.month(report.latestMonth)}:{" "}
+                          <span className="font-mono text-white">{formatNumber(d.currValue)}</span>.{" "}
+                          {t.dashboard.quantityLabel} {t.common.month(report.comparedToMonth)}:{" "}
+                          <span className="font-mono text-white">{formatNumber(d.prevQty)}</span> →{" "}
+                          {t.common.month(report.latestMonth)}:{" "}
+                          <span className="font-mono text-white">{formatNumber(d.currQty)}</span>.
                         </p>
                         {clusterPct !== null && (
                           <p className="mb-2 text-xs text-muted">
-                            This area moved{" "}
-                            <span className={d.pctChange !== null && d.pctChange < 0 ? "text-red" : "text-green"}>
-                              {d.pctChange}%
-                            </span>{" "}
-                            vs the {report.hasClusters ? `${d.cluster} cluster` : "cluster"} average of{" "}
-                            <span className={clusterPct < 0 ? "text-red" : "text-green"}>{clusterPct}%</span> over
-                            the same month.
+                            {t.dashboard.areaMovedVs(
+                              d.pctChange ?? 0,
+                              report.hasClusters ? d.cluster : t.dashboard.clusterWord,
+                              clusterPct,
+                            )}
                           </p>
                         )}
-                        <table className="w-full text-left">
+                        <table className="w-full text-start">
                           <tbody>
                             <tr className="text-muted">
-                              <td className="py-1 pr-4">3-month declining streak</td>
-                              <td className="py-1 text-white">{d.decliningStreak ? "Yes" : "No"}</td>
+                              <td className="py-1 pe-4">{t.dashboard.decliningStreak}</td>
+                              <td className="py-1 text-white">{d.decliningStreak ? t.dashboard.yes : t.dashboard.no}</td>
                             </tr>
                           </tbody>
                         </table>
-                        <p className="mt-1.5 text-xs text-muted">
-                          &quot;Value&quot; is the sum of the mapped Value column from your uploaded file (all
-                          items combined, no currency conversion). &quot;Quantity&quot; is the sum of the mapped
-                          Quantity column for the same area and month.
-                        </p>
+                        <p className="mt-1.5 text-xs text-muted">{t.dashboard.valueExplainer}</p>
                       </div>
 
                       {d.monthlySeries.length >= 2 && (
                         <div>
                           <div className="mb-2 text-xs font-semibold text-white">
-                            Trend — last {d.monthlySeries.length} months
+                            {t.dashboard.trendLastMonths(d.monthlySeries.length)}
                           </div>
                           <TrendChart
                             areaLabel={area}
@@ -550,7 +547,7 @@ export default function LumenClient({
                         if (familyEntries.length === 0) return null;
                         return (
                         <div>
-                          <div className="mb-2 text-xs font-semibold text-white">By item</div>
+                          <div className="mb-2 text-xs font-semibold text-white">{t.dashboard.byItem}</div>
                           <div className="space-y-2">
                             {familyEntries.map(([fam, fc]) => {
                               const itemOpen = expandedItems.has(fam);
@@ -565,13 +562,13 @@ export default function LumenClient({
                               <div key={fam} className="text-xs">
                                 <button
                                   onClick={() => toggleItem(fam)}
-                                  className="flex w-full items-center gap-2 rounded-lg text-left transition-colors hover:bg-surf2/60"
+                                  className="flex w-full items-center gap-2 rounded-lg text-start transition-colors hover:bg-surf2/60"
                                 >
                                   <span
                                     className="h-2 w-2 shrink-0 rounded-full"
                                     style={{ backgroundColor: colorForFamily(fam) }}
                                   />
-                                  <span className="min-w-0 flex-1 truncate text-muted">{fam}</span>
+                                  <span className="min-w-0 flex-1 truncate text-muted" dir="auto">{fam}</span>
                                   <span
                                     className={`shrink-0 font-mono ${
                                       fc.pctChange !== null && fc.pctChange < 0 ? "text-red" : "text-green"
@@ -581,19 +578,19 @@ export default function LumenClient({
                                     {fc.pctChange ?? "—"}
                                     {fc.pctChange !== null ? "%" : ""}
                                   </span>
-                                  <span className="shrink-0 text-[10px] text-muted">{itemOpen ? "Hide" : "Details"}</span>
+                                  <span className="shrink-0 text-[10px] text-muted">{itemOpen ? t.common.hide : t.common.details}</span>
                                 </button>
-                                <div className="pl-4 font-mono text-[11px] break-words text-muted">
-                                  Month {report.comparedToMonth}: {formatNumber(fc.prevValue)} → Month{" "}
-                                  {report.latestMonth}: {formatNumber(fc.currValue)}
+                                <div className="ps-4 font-mono text-[11px] break-words text-muted">
+                                  {t.common.month(report.comparedToMonth)}: {formatNumber(fc.prevValue)} →{" "}
+                                  {t.common.month(report.latestMonth)}: {formatNumber(fc.currValue)}
                                 </div>
 
                                 {itemOpen && (
-                                  <div className="ml-4 mt-2 space-y-3 rounded-lg bg-surf2/60 p-3">
+                                  <div className="ms-4 mt-2 space-y-3 rounded-lg bg-surf2/60 p-3">
                                     {itemSeries.length >= 2 && (
                                       <div>
                                         <div className="mb-1 text-[11px] font-semibold text-white">
-                                          Trend — last {itemSeries.length} months
+                                          {t.dashboard.trendLastMonths(itemSeries.length)}
                                         </div>
                                         <ItemTrendChart label={fam} series={itemSeries} />
                                       </div>
@@ -602,21 +599,21 @@ export default function LumenClient({
                                     {areaRanking.length > 0 && (
                                       <div>
                                         <div className="mb-1 text-[11px] font-semibold text-white">
-                                          By area — Month {report.latestMonth}
+                                          {t.dashboard.byAreaMonth(report.latestMonth)}
                                         </div>
                                         <div className="space-y-1">
                                           {areaRanking.map(([a, changes], i) => (
                                             <div key={a} className="flex items-center justify-between gap-2 text-[11px]">
-                                              <span className="min-w-0 flex-1 truncate text-muted">
+                                              <span className="min-w-0 flex-1 truncate text-muted" dir="auto">
                                                 {a}
                                                 {i === 0 && areaRanking.length > 1 && (
-                                                  <span className="ml-1.5 rounded-full border border-green/40 px-1.5 py-0.5 text-[9px] text-green">
-                                                    Top
+                                                  <span className="ms-1.5 rounded-full border border-green/40 px-1.5 py-0.5 text-[9px] text-green">
+                                                    {t.dashboard.top}
                                                   </span>
                                                 )}
                                                 {i === areaRanking.length - 1 && areaRanking.length > 1 && (
-                                                  <span className="ml-1.5 rounded-full border border-red/40 px-1.5 py-0.5 text-[9px] text-red">
-                                                    Lowest
+                                                  <span className="ms-1.5 rounded-full border border-red/40 px-1.5 py-0.5 text-[9px] text-red">
+                                                    {t.dashboard.lowest}
                                                   </span>
                                                 )}
                                               </span>
@@ -631,11 +628,11 @@ export default function LumenClient({
 
                                     {(rootCauseAreas.length > 0 || rootCauseClusters.length > 0) && (
                                       <div className="text-[11px] text-muted">
-                                        <span className="font-semibold text-amber">Root cause for: </span>
+                                        <span className="font-semibold text-amber">{t.dashboard.rootCauseFor} </span>
                                         {[
                                           ...rootCauseAreas,
                                           ...rootCauseClusters.map((c) =>
-                                            c === "All areas" ? "the cluster-wide drop" : `the cluster-wide drop in ${c}`,
+                                            c === "All areas" ? t.dashboard.theClusterWideDrop : t.dashboard.theClusterWideDropIn(c),
                                           ),
                                         ].join(", ")}
                                       </div>
@@ -652,20 +649,20 @@ export default function LumenClient({
 
                       {areaFindings.map((f, i) => (
                         <div key={i} className="break-words rounded-lg bg-surf2 px-3 py-2.5">
-                          <p className="mb-1.5">{f.summary}</p>
+                          <p className="mb-1.5">{findingSummary(f, report, t)}</p>
                           {"rootCauseFamily" in f && (
                             <p className="mb-1.5 text-xs text-muted">
-                              Root cause item:{" "}
+                              {t.dashboard.rootCauseItem}{" "}
                               <span className="font-semibold" style={{ color: colorForFamily(f.rootCauseFamily) }}>
                                 {f.rootCauseFamily}
                               </span>
                               {" · "}
-                              {f.rootCauseDetail.pctChange}% ({formatNumber(f.rootCauseDetail.absDrop)} value drop)
+                              {f.rootCauseDetail.pctChange}% ({t.dashboard.valueDrop(formatNumber(f.rootCauseDetail.absDrop))})
                             </p>
                           )}
                           <p className="text-xs">
-                            <span className="font-semibold text-amber">Decision: </span>
-                            {f.decision}
+                            <span className="font-semibold text-amber">{t.dashboard.decision} </span>
+                            {findingDecision(f, t)}
                           </p>
                         </div>
                       ))}

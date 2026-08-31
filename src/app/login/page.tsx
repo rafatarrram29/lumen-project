@@ -2,8 +2,11 @@
 
 import { useState } from "react";
 import { createClient } from "@/lib/supabase/client";
+import { useLanguage } from "@/lib/i18n/LanguageProvider";
+import LanguageToggle from "@/components/LanguageToggle";
 
 export default function LoginPage() {
+  const { t } = useLanguage();
   const [mode, setMode] = useState<"signin" | "signup">("signin");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -43,7 +46,7 @@ export default function LoginPage() {
         setLoading(false);
         return;
       }
-      setMessage("Check your email to confirm your account before signing in.");
+      setMessage(t.login.checkEmail);
       setLoading(false);
     }
   }
@@ -51,25 +54,22 @@ export default function LoginPage() {
   return (
     <div className="flex min-h-screen items-center justify-center bg-bg px-4">
       <div className="w-full max-w-sm rounded-2xl border border-bdr bg-surf p-8 shadow-xl">
-        <div className="mb-6 flex items-center gap-2">
-          <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-gradient-to-br from-amber to-[#d68820] font-bold text-bg">
-            L
+        <div className="mb-6 flex items-center justify-between gap-2">
+          <div className="flex items-center gap-2">
+            <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-gradient-to-br from-amber to-[#d68820] font-bold text-bg">
+              L
+            </div>
+            <div className="text-lg font-semibold">{t.common.appName}</div>
           </div>
-          <div className="text-lg font-semibold">Lumen</div>
+          <LanguageToggle />
         </div>
 
-        <h1 className="mb-1 text-xl font-semibold">
-          Territory Decision Engine
-        </h1>
-        <p className="mb-6 text-sm text-muted">
-          Upload your monthly sales export, get territory-level decisions.
-        </p>
+        <h1 className="mb-1 text-xl font-semibold">{t.login.title}</h1>
+        <p className="mb-6 text-sm text-muted">{t.login.subtitle}</p>
 
         <form onSubmit={handleSubmit} className="space-y-3.5">
           <div>
-            <label className="mb-1.5 block text-xs font-medium text-muted">
-              Email
-            </label>
+            <label className="mb-1.5 block text-xs font-medium text-muted">{t.login.email}</label>
             <input
               type="email"
               required
@@ -80,9 +80,7 @@ export default function LoginPage() {
             />
           </div>
           <div>
-            <label className="mb-1.5 block text-xs font-medium text-muted">
-              Password
-            </label>
+            <label className="mb-1.5 block text-xs font-medium text-muted">{t.login.password}</label>
             <input
               type="password"
               required
@@ -102,18 +100,14 @@ export default function LoginPage() {
             disabled={loading}
             className="w-full rounded-lg bg-gradient-to-br from-amber to-[#d68820] py-2.5 text-sm font-semibold text-bg transition-opacity hover:opacity-90 disabled:opacity-60"
           >
-            {loading
-              ? "Please wait…"
-              : mode === "signin"
-                ? "Sign in"
-                : "Create account"}
+            {loading ? t.login.pleaseWait : mode === "signin" ? t.login.signIn : t.login.createAccount}
           </button>
         </form>
 
         <div className="mt-5 text-center text-sm text-muted">
           {mode === "signin" ? (
             <>
-              Don&apos;t have an account?{" "}
+              {t.login.noAccount}{" "}
               <button
                 className="font-semibold text-amber"
                 onClick={() => {
@@ -122,12 +116,12 @@ export default function LoginPage() {
                   setMessage(null);
                 }}
               >
-                Sign up free
+                {t.login.signUpFree}
               </button>
             </>
           ) : (
             <>
-              Already have an account?{" "}
+              {t.login.haveAccount}{" "}
               <button
                 className="font-semibold text-amber"
                 onClick={() => {
@@ -136,7 +130,7 @@ export default function LoginPage() {
                   setMessage(null);
                 }}
               >
-                Sign in
+                {t.login.signIn}
               </button>
             </>
           )}

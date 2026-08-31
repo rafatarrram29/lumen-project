@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { Space_Grotesk, JetBrains_Mono } from "next/font/google";
+import { LanguageProvider } from "@/lib/i18n/LanguageProvider";
 import "./globals.css";
 
 const spaceGrotesk = Space_Grotesk({
@@ -25,7 +26,9 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
       lang="en"
       className={`${spaceGrotesk.variable} ${jetbrainsMono.variable} h-full antialiased`}
     >
-      <body className="min-h-full flex flex-col font-sans">{children}</body>
+      <body className="min-h-full flex flex-col font-sans">
+        <LanguageProvider>{children}</LanguageProvider>
+      </body>
     </html>
   );
 }
