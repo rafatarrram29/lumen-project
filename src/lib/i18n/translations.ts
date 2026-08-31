@@ -24,6 +24,21 @@ export type Translations = {
     signUpFree: string;
     haveAccount: string;
     checkEmail: string;
+    forgotPassword: string;
+    resetTitle: string;
+    resetSubtitle: string;
+    sendResetLink: string;
+    resetLinkSent: string;
+    backToSignIn: string;
+  };
+  resetPassword: {
+    title: string;
+    subtitle: string;
+    newPassword: string;
+    updateButton: string;
+    successTitle: string;
+    successBody: string;
+    continueToApp: string;
   };
   home: {
     tagline: string;
@@ -147,6 +162,21 @@ const en: Translations = {
     signUpFree: "Sign up free",
     haveAccount: "Already have an account?",
     checkEmail: "Check your email to confirm your account before signing in.",
+    forgotPassword: "Forgot password?",
+    resetTitle: "Reset your password",
+    resetSubtitle: "Enter your email and we'll send you a link to set a new password.",
+    sendResetLink: "Send reset link",
+    resetLinkSent: "Check your email for a link to reset your password.",
+    backToSignIn: "Back to sign in",
+  },
+  resetPassword: {
+    title: "Set a new password",
+    subtitle: "Choose a new password for your account.",
+    newPassword: "New password",
+    updateButton: "Update password",
+    successTitle: "Password updated",
+    successBody: "Your password has been changed. You're signed in now.",
+    continueToApp: "Continue to Lumen",
   },
   home: {
     tagline:
@@ -279,6 +309,21 @@ const ar: Translations = {
     signUpFree: "سجّل مجانًا",
     haveAccount: "لديك حساب بالفعل؟",
     checkEmail: "تحقق من بريدك الإلكتروني لتأكيد حسابك قبل تسجيل الدخول.",
+    forgotPassword: "نسيت كلمة المرور؟",
+    resetTitle: "إعادة تعيين كلمة المرور",
+    resetSubtitle: "اكتب بريدك الإلكتروني وهنبعتلك رابط لتحديد كلمة مرور جديدة.",
+    sendResetLink: "إرسال رابط إعادة التعيين",
+    resetLinkSent: "تحقق من بريدك الإلكتروني عشان تلاقي رابط إعادة تعيين كلمة المرور.",
+    backToSignIn: "الرجوع لتسجيل الدخول",
+  },
+  resetPassword: {
+    title: "حدد كلمة مرور جديدة",
+    subtitle: "اختار كلمة مرور جديدة لحسابك.",
+    newPassword: "كلمة المرور الجديدة",
+    updateButton: "تحديث كلمة المرور",
+    successTitle: "تم تحديث كلمة المرور",
+    successBody: "اتغيرت كلمة المرور بنجاح. انت مسجل دخول دلوقتي.",
+    continueToApp: "الدخول لـ Lumen",
   },
   home: {
     tagline: "بيانات أكتر، قرارات أبسط. ارفع ملف مبيعاتك الشهري وحوّل أرقام المناطق لإجراءات واضحة وواثقة.",
