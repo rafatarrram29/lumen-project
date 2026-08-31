@@ -31,9 +31,15 @@ design reference only — it is not part of the running app.
    the `lumen_datasets` table and the dataset/rep/cluster columns on
    `lumen_sales_records` — safe to run even if you already have data, since
    it backfills any existing rows into a "Legacy data" dataset automatically.
-4. Open **Settings -> API** and copy the **Project URL** and the **anon
+4. Then run `supabase/lumen_user_isolation_migration.sql` the same way. This
+   makes every dataset private to the user who created it — anyone can still
+   sign up and use the app, but users can no longer see or touch each
+   other's data. Datasets created before this migration (e.g. "Legacy data")
+   stay shared and usable by everyone, exactly as before, but can no longer
+   be deleted through the app.
+5. Open **Settings -> API** and copy the **Project URL** and the **anon
    public** key.
-5. Open **Authentication -> Sign In / Providers** and make sure **Email**
+6. Open **Authentication -> Sign In / Providers** and make sure **Email**
    is enabled (it is by default). For local development, under
    **Authentication -> URL Configuration**, you can leave the defaults —
    we'll add your real domain there once deployed.
