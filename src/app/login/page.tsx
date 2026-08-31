@@ -7,7 +7,7 @@ import LanguageToggle from "@/components/LanguageToggle";
 
 export default function LoginPage() {
   const { t } = useLanguage();
-  const [mode, setMode] = useState<"signin" | "signup">("signin");
+  const [mode, setMode] = useState<"signin" | "signup" | "forgot">("signin");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
@@ -33,7 +33,7 @@ export default function LoginPage() {
         return;
       }
       window.location.href = "/";
-    } else {
+    } else if (mode === "signup") {
       const { error } = await supabase.auth.signUp({
         email,
         password,
@@ -47,6 +47,17 @@ export default function LoginPage() {
         return;
       }
       setMessage(t.login.checkEmail);
+      setLoading(false);
+    } else {
+      const { error } = await supabase.auth.resetPasswordForEmail(email, {
+        redirectTo: `${window.location.origin}/auth/callback?next=/reset-password`,
+      });
+      if (error) {
+        setError(error.message);
+        setLoading(false);
+        return;
+      }
+      setMessage(t.login.resetLinkSent);
       setLoading(false);
     }
   }
@@ -64,8 +75,8 @@ export default function LoginPage() {
           <LanguageToggle />
         </div>
 
-        <h1 className="mb-1 text-xl font-semibold">{t.login.title}</h1>
-        <p className="mb-6 text-sm text-muted">{t.login.subtitle}</p>
+        <h1 className="mb-1 text-xl font-semibold">{mode === "forgot" ? t.login.resetTitle : t.login.title}</h1>
+        <p className="mb-6 text-sm text-muted">{mode === "forgot" ? t.login.resetSubtitle : t.login.subtitle}</p>
 
         <form onSubmit={handleSubmit} className="space-y-3.5">
           <div>
@@ -79,18 +90,35 @@ export default function LoginPage() {
               className="w-full rounded-lg border border-bdr bg-surf2 px-3 py-2.5 text-sm text-white outline-none focus:border-amber"
             />
           </div>
-          <div>
-            <label className="mb-1.5 block text-xs font-medium text-muted">{t.login.password}</label>
-            <input
-              type="password"
-              required
-              minLength={6}
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-              placeholder="••••••••"
-              className="w-full rounded-lg border border-bdr bg-surf2 px-3 py-2.5 text-sm text-white outline-none focus:border-amber"
-            />
-          </div>
+          {mode !== "forgot" && (
+            <div>
+              <div className="mb-1.5 flex items-center justify-between gap-2">
+                <label className="block text-xs font-medium text-muted">{t.login.password}</label>
+                {mode === "signin" && (
+                  <button
+                    type="button"
+                    className="text-xs font-medium text-amber"
+                    onClick={() => {
+                      setMode("forgot");
+                      setError(null);
+                      setMessage(null);
+                    }}
+                  >
+                    {t.login.forgotPassword}
+                  </button>
+                )}
+              </div>
+              <input
+                type="password"
+                required
+                minLength={6}
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                placeholder="••••••••"
+                className="w-full rounded-lg border border-bdr bg-surf2 px-3 py-2.5 text-sm text-white outline-none focus:border-amber"
+              />
+            </div>
+          )}
 
           {error && <p className="text-sm text-red">{error}</p>}
           {message && <p className="text-sm text-green">{message}</p>}
@@ -100,7 +128,13 @@ export default function LoginPage() {
             disabled={loading}
             className="w-full rounded-lg bg-gradient-to-br from-amber to-[#d68820] py-2.5 text-sm font-semibold text-bg transition-opacity hover:opacity-90 disabled:opacity-60"
           >
-            {loading ? t.login.pleaseWait : mode === "signin" ? t.login.signIn : t.login.createAccount}
+            {loading
+              ? t.login.pleaseWait
+              : mode === "signin"
+                ? t.login.signIn
+                : mode === "signup"
+                  ? t.login.createAccount
+                  : t.login.sendResetLink}
           </button>
         </form>
 
@@ -119,7 +153,7 @@ export default function LoginPage() {
                 {t.login.signUpFree}
               </button>
             </>
-          ) : (
+          ) : mode === "signup" ? (
             <>
               {t.login.haveAccount}{" "}
               <button
@@ -133,6 +167,17 @@ export default function LoginPage() {
                 {t.login.signIn}
               </button>
             </>
+          ) : (
+            <button
+              className="font-semibold text-amber"
+              onClick={() => {
+                setMode("signin");
+                setError(null);
+                setMessage(null);
+              }}
+            >
+              {t.login.backToSignIn}
+            </button>
           )}
         </div>
       </div>
