@@ -2,25 +2,40 @@
 
 import { useMemo, useState } from "react";
 import { guessMapping, type ColumnMapping, type Dataset, type RawSheet } from "@/lib/lumen/columnMapping";
+import { useLanguage } from "@/lib/i18n/LanguageProvider";
+import type { Translations } from "@/lib/i18n/translations";
 
-type MappingField = { key: keyof ColumnMapping; label: string; required: boolean };
+type MappingFieldKey = keyof ColumnMapping;
+type MappingField = { key: MappingFieldKey; required: boolean };
 
 const MAPPING_FIELDS: MappingField[] = [
-  { key: "area", label: "Area / Region", required: true },
-  { key: "item", label: "Item / Product", required: true },
-  { key: "value", label: "Value", required: true },
-  { key: "qty", label: "Quantity", required: false },
-  { key: "month", label: "Month", required: true },
-  { key: "rep", label: "Rep", required: false },
-  { key: "cluster", label: "Cluster", required: false },
+  { key: "area", required: true },
+  { key: "item", required: true },
+  { key: "value", required: true },
+  { key: "qty", required: false },
+  { key: "month", required: true },
+  { key: "rep", required: false },
+  { key: "cluster", required: false },
 ];
 
-export function missingMappingColumns(mapping: ColumnMapping, headers: string[]): string[] {
+function fieldLabel(key: MappingFieldKey, t: Translations): string {
+  return {
+    area: t.wizard.fieldArea,
+    item: t.wizard.fieldItem,
+    value: t.wizard.fieldValue,
+    qty: t.wizard.fieldQty,
+    month: t.wizard.fieldMonth,
+    rep: t.wizard.fieldRep,
+    cluster: t.wizard.fieldCluster,
+  }[key];
+}
+
+export function missingMappingColumns(mapping: ColumnMapping, headers: string[], t: Translations): string[] {
   const headerSet = new Set(headers);
   const missing: string[] = [];
   for (const field of MAPPING_FIELDS) {
     const value = mapping[field.key];
-    if (value && !headerSet.has(value)) missing.push(field.label);
+    if (value && !headerSet.has(value)) missing.push(fieldLabel(field.key, t));
   }
   return missing;
 }
@@ -44,6 +59,7 @@ export function UploadWizardModal({
   onCancel: () => void;
   onConfirm: (choice: WizardChoice) => void;
 }) {
+  const { t } = useLanguage();
   const [mode, setMode] = useState<"new" | "existing">(defaultDatasetId ? "existing" : "new");
   const [name, setName] = useState(() => fileName.replace(/\.[^./]+$/, ""));
   const [existingDatasetId, setExistingDatasetId] = useState<string | null>(
@@ -63,7 +79,7 @@ export function UploadWizardModal({
 
   const existingDataset = datasets.find((d) => d.id === existingDatasetId) ?? null;
   const existingMissing = existingDataset
-    ? missingMappingColumns(existingDataset.columnMapping, sheet.headers)
+    ? missingMappingColumns(existingDataset.columnMapping, sheet.headers, t)
     : [];
 
   const newMappingComplete = Boolean(mapping.area && mapping.item && mapping.value && mapping.month);
@@ -96,8 +112,8 @@ export function UploadWizardModal({
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
       <div className="max-h-[85vh] w-full max-w-lg overflow-y-auto rounded-2xl border border-bdr bg-surf p-5">
-        <h2 className="mb-1 truncate text-base font-semibold text-white">Upload {fileName}</h2>
-        <p className="mb-4 text-xs text-muted">Choose where this file&apos;s data goes.</p>
+        <h2 className="mb-1 truncate text-base font-semibold text-white">{t.wizard.uploadTitle(fileName)}</h2>
+        <p className="mb-4 text-xs text-muted">{t.wizard.subtitle}</p>
 
         {datasets.length > 0 && (
           <div className="mb-4 flex gap-2">
@@ -108,7 +124,7 @@ export function UploadWizardModal({
                 mode === "existing" ? "border-amber bg-amber/10 text-white" : "border-bdr text-muted"
               }`}
             >
-              Add to existing dataset
+              {t.wizard.addToExisting}
             </button>
             <button
               type="button"
@@ -117,7 +133,7 @@ export function UploadWizardModal({
                 mode === "new" ? "border-amber bg-amber/10 text-white" : "border-bdr text-muted"
               }`}
             >
-              Create new dataset
+              {t.wizard.createNew}
             </button>
           </div>
         )}
@@ -125,7 +141,7 @@ export function UploadWizardModal({
         {mode === "existing" ? (
           <div className="space-y-3">
             <label className="block text-xs text-muted">
-              Dataset
+              {t.wizard.datasetLabel}
               <select
                 value={existingDatasetId ?? ""}
                 onChange={(e) => setExistingDatasetId(e.target.value)}
@@ -140,16 +156,14 @@ export function UploadWizardModal({
             </label>
             {existingMissing.length > 0 && (
               <p className="break-words rounded-lg bg-red/10 px-3 py-2 text-xs text-red">
-                This file doesn&apos;t match &quot;{existingDataset?.name}&quot;&apos;s saved column
-                mapping — missing: {existingMissing.join(", ")}. Pick a different dataset, or create a
-                new one instead.
+                {t.wizard.mismatch(existingDataset?.name ?? "", existingMissing.join(", "))}
               </p>
             )}
           </div>
         ) : (
           <div className="space-y-3">
             <label className="block text-xs text-muted">
-              Dataset name
+              {t.wizard.datasetNameLabel}
               <input
                 value={name}
                 onChange={(e) => setName(e.target.value)}
@@ -158,9 +172,7 @@ export function UploadWizardModal({
             </label>
 
             <div>
-              <p className="mb-2 text-xs text-muted">
-                Match each column from your file to what it means. Required fields are marked *.
-              </p>
+              <p className="mb-2 text-xs text-muted">{t.wizard.mappingHelp}</p>
               <div className="space-y-2">
                 {MAPPING_FIELDS.map((field) => (
                   <label
@@ -168,7 +180,7 @@ export function UploadWizardModal({
                     className="flex items-center justify-between gap-2 text-xs text-muted"
                   >
                     <span className="w-28 shrink-0">
-                      {field.label}
+                      {fieldLabel(field.key, t)}
                       {field.required ? " *" : ""}
                     </span>
                     <select
@@ -178,7 +190,7 @@ export function UploadWizardModal({
                       }
                       className="min-w-0 flex-1 rounded-lg border border-bdr bg-surf2 px-2 py-1.5 text-sm text-white outline-none focus:border-amber"
                     >
-                      <option value="">{field.required ? "Select a column…" : "(none)"}</option>
+                      <option value="">{field.required ? t.wizard.selectColumn : t.common.none}</option>
                       {sheet.headers.map((h) => (
                         <option key={h} value={h}>
                           {h}
@@ -198,7 +210,7 @@ export function UploadWizardModal({
             onClick={onCancel}
             className="rounded-lg border border-bdr px-4 py-2 text-sm text-muted hover:text-white"
           >
-            Cancel
+            {t.common.cancel}
           </button>
           <button
             type="button"
@@ -206,7 +218,7 @@ export function UploadWizardModal({
             disabled={confirmDisabled}
             className="rounded-lg bg-gradient-to-br from-amber to-[#d68820] px-4 py-2 text-sm font-semibold text-bg disabled:opacity-50"
           >
-            Continue
+            {t.common.continueLabel}
           </button>
         </div>
       </div>
