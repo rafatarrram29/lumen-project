@@ -88,6 +88,36 @@ export default function LumenClient({
     fetchReport(datasetId, year);
   }
 
+  async function handleDeleteDataset(dataset: Dataset) {
+    const proceed = window.confirm(
+      `Delete "${dataset.name}"? This permanently removes all of its uploaded data. This cannot be undone.`,
+    );
+    if (!proceed) return;
+
+    setUploadError(null);
+    try {
+      const res = await fetch(`/api/lumen/datasets/${dataset.id}`, { method: "DELETE" });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error || "Could not delete dataset");
+
+      const remaining = datasets.filter((d) => d.id !== dataset.id);
+      setDatasets(remaining);
+
+      if (selectedDatasetId === dataset.id) {
+        const next = remaining[0]?.id ?? null;
+        setSelectedDatasetId(next);
+        setExpanded(new Set());
+        if (next) {
+          await fetchReport(next, year);
+        } else {
+          setReport({ error: "No datasets yet — upload a file to get started." });
+        }
+      }
+    } catch (err) {
+      setUploadError(err instanceof Error ? err.message : "Could not delete dataset");
+    }
+  }
+
   async function handleFileSelected(file: File) {
     setUploadError(null);
     setUploadMessage(null);
@@ -308,20 +338,34 @@ export default function LumenClient({
           <div className="mt-4 border-t border-bdr pt-4">
             <div className="mb-2 text-xs font-semibold text-muted">Datasets</div>
             <div className="flex flex-col gap-1.5">
-              {datasets.map((d) => (
-                <button
-                  key={d.id}
-                  onClick={() => selectDataset(d.id)}
-                  title={d.name}
-                  className={`w-full min-w-0 truncate rounded-lg border px-3 py-1.5 text-left text-sm transition-colors ${
-                    d.id === selectedDatasetId
-                      ? "border-amber bg-amber/10 text-white"
-                      : "border-bdr text-muted hover:text-white"
-                  }`}
-                >
-                  {d.name}
-                </button>
-              ))}
+              {datasets.map((d) => {
+                const isSelected = d.id === selectedDatasetId;
+                return (
+                  <div key={d.id} className="flex items-center gap-1.5">
+                    <button
+                      onClick={() => selectDataset(d.id)}
+                      title={d.name}
+                      className={`min-w-0 flex-1 truncate rounded-lg border px-3 py-1.5 text-left text-sm transition-colors ${
+                        isSelected
+                          ? "border-amber bg-amber/10 text-white"
+                          : "border-bdr text-muted hover:text-white"
+                      }`}
+                    >
+                      {d.name}
+                    </button>
+                    {isSelected && (
+                      <button
+                        onClick={() => handleDeleteDataset(d)}
+                        title={`Delete ${d.name}`}
+                        aria-label={`Delete ${d.name}`}
+                        className="shrink-0 rounded-lg border border-bdr px-2.5 py-1.5 text-muted transition-colors hover:border-red hover:text-red"
+                      >
+                        ×
+                      </button>
+                    )}
+                  </div>
+                );
+              })}
             </div>
           </div>
         )}
