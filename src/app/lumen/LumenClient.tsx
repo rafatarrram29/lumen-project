@@ -281,6 +281,28 @@ export default function LumenClient({
         >
           {loadingReport ? "Loading…" : "Analyze"}
         </button>
+
+        {datasets.length > 0 && (
+          <div className="mt-4 border-t border-bdr pt-4">
+            <div className="mb-2 text-xs font-semibold text-muted">Datasets</div>
+            <div className="flex flex-col gap-1.5">
+              {datasets.map((d) => (
+                <button
+                  key={d.id}
+                  onClick={() => selectDataset(d.id)}
+                  title={d.name}
+                  className={`w-full min-w-0 truncate rounded-lg border px-3 py-1.5 text-left text-sm transition-colors ${
+                    d.id === selectedDatasetId
+                      ? "border-amber bg-amber/10 text-white"
+                      : "border-bdr text-muted hover:text-white"
+                  }`}
+                >
+                  {d.name}
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
       </Sidebar>
 
       {pendingFile && pendingSheet && (
@@ -299,25 +321,6 @@ export default function LumenClient({
 
       <main className="min-w-0 flex-1 overflow-y-auto px-6 py-6">
       <div className="mx-auto max-w-4xl">
-      {datasets.length > 0 && (
-        <div className="mb-4 flex gap-2 overflow-x-auto pb-1">
-          {datasets.map((d) => (
-            <button
-              key={d.id}
-              onClick={() => selectDataset(d.id)}
-              title={d.name}
-              className={`shrink-0 max-w-[12rem] truncate rounded-lg border px-3 py-1.5 text-sm transition-colors ${
-                d.id === selectedDatasetId
-                  ? "border-amber bg-amber/10 text-white"
-                  : "border-bdr text-muted hover:text-white"
-              }`}
-            >
-              {d.name}
-            </button>
-          ))}
-        </div>
-      )}
-
       {hasError && (
         <div className="rounded-2xl border border-bdr bg-surf p-5 text-sm text-muted">
           {report && "error" in report ? report.error : null}
