@@ -192,13 +192,19 @@ function MappingStep({
   const guess = useMemo(() => guessImsMapping(sheet.headers), [sheet.headers]);
 
   const [displayName, setDisplayName] = useState(fileName.replace(/\.[^./]+$/, ""));
-  const [mapping, setMapping] = useState<Record<keyof ImsColumnMapping, string | null>>({
+  const [mapping, setMapping] = useState<Record<Exclude<keyof ImsColumnMapping, "fixedMonth">, string | null>>({
     area: guess.area ?? null,
     product: guess.product ?? null,
     marketShare: guess.marketShare ?? null,
     month: guess.month ?? null,
     company: guess.company ?? null,
   });
+  // A snapshot file often has no per-row month column at all (a
+  // comparison table, a single "as of" export) — this lets the user say
+  // "this whole file is month N" once instead, only ever used when no
+  // Month column is mapped.
+  const [fixedMonth, setFixedMonth] = useState<string>("");
+  const fixedMonthNumber = fixedMonth.trim() === "" ? null : Number(fixedMonth);
 
   const { companyOptions, companyGuess } = useMemo(() => {
     if (!mapping.company) return { companyOptions: [] as string[], companyGuess: null as string | null };
@@ -207,7 +213,8 @@ function MappingStep({
         area: mapping.area,
         product: mapping.product,
         marketShare: mapping.marketShare ?? sheet.headers[0],
-        month: mapping.month ?? sheet.headers[0],
+        month: mapping.month,
+        fixedMonth: mapping.month ? null : (fixedMonthNumber ?? 1),
         company: mapping.company,
       });
       const options = Array.from(new Set(rows.map((r) => r.company).filter((c): c is string => c !== null))).sort();
@@ -215,12 +222,16 @@ function MappingStep({
     } catch {
       return { companyOptions: [] as string[], companyGuess: null as string | null };
     }
-  }, [mapping.company, mapping.area, mapping.product, mapping.marketShare, mapping.month, sheet]);
+  }, [mapping.company, mapping.area, mapping.product, mapping.marketShare, mapping.month, fixedMonthNumber, sheet]);
 
   const [ownCompany, setOwnCompany] = useState<string | null>(null);
   const effectiveOwnCompany = ownCompany ?? companyGuess;
 
-  const complete = isValidImsMapping(mapping) && displayName.trim().length > 0;
+  const fixedMonthInvalid = fixedMonth.trim() !== "" && (fixedMonthNumber === null || Number.isNaN(fixedMonthNumber));
+  const complete =
+    isValidImsMapping({ ...mapping, fixedMonth: mapping.month ? null : fixedMonthNumber }) &&
+    !fixedMonthInvalid &&
+    displayName.trim().length > 0;
 
   function handleConfirm() {
     if (!complete) return;
@@ -230,7 +241,8 @@ function MappingStep({
         area: mapping.area,
         product: mapping.product,
         marketShare: mapping.marketShare!,
-        month: mapping.month!,
+        month: mapping.month,
+        fixedMonth: mapping.month ? null : fixedMonthNumber,
         company: mapping.company,
       },
       ownCompany: mapping.company ? effectiveOwnCompany : null,
@@ -238,7 +250,7 @@ function MappingStep({
     });
   }
 
-  const fieldLabels: Record<keyof ImsColumnMapping, string> = {
+  const fieldLabels: Record<Exclude<keyof ImsColumnMapping, "fixedMonth">, string> = {
     area: t.ims.fieldArea,
     product: t.ims.fieldProduct,
     marketShare: t.ims.fieldMarketShare,
@@ -267,7 +279,7 @@ function MappingStep({
           </label>
 
           <div className="space-y-2">
-            {(["area", "product", "marketShare", "month", "company"] as (keyof ImsColumnMapping)[]).map((key) => (
+            {(["area", "product", "marketShare", "month", "company"] as const).map((key) => (
               <label key={key} className="flex items-center justify-between gap-2 text-xs text-muted">
                 <span className="w-32 shrink-0">
                   {fieldLabels[key]}
@@ -288,6 +300,20 @@ function MappingStep({
               </label>
             ))}
           </div>
+          {!mapping.month && (
+            <label className="flex items-center justify-between gap-2 text-xs text-muted">
+              <span className="w-32 shrink-0">{t.ims.fixedMonthLabel}</span>
+              <input
+                type="number"
+                min={1}
+                value={fixedMonth}
+                onChange={(e) => setFixedMonth(e.target.value)}
+                placeholder={t.ims.fixedMonthPlaceholder}
+                className="min-w-0 flex-1 rounded-lg border border-bdr bg-surf2 px-2 py-1.5 text-sm text-white outline-none focus:border-amber"
+              />
+            </label>
+          )}
+          {!mapping.month && <p className="text-[11px] text-muted">{t.ims.fixedMonthHint}</p>}
           {!(mapping.area || mapping.product) && <p className="text-[11px] text-amber">{t.ims.atLeastOneOfAreaProduct}</p>}
           {mapping.company && <p className="text-xs text-muted">{t.ims.fieldCompanyHint}</p>}
 

@@ -15,6 +15,16 @@
 // that has no business in the client bundle) into a RawSheet, so nothing
 // downstream of "give me a RawSheet" needs to know whether the file was a
 // spreadsheet or a PDF.
+//
+// Month is flexible too: a lot of real IMS material is a snapshot — one
+// point in time, not a trend — with no per-row month value at all (a
+// comparison table, a single "as of" export). Rather than force every
+// file to have a month COLUMN, fixedMonth lets the user state once "this
+// whole file is for month N" and have every row use that. The dashboard
+// already renders a single-month file fine on its own (the change/vs-
+// prior-month column just reads "—" with nothing to compare against) —
+// this only removes the requirement to have a real month column to begin
+// with, it doesn't add any new display logic.
 import { parseNumeric, type RawSheet } from "./columnMapping";
 import type { SkippedRowInfo } from "./columnMapping";
 
@@ -22,7 +32,8 @@ export type ImsColumnMapping = {
   area: string | null;
   product: string | null;
   marketShare: string;
-  month: string;
+  month: string | null;
+  fixedMonth: number | null;
   company: string | null;
 };
 
@@ -76,8 +87,11 @@ export function isValidImsMapping(mapping: {
   product: string | null;
   marketShare: string | null;
   month: string | null;
+  fixedMonth?: number | null;
 }): boolean {
-  return Boolean((mapping.area || mapping.product) && mapping.marketShare && mapping.month);
+  return Boolean(
+    (mapping.area || mapping.product) && mapping.marketShare && (mapping.month || mapping.fixedMonth != null),
+  );
 }
 
 // A market-share value can come in as "23.4", "23.4%", or (rarely) already
@@ -106,17 +120,25 @@ export function applyImsMapping(
     const areaVal = mapping.area ? r[mapping.area] : null;
     const productVal = mapping.product ? r[mapping.product] : null;
     const shareVal = r[mapping.marketShare];
-    const monthVal = r[mapping.month];
+    const monthVal = mapping.month ? r[mapping.month] : null;
     // Only the columns actually mapped are required per row — an
     // unmapped Area/Product is fine (see isValidImsMapping above), but a
-    // MAPPED one still has to have a value on this row to keep it.
-    if ((mapping.area && areaVal == null) || (mapping.product && productVal == null) || shareVal == null || monthVal == null) {
+    // MAPPED one still has to have a value on this row to keep it. A
+    // mapped Month column needs a value per row same as any other; a
+    // fixedMonth (no column mapped at all) applies to every row equally,
+    // so there's nothing to check per row.
+    if (
+      (mapping.area && areaVal == null) ||
+      (mapping.product && productVal == null) ||
+      shareVal == null ||
+      (mapping.month && monthVal == null)
+    ) {
       skippedCount++;
       continue;
     }
 
     const marketShare = parseShare(shareVal);
-    const month = Math.trunc(parseNumeric(monthVal));
+    const month = mapping.month ? Math.trunc(parseNumeric(monthVal)) : mapping.fixedMonth!;
     if (Number.isNaN(marketShare) || Number.isNaN(month)) {
       skippedCount++;
       if (examples.length < 5) {

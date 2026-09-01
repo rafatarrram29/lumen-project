@@ -160,6 +160,9 @@ export type Translations = {
     fieldCompany: string;
     fieldCompanyHint: string;
     atLeastOneOfAreaProduct: string;
+    fixedMonthLabel: string;
+    fixedMonthPlaceholder: string;
+    fixedMonthHint: string;
     ownCompanyLabel: string;
     ownCompanyHint: string;
     pdfExtracting: string;
@@ -456,6 +459,9 @@ const en: Translations = {
     fieldCompany: "Company (optional)",
     fieldCompanyHint: "Only needed if this file lists more than one company's share per area/product/month.",
     atLeastOneOfAreaProduct: "Map at least one of Area or Product — whichever this file actually has.",
+    fixedMonthLabel: "This file is for month",
+    fixedMonthPlaceholder: "e.g. 6",
+    fixedMonthHint: "No Month column mapped — this file will be treated as a single-point snapshot for the month number you enter here.",
     ownCompanyLabel: "Which value in that column is us?",
     ownCompanyHint: "Everything else in that column is treated as a competitor.",
     pdfExtracting: "Reading the PDF…",
@@ -767,6 +773,9 @@ const ar: Translations = {
     fieldCompany: "الشركة (اختياري)",
     fieldCompanyHint: "محتاجه بس لو الملف فيه حصة أكتر من شركة لكل منطقة/منتج/شهر.",
     atLeastOneOfAreaProduct: "حدد عمود واحد على الأقل من المنطقة أو المنتج — أنهي واحد فيهم موجود فعلاً في الملف.",
+    fixedMonthLabel: "الملف ده بتاع شهر",
+    fixedMonthPlaceholder: "مثلاً 6",
+    fixedMonthHint: "مفيش عمود شهر محدد — الملف ده هيتعامل معاه كلقطة (snapshot) لشهر واحد بالرقم اللي هتكتبه هنا.",
     ownCompanyLabel: "أنهي قيمة في العمود ده هي إحنا؟",
     ownCompanyHint: "أي قيمة تانية في العمود ده هتتحسب منافس.",
     pdfExtracting: "بيتم قراءة ملف PDF…",
