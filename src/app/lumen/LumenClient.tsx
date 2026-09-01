@@ -146,7 +146,7 @@ export default function LumenClient({
   const [imsFiles, setImsFiles] = useState<ImsFile[]>([]);
   const [imsReport, setImsReport] = useState<ImsReport | null>(null);
   const [imsLoading, setImsLoading] = useState(false);
-  const [pendingImsFile, setPendingImsFile] = useState<{ file: File; sheet: RawSheet } | null>(null);
+  const [pendingImsFile, setPendingImsFile] = useState<{ file: File; sheet: RawSheet | null } | null>(null);
   const [showCorrectionLog, setShowCorrectionLog] = useState(false);
   const [showEditSalesMapping, setShowEditSalesMapping] = useState(false);
   const [showExportModal, setShowExportModal] = useState(false);
@@ -764,6 +764,13 @@ export default function LumenClient({
   async function handleAddImsFile(file: File) {
     setUploadError(null);
     setUploadMessage(null);
+    // PDF is IMS-only — the sales/linked-file paths never see this
+    // branch. The PDF itself isn't parsed here; AddImsFileModal sends the
+    // raw file to /api/lumen/ims-pdf-extract and works from its response.
+    if (file.name.toLowerCase().endsWith(".pdf")) {
+      setPendingImsFile({ file, sheet: null });
+      return;
+    }
     try {
       const { readWorkbookSheet } = await import("@/lib/lumen/readWorkbookSheet");
       const sheet = await readWorkbookSheet(file);
@@ -783,7 +790,7 @@ export default function LumenClient({
     setUploadMessage(null);
 
     try {
-      const { rows } = applyImsMapping(pending.sheet, save.mapping);
+      const { rows } = applyImsMapping(save.sheet, save.mapping);
 
       const createRes = await fetch("/api/lumen/ims-files", {
         method: "POST",
@@ -1192,6 +1199,7 @@ export default function LumenClient({
       {pendingImsFile && selectedDatasetId && (
         <AddImsFileModal
           fileName={pendingImsFile.file.name}
+          file={pendingImsFile.file}
           sheet={pendingImsFile.sheet}
           onCancel={() => setPendingImsFile(null)}
           onConfirm={handleImsFileConfirm}

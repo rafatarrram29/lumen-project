@@ -82,9 +82,13 @@ design reference only — it is not part of the running app.
     `lumen_ims_records` table). Purely additive — it does not touch any
     other table, so every dataset keeps working exactly as it does today
     whether or not it ever gets an IMS file.
-14. Open **Settings -> API** and copy the **Project URL** and the **anon
+14. Then run `supabase/lumen_ims_flexible_mapping_migration.sql`. Makes
+    an IMS file's Area and Product columns both optional (at least one is
+    still required) — a real IMS export is often organized by
+    product/market with no geography column at all.
+15. Open **Settings -> API** and copy the **Project URL** and the **anon
    public** key.
-15. Open **Authentication -> Sign In / Providers** and make sure **Email**
+16. Open **Authentication -> Sign In / Providers** and make sure **Email**
    is enabled (it is by default). For local development, under
    **Authentication -> URL Configuration**, you can leave the defaults —
    we'll add your real domain there once deployed.
@@ -198,12 +202,37 @@ completely unaffected.
 A separate **Market Insights** tab, next to Sales, for IQVIA Market Share
 (IMS) or other marketing/competitor data — entirely independent of the
 sales analysis (a dataset with no IMS file behaves exactly as it does
-today; nothing about the Sales tab changes). Upload an IMS file
-("+ Upload IMS file" in the tab) and map its columns (Area, Product,
-Market Share, Month, and an optional Company column for files that list
-more than one company's share per row) the same way a sales file is
-mapped. If the file has a Company column, you confirm which value is your
-own company — everything else is treated as a competitor.
+today; nothing about the Sales tab changes, and none of the flexibility
+below applies to it either — Area/Item/Value/Month stay required exactly
+as before for Sales). Upload an IMS file ("+ Upload IMS file" in the tab)
+— Excel/CSV/ODS **or PDF** — and map its columns the same way a sales
+file is mapped, with one difference: an IMS file's mapping is unusually
+flexible on purpose, because real IMS exports vary a lot in shape.
+
+- **Area and Product are both optional** — map whichever one this
+  particular file actually has (at least one is required; a file
+  organized purely by product/market with no geography column works
+  fine with Area left unmapped). Market Share and Month are always
+  required. An optional Company column lets one file carry more than one
+  company's share per row — you confirm which value is your own company;
+  everything else is treated as a competitor.
+- **PDF files** are read page by page — a PDF deck rarely has one
+  consistent layout throughout, so each page is extracted independently
+  and nothing is assumed about page 2 based on what page 1 looked like.
+  For each page, you get a preview of exactly what was found before
+  anything is imported:
+  - A clean, confidently-detected table — shown as a grid, with a
+    "Use this table" button.
+  - A page where extraction found text but nothing that reduces to a
+    clean, consistent grid (a narrative slide, a native chart, a
+    comparison layout) — shown as "couldn't find a clear table here,"
+    with the choice to skip it or type its data in by hand (paste or type
+    rows, comma- or tab-separated).
+  - A page that's an image with no extractable text at all (a title
+    slide, a scanned page) — same skip-or-type-manually choice.
+  - Only one table (extracted or hand-typed) is imported per upload —
+    repeat "+ Upload IMS file" to bring in more than one page/table from
+    the same PDF.
 
 The tab shows, per area and product: the latest market share and how it's
 moved, and the strongest competitor's share alongside it. A **Findings**
@@ -406,3 +435,14 @@ so both modes stay fully legible everywhere, in either language.
   no inline editing, undo, or PDF/PPTX export for IMS data yet — those
   exist for the Sales tab only. Deleting and re-uploading a corrected IMS
   file is the way to fix a mistake in it for now.
+- **IMS PDF extraction** finds real, accurately-extracted tables reliably
+  when a page's table is genuinely a clean grid (verified against a real
+  20-page IMS deck: 10 pages extracted correctly, 10 correctly declined
+  in favor of manual entry rather than guessing). What it does *not* do
+  is reshape a table once found: a monthly-trend table with one column
+  per month (a very common IMS layout — "Jan, Feb, Mar, …" across the
+  header) still has to be re-typed into one row per month via the manual
+  entry option, since the mapping step expects one column *containing*
+  the month, not one column *per* month. Turning that reshaping into
+  something automatic is a reasonable next step if PDF imports turn out
+  to be a common enough workflow to justify it.

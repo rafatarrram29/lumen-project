@@ -60,11 +60,11 @@ function AreaProductRow({ row, t }: { row: ImsAreaProduct; t: Translations }) {
   const changeNegative = row.pctPointChange !== null && row.pctPointChange < 0;
   return (
     <tr className="border-b border-bdr/60 last:border-0">
-      <td className="max-w-[10rem] truncate px-3 py-2 text-white" dir="auto" title={row.area}>
-        {row.area}
+      <td className="max-w-[10rem] truncate px-3 py-2 text-white" dir="auto" title={row.area ?? undefined}>
+        {row.area ?? "—"}
       </td>
-      <td className="max-w-[10rem] truncate px-3 py-2 text-white" dir="auto" title={row.product}>
-        {row.product}
+      <td className="max-w-[10rem] truncate px-3 py-2 text-white" dir="auto" title={row.product ?? undefined}>
+        {row.product ?? "—"}
       </td>
       <td className="px-3 py-2 font-mono text-white">{formatShare(row.latestShare)}</td>
       <td className={`px-3 py-2 font-mono ${changePositive ? "text-green" : changeNegative ? "text-red" : "text-muted"}`}>
@@ -110,7 +110,7 @@ export function ImsPanel({
       <input
         ref={addInputRef}
         type="file"
-        accept=".xlsx,.xls,.xlsm,.csv,.tsv,.txt,.ods"
+        accept=".xlsx,.xls,.xlsm,.csv,.tsv,.txt,.ods,.pdf"
         className="hidden"
         onChange={(e) => {
           const file = e.target.files?.[0];

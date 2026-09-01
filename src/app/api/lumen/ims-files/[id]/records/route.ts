@@ -4,7 +4,7 @@ import { findDuplicateKeys, POSTGRES_UNIQUE_VIOLATION } from "@/lib/lumen/duplic
 
 const MAX_ROWS_PER_REQUEST = 5000;
 
-type IncomingRow = { area: string; product: string; company: string | null; marketShare: number; month: number };
+type IncomingRow = { area: string | null; product: string | null; company: string | null; marketShare: number; month: number };
 
 // Appends a batch of parsed IMS rows to an already-created IMS file
 // (mirrors the dataset-create -> upload-rows split used for the primary
@@ -46,8 +46,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
   const records = rows
     .filter(
       (r) =>
-        typeof r.area === "string" &&
-        typeof r.product === "string" &&
+        (typeof r.area === "string" || typeof r.product === "string") &&
         typeof r.marketShare === "number" &&
         Number.isFinite(r.marketShare) &&
         Number.isInteger(r.month),
@@ -55,8 +54,8 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     .map((r) => ({
       dataset_id: datasetId,
       file_id: fileId,
-      area: r.area,
-      product: r.product,
+      area: typeof r.area === "string" ? r.area : null,
+      product: typeof r.product === "string" ? r.product : null,
       company: typeof r.company === "string" ? r.company : null,
       market_share: r.marketShare,
       month: r.month,
@@ -75,7 +74,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
   // row is an actual duplicate.
   const duplicates = findDuplicateKeys(
     records,
-    (r) => `${r.dataset_id}|${r.year}|${r.month}|${r.area}|${r.product}|${r.company ?? ""}|${r.market_share}`,
+    (r) => `${r.dataset_id}|${r.year}|${r.month}|${r.area ?? ""}|${r.product ?? ""}|${r.company ?? ""}|${r.market_share}`,
   );
   if (duplicates.length > 0) {
     return NextResponse.json(
