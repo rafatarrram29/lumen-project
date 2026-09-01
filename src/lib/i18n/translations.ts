@@ -146,6 +146,40 @@ export type Translations = {
     uploadSuccess: (n: number) => string;
     linkedContextTitle: string;
   };
+  ims: {
+    tabLabel: string;
+    salesTabLabel: string;
+    emptyTitle: string;
+    emptyBody: string;
+    uploadButton: string;
+    modalTitle: (fileName: string) => string;
+    fieldArea: string;
+    fieldProduct: string;
+    fieldMarketShare: string;
+    fieldMonth: string;
+    fieldCompany: string;
+    fieldCompanyHint: string;
+    ownCompanyLabel: string;
+    ownCompanyHint: string;
+    save: string;
+    uploadSuccess: (n: number) => string;
+    deleteButton: string;
+    deleteConfirm: (name: string) => string;
+    filesTitle: string;
+    byAreaProduct: string;
+    latestShare: string;
+    change: string;
+    vsMonthsAgo: (n: number) => string;
+    topCompetitor: string;
+    noCompetitorData: string;
+    findingsTitle: string;
+    noFindings: string;
+    shareDropSummary: (product: string, area: string, pct: number, months: number) => string;
+    shareGainSummary: (product: string, area: string, pct: number, months: number) => string;
+    competitorMoveNote: (company: string, pct: number) => string;
+    marketOutpacingUs: (area: string, salesPct: number, sharePct: number) => string;
+    weOutpacingMarket: (area: string, salesPct: number, sharePct: number) => string;
+  };
   repHistory: {
     title: string;
     addPeriod: string;
@@ -391,6 +425,46 @@ const en: Translations = {
     replaceModalTitle: (fileName) => `Replace with ${fileName}`,
     uploadSuccess: (n) => `Uploaded ${n} rows.`,
     linkedContextTitle: "Linked data",
+  },
+  ims: {
+    tabLabel: "Market Insights",
+    salesTabLabel: "Sales",
+    emptyTitle: "No IMS data yet",
+    emptyBody:
+      "Upload an IQVIA Market Share (IMS) or marketing file to see market-share trends, competitor comparisons, and share-change insights for this dataset — completely separate from the sales analysis above.",
+    uploadButton: "+ Upload IMS file",
+    modalTitle: (fileName) => `Map columns for ${fileName}`,
+    fieldArea: "Area",
+    fieldProduct: "Product",
+    fieldMarketShare: "Market share",
+    fieldMonth: "Month",
+    fieldCompany: "Company (optional)",
+    fieldCompanyHint: "Only needed if this file lists more than one company's share per area/product/month.",
+    ownCompanyLabel: "Which value in that column is us?",
+    ownCompanyHint: "Everything else in that column is treated as a competitor.",
+    save: "Save",
+    uploadSuccess: (n) => `Uploaded ${n} rows.`,
+    deleteButton: "Delete",
+    deleteConfirm: (name) => `Delete "${name}"? This will permanently delete all its uploaded data.`,
+    filesTitle: "IMS files",
+    byAreaProduct: "Market share by area & product",
+    latestShare: "Latest share",
+    change: "Change",
+    vsMonthsAgo: (n) => `vs ${n} month${n === 1 ? "" : "s"} ago`,
+    topCompetitor: "Top competitor",
+    noCompetitorData: "No competitor data",
+    findingsTitle: "Findings",
+    noFindings: "No significant market-share moves detected.",
+    shareDropSummary: (product, area, pct, months) =>
+      `${product} share in ${area} dropped ${Math.abs(pct)} point${Math.abs(pct) === 1 ? "" : "s"} over the last ${months} month${months === 1 ? "" : "s"}.`,
+    shareGainSummary: (product, area, pct, months) =>
+      `${product} share in ${area} grew ${pct} point${pct === 1 ? "" : "s"} over the last ${months} month${months === 1 ? "" : "s"}.`,
+    competitorMoveNote: (company, pct) =>
+      ` Meanwhile, ${company} ${pct > 0 ? "gained" : "lost"} ${Math.abs(pct)} point${Math.abs(pct) === 1 ? "" : "s"} in the same window.`,
+    marketOutpacingUs: (area, salesPct, sharePct) =>
+      `${area}: our sales moved ${salesPct}% but our share moved ${sharePct} points — the market itself is growing faster than we are.`,
+    weOutpacingMarket: (area, salesPct, sharePct) =>
+      `${area}: our sales moved ${salesPct}% but our share moved ${sharePct} points — we're outperforming a shrinking or slower market.`,
   },
   repHistory: {
     title: "Rep history",
@@ -643,6 +717,46 @@ const ar: Translations = {
     replaceModalTitle: (fileName) => `استبدال بـ ${fileName}`,
     uploadSuccess: (n) => `تم رفع ${n} صف.`,
     linkedContextTitle: "بيانات مرتبطة",
+  },
+  ims: {
+    tabLabel: "رؤى السوق (IMS)",
+    salesTabLabel: "المبيعات",
+    emptyTitle: "لسه مفيش بيانات IMS",
+    emptyBody:
+      "ارفع ملف حصة سوقية (IQVIA IMS) أو بيانات ماركتنج عشان تشوف اتجاهات الحصة السوقية، مقارنة بالمنافسين، وملاحظات على أي تغيير كبير في الحصة — منفصل تمامًا عن تحليل المبيعات فوق.",
+    uploadButton: "+ رفع ملف IMS",
+    modalTitle: (fileName) => `تحديد أعمدة ${fileName}`,
+    fieldArea: "المنطقة",
+    fieldProduct: "المنتج",
+    fieldMarketShare: "الحصة السوقية",
+    fieldMonth: "الشهر",
+    fieldCompany: "الشركة (اختياري)",
+    fieldCompanyHint: "محتاجه بس لو الملف فيه حصة أكتر من شركة لكل منطقة/منتج/شهر.",
+    ownCompanyLabel: "أنهي قيمة في العمود ده هي إحنا؟",
+    ownCompanyHint: "أي قيمة تانية في العمود ده هتتحسب منافس.",
+    save: "حفظ",
+    uploadSuccess: (n) => `تم رفع ${n} صف.`,
+    deleteButton: "حذف",
+    deleteConfirm: (name) => `حذف "${name}"؟ ده هيمسح كل بياناته المرفوعة نهائيًا.`,
+    filesTitle: "ملفات IMS",
+    byAreaProduct: "الحصة السوقية حسب المنطقة والمنتج",
+    latestShare: "آخر حصة",
+    change: "التغيير",
+    vsMonthsAgo: (n) => `مقابل ${n} شهر قبل كده`,
+    topCompetitor: "أقوى منافس",
+    noCompetitorData: "مفيش بيانات منافسين",
+    findingsTitle: "الملاحظات",
+    noFindings: "مفيش تغييرات كبيرة في الحصة السوقية.",
+    shareDropSummary: (product, area, pct, months) =>
+      `حصة ${product} في ${area} قلت ${Math.abs(pct)} نقطة خلال آخر ${months} شهر.`,
+    shareGainSummary: (product, area, pct, months) =>
+      `حصة ${product} في ${area} زادت ${pct} نقطة خلال آخر ${months} شهر.`,
+    competitorMoveNote: (company, pct) =>
+      ` في نفس الوقت، ${company} ${pct > 0 ? "كسب" : "خسر"} ${Math.abs(pct)} نقطة.`,
+    marketOutpacingUs: (area, salesPct, sharePct) =>
+      `${area}: مبيعاتنا تحركت ${salesPct}% بس حصتنا تحركت ${sharePct} نقطة — السوق كله بيكبر أسرع مننا.`,
+    weOutpacingMarket: (area, salesPct, sharePct) =>
+      `${area}: مبيعاتنا تحركت ${salesPct}% بس حصتنا تحركت ${sharePct} نقطة — إحنا بنتفوق على سوق بيصغر أو بيتباطأ.`,
   },
   repHistory: {
     title: "سجل المناديب",

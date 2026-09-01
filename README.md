@@ -77,9 +77,14 @@ design reference only — it is not part of the running app.
     legitimately distinct rows that happen to share an area/item/month —
     the root cause of the true duplicate-row class of bug is closed at
     the database itself, not just checked for afterward.
-13. Open **Settings -> API** and copy the **Project URL** and the **anon
+13. Then run `supabase/lumen_ims_migration.sql`. This adds the **Market
+    Insights (IMS)** section described below (a `lumen_ims_files` and a
+    `lumen_ims_records` table). Purely additive — it does not touch any
+    other table, so every dataset keeps working exactly as it does today
+    whether or not it ever gets an IMS file.
+14. Open **Settings -> API** and copy the **Project URL** and the **anon
    public** key.
-14. Open **Authentication -> Sign In / Providers** and make sure **Email**
+15. Open **Authentication -> Sign In / Providers** and make sure **Email**
    is enabled (it is by default). For local development, under
    **Authentication -> URL Configuration**, you can leave the defaults —
    we'll add your real domain there once deployed.
@@ -187,6 +192,33 @@ file's numbers appear together as context for the same drop, without
 changing the underlying sales analysis itself. A file whose join keys
 don't include Area won't appear there. Datasets with no linked files are
 completely unaffected.
+
+## Market Insights / IMS (optional)
+
+A separate **Market Insights** tab, next to Sales, for IQVIA Market Share
+(IMS) or other marketing/competitor data — entirely independent of the
+sales analysis (a dataset with no IMS file behaves exactly as it does
+today; nothing about the Sales tab changes). Upload an IMS file
+("+ Upload IMS file" in the tab) and map its columns (Area, Product,
+Market Share, Month, and an optional Company column for files that list
+more than one company's share per row) the same way a sales file is
+mapped. If the file has a Company column, you confirm which value is your
+own company — everything else is treated as a competitor.
+
+The tab shows, per area and product: the latest market share and how it's
+moved, and the strongest competitor's share alongside it. A **Findings**
+section calls out anything worth noticing without you having to scan the
+whole table:
+
+- A share move of 3 points or more over the last few months, naming which
+  competitor gained or lost ground in the same window, if any.
+- When the same dataset also has sales data for an area: a note when sales
+  and market share moved in *opposite* directions — sales up but share
+  down means the whole market is growing faster than you are; sales down
+  but share up means you're outperforming a shrinking market.
+
+An IMS file can be deleted independently at any time, without touching the
+dataset's sales data or any other linked file.
 
 ## Correcting mistakes in-app
 
@@ -370,3 +402,7 @@ so both modes stay fully legible everywhere, in either language.
   after a period of inactivity can still be slower than a warm one — that's
   the hosting platform's serverless cold start, not something a code change
   here controls.
+- **Market Insights / IMS** (see above) is read-only in this first version:
+  no inline editing, undo, or PDF/PPTX export for IMS data yet — those
+  exist for the Sales tab only. Deleting and re-uploading a corrected IMS
+  file is the way to fix a mistake in it for now.
