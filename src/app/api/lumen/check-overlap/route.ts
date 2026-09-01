@@ -31,7 +31,7 @@ export async function GET(request: Request) {
   const { data, error } = await fetchAllRows((from, to) =>
     supabase
       .from("lumen_sales_records")
-      .select("month")
+      .select("month, source_file")
       .eq("year", year)
       .eq("dataset_id", datasetId)
       .in("month", months)
@@ -46,5 +46,13 @@ export async function GET(request: Request) {
     (a, b) => a - b,
   );
 
-  return NextResponse.json({ overlappingMonths });
+  // Which file(s) the data that's about to be replaced actually came from —
+  // shown in the replace-confirmation prompt so a leftover test/sample
+  // upload sitting under a real month is obvious before deciding whether
+  // to replace it, instead of only after the fact.
+  const existingSourceFiles = Array.from(
+    new Set((data ?? []).map((r) => r.source_file as string | null).filter((f): f is string => !!f)),
+  ).sort();
+
+  return NextResponse.json({ overlappingMonths, existingSourceFiles });
 }
