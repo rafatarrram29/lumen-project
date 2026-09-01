@@ -57,6 +57,32 @@ export type Dataset = {
   userId: string | null;
 };
 
+// Rows dropped while applying a mapping (missing a required field, or a
+// month/value cell that couldn't be read as a number) used to vanish with
+// no trace — the report would just be quietly short some rows. Callers now
+// get a count plus a few examples so an upload can surface a warning
+// instead of silently under-counting.
+export type SkippedRowInfo = { count: number; examples: string[] };
+
+const ARABIC_INDIC_DIGITS = "٠١٢٣٤٥٦٧٨٩";
+const EXTENDED_ARABIC_INDIC_DIGITS = "۰۱۲۳۴۵۶۷۸۹";
+
+// Number() alone fails silently on very common real-world spreadsheet
+// formatting: Arabic-Indic digits (input regional settings), and
+// thousands-separator commas (e.g. a value exported as text "56,996").
+// Both would previously make a perfectly valid row disappear from the
+// upload with no warning at all.
+export function parseNumeric(raw: unknown): number {
+  if (typeof raw === "number") return raw;
+  if (raw == null) return NaN;
+  let s = String(raw).trim();
+  if (s === "") return NaN;
+  s = s.replace(/[٠-٩]/g, (d) => String(ARABIC_INDIC_DIGITS.indexOf(d)));
+  s = s.replace(/[۰-۹]/g, (d) => String(EXTENDED_ARABIC_INDIC_DIGITS.indexOf(d)));
+  s = s.replace(/,/g, "");
+  return Number(s);
+}
+
 type GuessRule = { field: keyof ColumnMapping; keywords: string[] };
 
 // Best-effort pre-fill for the mapping step, so most files just need a
@@ -133,26 +159,42 @@ export function guessTargetMapping(headers: string[]): Partial<Record<keyof Targ
   return guess;
 }
 
-export function applyTargetMapping(sheet: RawSheet, mapping: TargetColumnMapping): ParsedTargetRow[] {
+export function applyTargetMapping(
+  sheet: RawSheet,
+  mapping: TargetColumnMapping,
+): { rows: ParsedTargetRow[]; skipped: SkippedRowInfo } {
   const rows: ParsedTargetRow[] = [];
+  const examples: string[] = [];
+  let skippedCount = 0;
 
   for (const r of sheet.rows) {
     const monthVal = r[mapping.month];
     const valueVal = r[mapping.value];
-    if (monthVal == null || valueVal == null) continue;
+    if (monthVal == null || valueVal == null) {
+      skippedCount++;
+      continue;
+    }
 
-    const month = Math.trunc(Number(monthVal));
-    const targetValue = Number(valueVal);
-    if (Number.isNaN(month) || Number.isNaN(targetValue)) continue;
+    const month = Math.trunc(parseNumeric(monthVal));
+    const targetValue = parseNumeric(valueVal);
+    if (Number.isNaN(month) || Number.isNaN(targetValue)) {
+      skippedCount++;
+      if (examples.length < 5) {
+        examples.push(
+          Number.isNaN(targetValue) ? `could not read value "${valueVal}" as a number` : `could not read month "${monthVal}" as a number`,
+        );
+      }
+      continue;
+    }
 
     const areaVal = mapping.area ? r[mapping.area] : null;
     const repVal = mapping.rep ? r[mapping.rep] : null;
     const itemVal = mapping.item ? r[mapping.item] : null;
 
     rows.push({
-      area: areaVal != null ? String(areaVal) : null,
-      rep: repVal != null ? String(repVal) : null,
-      item: itemVal != null ? String(itemVal) : null,
+      area: areaVal != null ? String(areaVal).trim() : null,
+      rep: repVal != null ? String(repVal).trim() : null,
+      item: itemVal != null ? String(itemVal).trim() : null,
       month,
       targetValue,
     });
@@ -162,37 +204,58 @@ export function applyTargetMapping(sheet: RawSheet, mapping: TargetColumnMapping
     throw new Error("No usable rows found after applying the target column mapping.");
   }
 
-  return rows;
+  return { rows, skipped: { count: skippedCount, examples } };
 }
 
-export function applyColumnMapping(sheet: RawSheet, mapping: ColumnMapping): ParsedSalesRow[] {
+export function applyColumnMapping(
+  sheet: RawSheet,
+  mapping: ColumnMapping,
+): { rows: ParsedSalesRow[]; skipped: SkippedRowInfo } {
   const rows: ParsedSalesRow[] = [];
+  const examples: string[] = [];
+  let skippedCount = 0;
 
   for (const r of sheet.rows) {
     const areaVal = r[mapping.area];
     const itemVal = r[mapping.item];
     const valueVal = r[mapping.value];
     const monthVal = r[mapping.month];
-    if (areaVal == null || itemVal == null || valueVal == null || monthVal == null) continue;
+    if (areaVal == null || itemVal == null || valueVal == null || monthVal == null) {
+      skippedCount++;
+      continue;
+    }
 
-    const salesValue = Number(valueVal);
-    const month = Math.trunc(Number(monthVal));
-    if (Number.isNaN(salesValue) || Number.isNaN(month)) continue;
+    const salesValue = parseNumeric(valueVal);
+    const month = Math.trunc(parseNumeric(monthVal));
+    if (Number.isNaN(salesValue) || Number.isNaN(month)) {
+      skippedCount++;
+      if (examples.length < 5) {
+        examples.push(
+          Number.isNaN(salesValue) ? `could not read value "${valueVal}" as a number` : `could not read month "${monthVal}" as a number`,
+        );
+      }
+      continue;
+    }
 
-    const item = String(itemVal);
+    // Trimmed so a stray leading/trailing space on just some rows of an
+    // otherwise-identical area/item/rep name doesn't silently split it
+    // into a second, near-invisible bucket in the report (e.g. "Domiat 1"
+    // vs "Domiat 1 " being treated as two different areas).
+    const item = String(itemVal).trim();
     const qtyRaw = mapping.qty ? r[mapping.qty] : null;
     const repRaw = mapping.rep ? r[mapping.rep] : null;
     const clusterRaw = mapping.cluster ? r[mapping.cluster] : null;
+    const qty = qtyRaw != null ? parseNumeric(qtyRaw) : NaN;
 
     rows.push({
-      area: String(areaVal),
+      area: String(areaVal).trim(),
       item,
       family: item,
-      salesQty: qtyRaw != null && !Number.isNaN(Number(qtyRaw)) ? Number(qtyRaw) : null,
+      salesQty: !Number.isNaN(qty) ? qty : null,
       salesValue,
       month,
-      rep: repRaw != null ? String(repRaw) : null,
-      cluster: clusterRaw != null ? String(clusterRaw) : null,
+      rep: repRaw != null ? String(repRaw).trim() : null,
+      cluster: clusterRaw != null ? String(clusterRaw).trim() : null,
     });
   }
 
@@ -200,5 +263,5 @@ export function applyColumnMapping(sheet: RawSheet, mapping: ColumnMapping): Par
     throw new Error("No usable rows found after applying the column mapping.");
   }
 
-  return rows;
+  return { rows, skipped: { count: skippedCount, examples } };
 }

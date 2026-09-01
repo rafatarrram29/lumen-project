@@ -4,7 +4,7 @@
 // — so its rows can be matched back to the same area/month shown in the
 // sales-based dashboard as supplementary context, without changing the
 // underlying sales analysis at all.
-import type { RawSheet } from "./columnMapping";
+import { parseNumeric, type RawSheet } from "./columnMapping";
 
 export type LinkedFileType = "achievement" | "kpis" | "other";
 
@@ -124,7 +124,7 @@ export function applyLinkedMapping(sheet: RawSheet, mapping: LinkedFileMapping):
   for (const r of sheet.rows) {
     const monthVal = r[mapping.month];
     if (monthVal == null) continue;
-    const month = Math.trunc(Number(monthVal));
+    const month = Math.trunc(parseNumeric(monthVal));
     if (Number.isNaN(month)) continue;
 
     const areaVal = mapping.area ? r[mapping.area] : null;
@@ -138,9 +138,14 @@ export function applyLinkedMapping(sheet: RawSheet, mapping: LinkedFileMapping):
     }
 
     rows.push({
-      area: areaVal != null ? String(areaVal) : null,
-      rep: repVal != null ? String(repVal) : null,
-      cluster: clusterVal != null ? String(clusterVal) : null,
+      // Trimmed so this file's rows still match the sales-report area they
+      // belong to even if the join-key cell has stray whitespace that the
+      // sales file's own area name doesn't (or vice versa) — untrimmed,
+      // that mismatch would make this linked file silently show no data
+      // for an area it actually has a row for.
+      area: areaVal != null ? String(areaVal).trim() : null,
+      rep: repVal != null ? String(repVal).trim() : null,
+      cluster: clusterVal != null ? String(clusterVal).trim() : null,
       month,
       data,
     });
