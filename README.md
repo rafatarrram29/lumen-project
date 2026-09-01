@@ -206,9 +206,26 @@ file — use "Replace" on it, which shows the same editable mapping.
   originally mapped for that dataset. Either pick the dataset that actually
   matches this file's format, or choose "Create new dataset" instead.
 
+## Export to PDF / PowerPoint
+
+The **Export** button (top of the dashboard) opens a checklist of every
+exportable piece of the current report — overview stats, each area, each
+decision, each chart, and Rep Leaderboard / Target vs Actual when present
+— all checked by default, with Select all / Deselect all. Pick PDF or
+PowerPoint and only the checked items are included; nothing in the output
+hints that anything was left out. If the dataset has open (unresolved)
+flagged issues, the export adds a short "some findings are still under
+review" notice. Everything renders in whichever language is active
+(English or Arabic, right-to-left) at export time. Generation happens
+entirely in the browser — no data is sent anywhere to build the file.
+
 ## Notes on current scope
 
 - Excel parsing uses the `xlsx` npm package, which carries a known
   high-severity advisory (Prototype Pollution / ReDoS) with no fix
   published to the npm registry — mitigated by the app being sign-in gated
   (internal use only). SheetJS's own patched build is a good follow-up.
+- PPTX export uses `pptxgenjs`, whose `image-size` dependency has an open
+  advisory for a few uncommon image formats (ICNS/JXL/HEIF parsing) — not
+  reachable here, since the export flow never feeds it a user-supplied
+  image, only text and chart data.

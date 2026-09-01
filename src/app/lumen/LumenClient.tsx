@@ -27,6 +27,8 @@ import { FlagIssueModal } from "./FlagIssueModal";
 import { CorrectionLogModal } from "./CorrectionLogModal";
 import { EditSalesMappingModal } from "./EditSalesMappingModal";
 import type { Correction, IssueType } from "@/lib/lumen/corrections";
+import { ExportModal, type ExportFormat } from "./ExportModal";
+import { buildExportItems } from "@/lib/lumen/exportItems";
 import { useLanguage } from "@/lib/i18n/LanguageProvider";
 import { findingSummary, findingDecision } from "@/lib/i18n/findingText";
 import type { Translations } from "@/lib/i18n/translations";
@@ -100,7 +102,7 @@ export default function LumenClient({
   initialDatasetId: string | null;
   initialReport: Report;
 }) {
-  const { t } = useLanguage();
+  const { t, lang } = useLanguage();
   const [year, setYear] = useState(initialYear);
   const [datasets, setDatasets] = useState<Dataset[]>(initialDatasets);
   const [selectedDatasetId, setSelectedDatasetId] = useState<string | null>(initialDatasetId);
@@ -126,6 +128,8 @@ export default function LumenClient({
   const [flagTarget, setFlagTarget] = useState<string | null>(null);
   const [showCorrectionLog, setShowCorrectionLog] = useState(false);
   const [showEditSalesMapping, setShowEditSalesMapping] = useState(false);
+  const [showExportModal, setShowExportModal] = useState(false);
+  const [exporting, setExporting] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const targetsFileInputRef = useRef<HTMLInputElement>(null);
 
@@ -636,6 +640,36 @@ export default function LumenClient({
     }
   }
 
+  async function handleExport(format: ExportFormat, selectedIds: Set<string>) {
+    if (!report || "error" in report) return;
+    const dataset = datasets.find((d) => d.id === selectedDatasetId);
+    const openCount = corrections.filter((c) => c.status === "open").length;
+
+    setExporting(true);
+    try {
+      const ctx = {
+        report,
+        t,
+        lang,
+        datasetName: dataset?.name ?? "Lumen",
+        openCorrectionsCount: openCount,
+        selectedIds,
+      };
+      if (format === "pdf") {
+        const { exportToPdf } = await import("@/lib/lumen/exportPdf");
+        await exportToPdf(ctx);
+      } else {
+        const { exportToPptx } = await import("@/lib/lumen/exportPptx");
+        await exportToPptx(ctx);
+      }
+      setShowExportModal(false);
+    } catch (err) {
+      setUploadError(err instanceof Error ? err.message : "Export failed");
+    } finally {
+      setExporting(false);
+    }
+  }
+
   function toggle(area: string) {
     setExpanded((prev) => {
       const next = new Set(prev);
@@ -908,6 +942,15 @@ export default function LumenClient({
         />
       )}
 
+      {showExportModal && report && !("error" in report) && (
+        <ExportModal
+          groups={buildExportItems(report, t)}
+          exporting={exporting}
+          onCancel={() => setShowExportModal(false)}
+          onExport={handleExport}
+        />
+      )}
+
       <main className="min-w-0 flex-1 overflow-y-auto px-6 py-6">
       <div className="mx-auto max-w-4xl">
       {hasError && (
@@ -918,6 +961,16 @@ export default function LumenClient({
 
       {report && !hasError && (
         <div key={`${selectedDatasetId}-${report.year}-${report.comparedToMonth}-${report.latestMonth}-${areas.length}`}>
+          <div className="mb-4 flex justify-end">
+            <button
+              type="button"
+              onClick={() => setShowExportModal(true)}
+              className="rounded-lg border border-bdr px-4 py-2 text-sm text-muted transition-colors hover:border-amber hover:text-white"
+            >
+              {t.export.button}
+            </button>
+          </div>
+
           <div className="mb-5 grid grid-cols-2 gap-3 sm:grid-cols-4">
             <StatTile label={t.dashboard.areasAnalyzed} value={String(areas.length)} delayMs={0} />
             <StatTile

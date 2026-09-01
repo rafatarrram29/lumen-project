@@ -73,6 +73,32 @@ export type Translations = {
     thresholdLabel: string;
     uploadSuccess: (n: number) => string;
   };
+  export: {
+    button: string;
+    modalTitle: string;
+    formatLabel: string;
+    formatPdf: string;
+    formatPptx: string;
+    selectAll: string;
+    deselectAll: string;
+    groupSummary: string;
+    groupAreas: string;
+    groupDecisions: string;
+    groupCharts: string;
+    groupSections: string;
+    itemSummary: string;
+    itemSystemic: string;
+    itemDecision: string;
+    itemTargets: string;
+    exportButton: string;
+    exporting: string;
+    noItemsSelected: string;
+    pendingReviewNotice: string;
+    generatedOn: (date: string) => string;
+    valueLabel: string;
+    changeLabel: string;
+    ofTargetLabel: string;
+  };
   corrections: {
     flagButton: string;
     modalTitle: string;
@@ -297,6 +323,32 @@ const en: Translations = {
     underTargetBy: (pct) => `Under target by ${pct}%`,
     thresholdLabel: "Alert threshold",
     uploadSuccess: (n) => `Uploaded ${n} target rows.`,
+  },
+  export: {
+    button: "Export",
+    modalTitle: "Export report",
+    formatLabel: "Format",
+    formatPdf: "PDF",
+    formatPptx: "PowerPoint",
+    selectAll: "Select all",
+    deselectAll: "Deselect all",
+    groupSummary: "Summary",
+    groupAreas: "Areas",
+    groupDecisions: "Decisions",
+    groupCharts: "Charts",
+    groupSections: "Other sections",
+    itemSummary: "Overview stats",
+    itemSystemic: "Systemic finding",
+    itemDecision: "Decision",
+    itemTargets: "Target vs Actual",
+    exportButton: "Export",
+    exporting: "Exporting…",
+    noItemsSelected: "Select at least one item to export.",
+    pendingReviewNotice: "Some findings in this report are still under review.",
+    generatedOn: (date) => `Generated on ${date}`,
+    valueLabel: "Value",
+    changeLabel: "Change",
+    ofTargetLabel: "% of target",
   },
   corrections: {
     flagButton: "🚩 Flag issue",
@@ -528,6 +580,32 @@ const ar: Translations = {
     underTargetBy: (pct) => `تحت الهدف بنسبة ${pct}%`,
     thresholdLabel: "نسبة التنبيه",
     uploadSuccess: (n) => `تم رفع ${n} صف هدف.`,
+  },
+  export: {
+    button: "تصدير",
+    modalTitle: "تصدير التقرير",
+    formatLabel: "الصيغة",
+    formatPdf: "PDF",
+    formatPptx: "PowerPoint",
+    selectAll: "تحديد الكل",
+    deselectAll: "إلغاء تحديد الكل",
+    groupSummary: "الملخص",
+    groupAreas: "المناطق",
+    groupDecisions: "القرارات",
+    groupCharts: "الرسوم البيانية",
+    groupSections: "أقسام تانية",
+    itemSummary: "إحصائيات عامة",
+    itemSystemic: "نتيجة جماعية",
+    itemDecision: "قرار",
+    itemTargets: "الهدف مقابل الفعلي",
+    exportButton: "تصدير",
+    exporting: "جاري التصدير…",
+    noItemsSelected: "اختار عنصر واحد على الأقل عشان تصدّر.",
+    pendingReviewNotice: "بعض النتائج في التقرير ده لسه قيد المراجعة.",
+    generatedOn: (date) => `تم الإنشاء في ${date}`,
+    valueLabel: "القيمة",
+    changeLabel: "التغيير",
+    ofTargetLabel: "% من الهدف",
   },
   corrections: {
     flagButton: "🚩 الإبلاغ عن مشكلة",
