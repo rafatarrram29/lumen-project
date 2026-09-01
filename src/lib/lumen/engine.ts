@@ -8,8 +8,8 @@
 //   calling anything a real drop.
 // Rule 2 (Systemic check): before blaming a single area, check whether ALL
 //   areas moved together in the same direction. If the dataset has a
-//   cluster column, this check runs separately inside each cluster; with
-//   no cluster column, every area is treated as one cluster (the original
+//   line column, this check runs separately inside each line; with
+//   no line column, every area is treated as one line (the original
 //   behavior).
 // Rule 3 (Root cause): break each area's change down by item to find which
 //   one is actually driving the move.
@@ -22,7 +22,7 @@ const SYSTEMIC_DROP_THRESHOLD = -15.0;
 const SYSTEMIC_AREA_FRACTION = 0.6;
 const TREND_DROP_STREAK = 3;
 const TREND_CHART_MONTHS = 6;
-export const DEFAULT_CLUSTER = "All areas";
+export const DEFAULT_LINE = "All areas";
 
 export type SalesRecord = {
   area: string;
@@ -30,7 +30,7 @@ export type SalesRecord = {
   salesValue: number;
   salesQty: number | null;
   month: number;
-  cluster: string | null;
+  line: string | null;
   rep: string | null;
 };
 
@@ -47,7 +47,7 @@ export type TargetRecord = {
 export type TargetProgress = { targetValue: number; pctOfTarget: number | null };
 
 type AreaChange = {
-  cluster: string;
+  line: string;
   prevValue: number;
   currValue: number;
   prevQty: number;
@@ -65,7 +65,7 @@ export type FamilyChange = {
   absDrop: number;
 };
 
-export type ClusterSummary = {
+export type LineSummary = {
   label: string;
   totalAreas: number;
   isSystemicDrop: boolean;
@@ -74,7 +74,7 @@ export type ClusterSummary = {
 
 type SystemicDropFinding = {
   type: "systemic_drop";
-  cluster: string;
+  line: string;
   droppingCount: number;
   totalAreas: number;
   summary: string;
@@ -111,10 +111,10 @@ export type Report =
       year: number;
       latestMonth: number;
       comparedToMonth: number;
-      hasClusters: boolean;
+      hasLines: boolean;
       isSystemicDrop: boolean;
       areas: Record<string, AreaChange>;
-      clusters: Record<string, ClusterSummary>;
+      lines: Record<string, LineSummary>;
       familyChanges: Record<string, FamilyChange>;
       areaFamilyChanges: Record<string, Record<string, FamilyChange>>;
       itemMonthlySeries: Record<string, MonthPoint[]>;
@@ -133,8 +133,8 @@ function pctChange(prev: number | null | undefined, curr: number): number | null
   return Math.round(((curr - prev) / prev) * 100 * 10) / 10;
 }
 
-function clusterKeyFor(cluster: string | null | undefined): string {
-  return cluster && cluster.trim() !== "" ? cluster : DEFAULT_CLUSTER;
+function lineKeyFor(line: string | null | undefined): string {
+  return line && line.trim() !== "" ? line : DEFAULT_LINE;
 }
 
 type MonthTotal = { value: number; qty: number };
@@ -254,15 +254,15 @@ export function buildReport(records: SalesRecord[], year: number, targets: Targe
       ? allMonths.slice(allMonths.length - TREND_CHART_MONTHS)
       : allMonths;
 
-  // Each area's cluster is whatever cluster label its rows carry (assumed
-  // consistent per area). No cluster column at all -> everyone shares the
-  // single default cluster, which reproduces the original ungrouped
+  // Each area's line is whatever line label its rows carry (assumed
+  // consistent per area). No line column at all -> everyone shares the
+  // single default line, which reproduces the original ungrouped
   // behavior exactly.
-  const areaCluster = new Map<string, string>();
-  let hasClusters = false;
+  const areaLine = new Map<string, string>();
+  let hasLines = false;
   for (const r of records) {
-    if (r.cluster && r.cluster.trim() !== "") hasClusters = true;
-    if (!areaCluster.has(r.area)) areaCluster.set(r.area, clusterKeyFor(r.cluster));
+    if (r.line && r.line.trim() !== "") hasLines = true;
+    if (!areaLine.has(r.area)) areaLine.set(r.area, lineKeyFor(r.line));
   }
 
   // --- Rule 1 + area-level change ---
@@ -286,7 +286,7 @@ export function buildReport(records: SalesRecord[], year: number, targets: Targe
       });
 
     areaChanges[area] = {
-      cluster: areaCluster.get(area) ?? DEFAULT_CLUSTER,
+      line: areaLine.get(area) ?? DEFAULT_LINE,
       prevValue: Math.round(prevTotal.value),
       currValue: Math.round(curr.value),
       prevQty: Math.round(prevTotal.qty),
@@ -298,33 +298,33 @@ export function buildReport(records: SalesRecord[], year: number, targets: Targe
     };
   }
 
-  // Areas grouped by cluster (only areas that made it into areaChanges).
-  const areasByCluster = new Map<string, string[]>();
+  // Areas grouped by line (only areas that made it into areaChanges).
+  const areasByLine = new Map<string, string[]>();
   for (const [area, d] of Object.entries(areaChanges)) {
-    const list = areasByCluster.get(d.cluster) ?? [];
+    const list = areasByLine.get(d.line) ?? [];
     list.push(area);
-    areasByCluster.set(d.cluster, list);
+    areasByLine.set(d.line, list);
   }
 
-  // --- Rule 2: systemic check, scoped to each cluster ---
-  const clusters: Record<string, ClusterSummary> = {};
-  const droppingAreasByCluster = new Map<string, string[]>();
+  // --- Rule 2: systemic check, scoped to each line ---
+  const lines: Record<string, LineSummary> = {};
+  const droppingAreasByLine = new Map<string, string[]>();
   let anySystemicDrop = false;
 
-  for (const [clusterLabel, areasInCluster] of areasByCluster) {
-    const dropping = areasInCluster.filter((a) => {
+  for (const [lineLabel, areasInLine] of areasByLine) {
+    const dropping = areasInLine.filter((a) => {
       const p = areaChanges[a].pctChange;
       return p !== null && p <= SYSTEMIC_DROP_THRESHOLD;
     });
-    droppingAreasByCluster.set(clusterLabel, dropping);
+    droppingAreasByLine.set(lineLabel, dropping);
 
-    const totalAreas = areasInCluster.length;
+    const totalAreas = areasInLine.length;
     const isSystemicDrop =
       totalAreas > 0 && dropping.length / totalAreas >= SYSTEMIC_AREA_FRACTION;
     if (isSystemicDrop) anySystemicDrop = true;
 
     const monthlySeries = chartMonths.map((m) => {
-      const valuesForMonth = areasInCluster
+      const valuesForMonth = areasInLine
         .map((a) => areaTotals.get(a)?.get(m)?.value)
         .filter((v): v is number => v !== undefined);
       const avgValue =
@@ -334,11 +334,11 @@ export function buildReport(records: SalesRecord[], year: number, targets: Targe
       return { month: m, avgValue };
     });
 
-    clusters[clusterLabel] = { label: clusterLabel, totalAreas, isSystemicDrop, monthlySeries };
+    lines[lineLabel] = { label: lineLabel, totalAreas, isSystemicDrop, monthlySeries };
   }
 
-  // Rising areas — used by rule 4 only, which is independent of cluster
-  // grouping (it's a per-area, per-item signal, not a cluster-wide one).
+  // Rising areas — used by rule 4 only, which is independent of line
+  // grouping (it's a per-area, per-item signal, not a line-wide one).
   const risingAreas = Object.entries(areaChanges)
     .filter(
       ([, d]) =>
@@ -350,7 +350,7 @@ export function buildReport(records: SalesRecord[], year: number, targets: Targe
 
   const findings: Finding[] = [];
 
-  // Cluster-wide (global) family totals — computed unconditionally so the
+  // Line-wide (global) family totals — computed unconditionally so the
   // UI can always show a family-vs-family overview, independent of which
   // drop scenario applies anywhere.
   const familyChanges = familyTotalsFor(Object.keys(areaChanges), familyTotals, prev, latest);
@@ -375,15 +375,15 @@ export function buildReport(records: SalesRecord[], year: number, targets: Targe
     if (Object.keys(famChanges).length > 0) areaFamilyChanges[area] = famChanges;
   }
 
-  // --- Rule 3: root cause, per cluster (cluster-wide if that cluster is
+  // --- Rule 3: root cause, per line (line-wide if that line is
   // systemic, else per dropping area within it) ---
-  for (const [clusterLabel, areasInCluster] of areasByCluster) {
-    const summary = clusters[clusterLabel];
-    const dropping = droppingAreasByCluster.get(clusterLabel) ?? [];
+  for (const [lineLabel, areasInLine] of areasByLine) {
+    const summary = lines[lineLabel];
+    const dropping = droppingAreasByLine.get(lineLabel) ?? [];
 
     if (summary.isSystemicDrop) {
-      const clusterFamilies = familyTotalsFor(areasInCluster, familyTotals, prev, latest);
-      const entries = Object.entries(clusterFamilies);
+      const lineFamilies = familyTotalsFor(areasInLine, familyTotals, prev, latest);
+      const entries = Object.entries(lineFamilies);
       if (entries.length === 0) continue;
       const worstEntry = entries.reduce((best, entry) =>
         entry[1].absDrop > best[1].absDrop ? entry : best,
@@ -391,17 +391,17 @@ export function buildReport(records: SalesRecord[], year: number, targets: Targe
 
       findings.push({
         type: "systemic_drop",
-        cluster: clusterLabel,
+        line: lineLabel,
         droppingCount: dropping.length,
         totalAreas: summary.totalAreas,
         summary:
           `${dropping.length} of ${summary.totalAreas} areas` +
-          (clusterLabel === DEFAULT_CLUSTER ? "" : ` in ${clusterLabel}`) +
-          ` dropped together from month ${prev} to ${latest} — this is a cluster-wide move, ` +
+          (lineLabel === DEFAULT_LINE ? "" : ` in ${lineLabel}`) +
+          ` dropped together from month ${prev} to ${latest} — this is a line-wide move, ` +
           `not an individual area failing.`,
         rootCauseFamily: worstEntry[0],
         rootCauseDetail: worstEntry[1],
-        allFamilies: clusterFamilies,
+        allFamilies: lineFamilies,
         decision:
           `Investigate ${worstEntry[0]} specifically (stock availability, ` +
           `pricing change, competitor activity) before reviewing any single ` +
@@ -420,7 +420,7 @@ export function buildReport(records: SalesRecord[], year: number, targets: Targe
           type: "local_drop",
           area,
           pctChange: areaChanges[area].pctChange,
-          summary: `${area} dropped ${areaChanges[area].pctChange}% and did not move with the rest of the cluster.`,
+          summary: `${area} dropped ${areaChanges[area].pctChange}% and did not move with the rest of the line.`,
           rootCauseFamily: worst[0],
           rootCauseDetail: worst[1],
           decision: `Review the ${worst[0]} visit plan and customer coverage specifically in ${area}.`,
@@ -458,7 +458,7 @@ export function buildReport(records: SalesRecord[], year: number, targets: Targe
             area,
             family: fam,
             pctChange: change,
-            summary: `${fam} grew ${change}% in ${area} while the cluster overall declined.`,
+            summary: `${fam} grew ${change}% in ${area} while the line overall declined.`,
             decision: `Review what worked for ${fam} in ${area} and check whether the same approach applies to similar customers in other areas.`,
           });
         }
@@ -469,7 +469,7 @@ export function buildReport(records: SalesRecord[], year: number, targets: Targe
   // --- Rep dimension (optional, fully independent of area/item findings
   // above): per-rep trend + an all-reps average series so the UI can show
   // each rep against their peers the same way areas are shown against
-  // their cluster. ---
+  // their line. ---
   const repTotals = groupRepMonthTotals(records);
   const hasReps = repTotals.size > 0;
   const repChanges: Record<string, FamilyChange> = {};
@@ -537,10 +537,10 @@ export function buildReport(records: SalesRecord[], year: number, targets: Targe
     year,
     latestMonth: latest,
     comparedToMonth: prev,
-    hasClusters,
+    hasLines,
     isSystemicDrop: anySystemicDrop,
     areas: areaChanges,
-    clusters,
+    lines,
     familyChanges,
     areaFamilyChanges,
     itemMonthlySeries,

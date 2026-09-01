@@ -33,7 +33,7 @@ export async function GET(request: Request) {
     fetchAllRows((from, to) =>
       supabase
         .from("lumen_sales_records")
-        .select("area, family, sales_value, sales_qty, month, cluster, rep, is_edited, edited_at, edited_by")
+        .select("area, family, sales_value, sales_qty, month, line, rep, is_edited, edited_at, edited_by")
         .eq("year", year)
         .eq("dataset_id", datasetId)
         .range(from, to),
@@ -58,7 +58,7 @@ export async function GET(request: Request) {
     salesValue: Number(r.sales_value),
     salesQty: r.sales_qty !== null ? Number(r.sales_qty) : null,
     month: Number(r.month),
-    cluster: r.cluster as string | null,
+    line: r.line as string | null,
     rep: r.rep as string | null,
   }));
 

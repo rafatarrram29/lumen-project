@@ -7,7 +7,7 @@ import type { Translations } from "@/lib/i18n/translations";
 
 type FieldKey = keyof ColumnMapping;
 const REQUIRED_FIELDS: FieldKey[] = ["area", "item", "value", "month"];
-const ALL_FIELDS: FieldKey[] = ["area", "item", "value", "qty", "month", "rep", "cluster"];
+const ALL_FIELDS: FieldKey[] = ["area", "item", "value", "qty", "month", "rep", "line"];
 
 function fieldLabel(key: FieldKey, t: Translations): string {
   return {
@@ -17,7 +17,7 @@ function fieldLabel(key: FieldKey, t: Translations): string {
     qty: t.wizard.fieldQty,
     month: t.wizard.fieldMonth,
     rep: t.wizard.fieldRep,
-    cluster: t.wizard.fieldCluster,
+    line: t.wizard.fieldLine,
   }[key];
 }
 
@@ -38,7 +38,7 @@ export function EditSalesMappingModal({
     qty: mapping.qty ?? "",
     month: mapping.month,
     rep: mapping.rep ?? "",
-    cluster: mapping.cluster ?? "",
+    line: mapping.line ?? "",
   });
   const [saving, setSaving] = useState(false);
 
@@ -54,7 +54,7 @@ export function EditSalesMappingModal({
       qty: values.qty.trim() || null,
       month: values.month.trim(),
       rep: values.rep.trim() || null,
-      cluster: values.cluster.trim() || null,
+      line: values.line.trim() || null,
     });
     setSaving(false);
   }

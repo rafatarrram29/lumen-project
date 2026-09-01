@@ -16,14 +16,14 @@ import { useLanguage } from "@/lib/i18n/LanguageProvider";
 import type { Translations } from "@/lib/i18n/translations";
 
 type AreaPoint = { month: number; value: number };
-type ClusterPoint = { month: number; avgValue: number };
+type LinePoint = { month: number; avgValue: number };
 
 type ChartRow = {
   month: string;
   areaIndex: number | null;
   areaValue: number | null;
-  clusterIndex: number | null;
-  clusterValue: number | null;
+  lineIndex: number | null;
+  lineValue: number | null;
 };
 
 function CustomTooltip({
@@ -52,12 +52,12 @@ function CustomTooltip({
           {row.areaValue.toLocaleString()}
         </div>
       )}
-      {row?.clusterValue !== null && row?.clusterValue !== undefined && (
+      {row?.lineValue !== null && row?.lineValue !== undefined && (
         <div className="mt-1 flex items-center gap-1.5 text-cyan">
           <span className="h-1.5 w-1.5 rounded-full bg-cyan" />
-          {compareLabel} {row.clusterIndex}
+          {compareLabel} {row.lineIndex}
           {` ${t.chart.idx} · `}
-          {row.clusterValue.toLocaleString()}
+          {row.lineValue.toLocaleString()}
         </div>
       )}
     </div>
@@ -67,13 +67,13 @@ function CustomTooltip({
 export function TrendChart({
   areaLabel,
   areaSeries,
-  clusterSeries,
+  lineSeries,
   compareShortLabel,
   compareLabel,
 }: {
   areaLabel: string;
   areaSeries: AreaPoint[];
-  clusterSeries: ClusterPoint[];
+  lineSeries: LinePoint[];
   compareShortLabel?: string;
   compareLabel?: string;
 }) {
@@ -81,20 +81,20 @@ export function TrendChart({
   if (areaSeries.length < 2) return null;
 
   const thisShortLabel = t.chart.thisArea;
-  const resolvedCompareShort = compareShortLabel ?? t.chart.clusterAvg;
-  const resolvedCompareLabel = compareLabel ?? t.chart.clusterAverage;
+  const resolvedCompareShort = compareShortLabel ?? t.chart.lineAvg;
+  const resolvedCompareLabel = compareLabel ?? t.chart.lineAverage;
 
   const baseArea = areaSeries[0].value || 1;
-  const baseCluster = clusterSeries[0]?.avgValue || 1;
+  const baseLine = lineSeries[0]?.avgValue || 1;
 
   const data: ChartRow[] = areaSeries.map((pt, i) => {
-    const clusterPt = clusterSeries[i];
+    const linePt = lineSeries[i];
     return {
       month: `Month ${pt.month}`,
       areaIndex: Math.round((pt.value / baseArea) * 100),
       areaValue: pt.value,
-      clusterIndex: clusterPt ? Math.round((clusterPt.avgValue / baseCluster) * 100) : null,
-      clusterValue: clusterPt ? clusterPt.avgValue : null,
+      lineIndex: linePt ? Math.round((linePt.avgValue / baseLine) * 100) : null,
+      lineValue: linePt ? linePt.avgValue : null,
     };
   });
 
@@ -131,7 +131,7 @@ export function TrendChart({
             />
             <Line
               type="monotone"
-              dataKey="clusterIndex"
+              dataKey="lineIndex"
               name={resolvedCompareLabel}
               stroke="var(--cyan)"
               strokeWidth={2}

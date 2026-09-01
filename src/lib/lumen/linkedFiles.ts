@@ -1,6 +1,6 @@
 // Linked files: optional extra files attached to a dataset alongside its
 // primary Sales file (e.g. Achievement, KPIs). Each one gets its own join
-// keys (Area/Rep/Cluster/Month) mapped by the user — never fully automatic
+// keys (Area/Rep/Line/Month) mapped by the user — never fully automatic
 // — so its rows can be matched back to the same area/month shown in the
 // sales-based dashboard as supplementary context, without changing the
 // underlying sales analysis at all.
@@ -8,12 +8,12 @@ import { parseNumeric, type RawSheet } from "./columnMapping";
 
 export type LinkedFileType = "achievement" | "kpis" | "other";
 
-export type JoinKey = "area" | "rep" | "cluster" | "month";
+export type JoinKey = "area" | "rep" | "line" | "month";
 
 export type LinkedFileMapping = {
   area: string | null;
   rep: string | null;
-  cluster: string | null;
+  line: string | null;
   month: string;
 };
 
@@ -31,7 +31,7 @@ export type LinkedRecord = {
   fileId: string;
   area: string | null;
   rep: string | null;
-  cluster: string | null;
+  line: string | null;
   month: number;
   data: Record<string, unknown>;
   isEdited: boolean;
@@ -61,7 +61,9 @@ type JoinGuessRule = { field: keyof LinkedFileMapping; keywords: string[] };
 const JOIN_GUESS_RULES: JoinGuessRule[] = [
   { field: "area", keywords: ["area", "region", "territory"] },
   { field: "rep", keywords: ["rep", "representative", "salesperson", "agent"] },
-  { field: "cluster", keywords: ["cluster", "group", "district", "zone"] },
+  // "line" itself is deliberately not a guess keyword — it's too generic
+  // and would false-match an unrelated column like "Product Line".
+  { field: "line", keywords: ["group", "district", "zone"] },
   { field: "month", keywords: ["month", "period"] },
 ];
 
@@ -97,27 +99,27 @@ export function guessLinkedMapping(headers: string[]): Partial<Record<keyof Link
 // edits in the modal, never applied without review.
 export function suggestedJoinKeys(
   linkedGuess: Partial<Record<keyof LinkedFileMapping, string>>,
-  salesMapping: { rep: string | null; cluster: string | null },
+  salesMapping: { rep: string | null; line: string | null },
 ): JoinKey[] {
   const keys: JoinKey[] = [];
   if (linkedGuess.month) keys.push("month");
   if (linkedGuess.area) keys.push("area");
   if (linkedGuess.rep && salesMapping.rep) keys.push("rep");
-  if (linkedGuess.cluster && salesMapping.cluster) keys.push("cluster");
+  if (linkedGuess.line && salesMapping.line) keys.push("line");
   return keys;
 }
 
 export type ParsedLinkedRow = {
   area: string | null;
   rep: string | null;
-  cluster: string | null;
+  line: string | null;
   month: number;
   data: Record<string, unknown>;
 };
 
 export function applyLinkedMapping(sheet: RawSheet, mapping: LinkedFileMapping): ParsedLinkedRow[] {
   const mappedHeaders = new Set(
-    [mapping.area, mapping.rep, mapping.cluster, mapping.month].filter((v): v is string => v !== null),
+    [mapping.area, mapping.rep, mapping.line, mapping.month].filter((v): v is string => v !== null),
   );
   const rows: ParsedLinkedRow[] = [];
 
@@ -129,7 +131,7 @@ export function applyLinkedMapping(sheet: RawSheet, mapping: LinkedFileMapping):
 
     const areaVal = mapping.area ? r[mapping.area] : null;
     const repVal = mapping.rep ? r[mapping.rep] : null;
-    const clusterVal = mapping.cluster ? r[mapping.cluster] : null;
+    const lineVal = mapping.line ? r[mapping.line] : null;
 
     const data: Record<string, unknown> = {};
     for (const header of sheet.headers) {
@@ -145,7 +147,7 @@ export function applyLinkedMapping(sheet: RawSheet, mapping: LinkedFileMapping):
       // for an area it actually has a row for.
       area: areaVal != null ? String(areaVal).trim() : null,
       rep: repVal != null ? String(repVal).trim() : null,
-      cluster: clusterVal != null ? String(clusterVal).trim() : null,
+      line: lineVal != null ? String(lineVal).trim() : null,
       month,
       data,
     });

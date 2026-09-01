@@ -36,7 +36,7 @@ export function buildExportItems(report: SuccessReport, t: Translations): Export
 
   const decisionItems: ExportItem[] = report.findings.map((f, i) => {
     let label: string;
-    if (f.type === "systemic_drop") label = `${t.export.itemSystemic}: ${f.cluster}`;
+    if (f.type === "systemic_drop") label = `${t.export.itemSystemic}: ${f.line}`;
     else if (f.type === "local_drop") label = `${t.export.itemDecision}: ${f.area}`;
     else label = `${t.export.itemDecision}: ${f.family} → ${f.area}`;
     return { id: `decision:${i}`, group: "decisions", label };
@@ -86,25 +86,25 @@ export function findingsForArea(report: SuccessReport, area: string): Finding[] 
   return report.findings.filter((f) => f.type !== "systemic_drop" && f.area === area);
 }
 
-// Which areas/clusters a given item (family) is the flagged root cause
+// Which areas/lines a given item (family) is the flagged root cause
 // for — mirrors the dashboard's per-item drill-down.
-export function findingsForItem(report: SuccessReport, item: string): { areas: string[]; clusters: string[] } {
+export function findingsForItem(report: SuccessReport, item: string): { areas: string[]; lines: string[] } {
   const areas: string[] = [];
-  const clusters: string[] = [];
+  const lines: string[] = [];
   for (const f of report.findings) {
     if (f.type === "local_drop" && f.rootCauseFamily === item) areas.push(f.area);
-    if (f.type === "systemic_drop" && f.rootCauseFamily === item) clusters.push(f.cluster);
+    if (f.type === "systemic_drop" && f.rootCauseFamily === item) lines.push(f.line);
   }
-  return { areas, clusters };
+  return { areas, lines };
 }
 
 // The same "root cause for ..." phrasing the dashboard's item drill-down
 // uses, built from a findingsForItem() result.
-export function rootCauseText(t: Translations, areas: string[], clusters: string[]): string | null {
-  if (areas.length === 0 && clusters.length === 0) return null;
+export function rootCauseText(t: Translations, areas: string[], lines: string[]): string | null {
+  if (areas.length === 0 && lines.length === 0) return null;
   const parts = [
     ...areas,
-    ...clusters.map((c) => (c === "All areas" ? t.dashboard.theClusterWideDrop : t.dashboard.theClusterWideDropIn(c))),
+    ...lines.map((c) => (c === "All areas" ? t.dashboard.theLineWideDrop : t.dashboard.theLineWideDropIn(c))),
   ];
   return `${t.dashboard.rootCauseFor} ${parts.join(", ")}`;
 }

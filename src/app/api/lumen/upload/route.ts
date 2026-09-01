@@ -12,7 +12,7 @@ type IncomingRow = {
   salesValue: number;
   month: number;
   rep: string | null;
-  cluster: string | null;
+  line: string | null;
 };
 
 export async function POST(request: Request) {
@@ -71,7 +71,7 @@ export async function POST(request: Request) {
       source_file: sourceFile,
       dataset_id: datasetId,
       rep: typeof r.rep === "string" ? r.rep : null,
-      cluster: typeof r.cluster === "string" ? r.cluster : null,
+      line: typeof r.line === "string" ? r.line : null,
     }));
 
   if (records.length === 0) {

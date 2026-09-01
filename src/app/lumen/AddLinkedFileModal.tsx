@@ -14,7 +14,7 @@ import type { RawSheet, ColumnMapping } from "@/lib/lumen/columnMapping";
 import { useLanguage } from "@/lib/i18n/LanguageProvider";
 import type { Translations } from "@/lib/i18n/translations";
 
-const ALL_JOIN_KEYS: JoinKey[] = ["area", "rep", "cluster", "month"];
+const ALL_JOIN_KEYS: JoinKey[] = ["area", "rep", "line", "month"];
 
 function typeLabel(type: LinkedFileType, t: Translations): string {
   return { achievement: t.linkedFiles.typeAchievement, kpis: t.linkedFiles.typeKpis, other: t.linkedFiles.typeOther }[type];
@@ -24,7 +24,7 @@ function joinKeyLabel(key: JoinKey, t: Translations): string {
   return {
     area: t.linkedFiles.joinKeyArea,
     rep: t.linkedFiles.joinKeyRep,
-    cluster: t.linkedFiles.joinKeyCluster,
+    line: t.linkedFiles.joinKeyLine,
     month: t.linkedFiles.joinKeyMonth,
   }[key];
 }
@@ -56,7 +56,7 @@ export function AddLinkedFileModal({
   const guess = useMemo(() => guessLinkedMapping(sheet.headers), [sheet.headers]);
   const headersMatchExisting =
     existingFile &&
-    [existingFile.columnMapping.area, existingFile.columnMapping.rep, existingFile.columnMapping.cluster, existingFile.columnMapping.month]
+    [existingFile.columnMapping.area, existingFile.columnMapping.rep, existingFile.columnMapping.line, existingFile.columnMapping.month]
       .filter((v): v is string => v !== null)
       .every((v) => sheet.headers.includes(v));
 
@@ -70,12 +70,12 @@ export function AddLinkedFileModal({
       : {
           area: guess.area ?? null,
           rep: guess.rep ?? null,
-          cluster: guess.cluster ?? null,
+          line: guess.line ?? null,
           month: guess.month ?? null,
         },
   );
   const [joinKeys, setJoinKeys] = useState<Set<JoinKey>>(
-    () => new Set(existingFile?.joinKeys ?? suggestedJoinKeys(guess, { rep: salesMapping.rep, cluster: salesMapping.cluster })),
+    () => new Set(existingFile?.joinKeys ?? suggestedJoinKeys(guess, { rep: salesMapping.rep, line: salesMapping.line })),
   );
 
   function toggleJoinKey(key: JoinKey) {
@@ -96,7 +96,7 @@ export function AddLinkedFileModal({
     onConfirm({
       fileType,
       displayName: displayName.trim(),
-      mapping: { area: mapping.area, rep: mapping.rep, cluster: mapping.cluster, month: mapping.month },
+      mapping: { area: mapping.area, rep: mapping.rep, line: mapping.line, month: mapping.month },
       joinKeys: activeJoinKeys,
     });
   }
@@ -135,7 +135,7 @@ export function AddLinkedFileModal({
           <div>
             <p className="mb-2 text-xs text-muted">{t.linkedFiles.mappingHelp}</p>
             <div className="space-y-2">
-              {(["area", "rep", "cluster", "month"] as (keyof LinkedFileMapping)[]).map((key) => (
+              {(["area", "rep", "line", "month"] as (keyof LinkedFileMapping)[]).map((key) => (
                 <label key={key} className="flex items-center justify-between gap-2 text-xs text-muted">
                   <span className="w-24 shrink-0">
                     {joinKeyLabel(key as JoinKey, t)}

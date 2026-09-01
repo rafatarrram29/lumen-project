@@ -13,7 +13,7 @@ export type ColumnMapping = {
   qty: string | null;
   month: string;
   rep: string | null;
-  cluster: string | null;
+  line: string | null;
 };
 
 export type ParsedSalesRow = {
@@ -24,7 +24,7 @@ export type ParsedSalesRow = {
   salesValue: number;
   month: number;
   rep: string | null;
-  cluster: string | null;
+  line: string | null;
 };
 
 export type RawSheet = {
@@ -94,7 +94,9 @@ const GUESS_RULES: GuessRule[] = [
   { field: "qty", keywords: ["sales qty", "quantity", "qty", "units"] },
   { field: "month", keywords: ["month", "period"] },
   { field: "rep", keywords: ["rep", "representative", "salesperson", "agent"] },
-  { field: "cluster", keywords: ["cluster", "group", "district", "zone"] },
+  // "line" itself is deliberately not a guess keyword — it's too generic
+  // and would false-match an unrelated column like "Product Line".
+  { field: "line", keywords: ["group", "district", "zone"] },
 ];
 
 export function guessMapping(headers: string[]): Partial<Record<keyof ColumnMapping, string>> {
@@ -244,7 +246,7 @@ export function applyColumnMapping(
     const item = String(itemVal).trim();
     const qtyRaw = mapping.qty ? r[mapping.qty] : null;
     const repRaw = mapping.rep ? r[mapping.rep] : null;
-    const clusterRaw = mapping.cluster ? r[mapping.cluster] : null;
+    const lineRaw = mapping.line ? r[mapping.line] : null;
     const qty = qtyRaw != null ? parseNumeric(qtyRaw) : NaN;
 
     rows.push({
@@ -255,7 +257,7 @@ export function applyColumnMapping(
       salesValue,
       month,
       rep: repRaw != null ? String(repRaw).trim() : null,
-      cluster: clusterRaw != null ? String(clusterRaw).trim() : null,
+      line: lineRaw != null ? String(lineRaw).trim() : null,
     });
   }
 

@@ -1,5 +1,5 @@
 -- Safe fix for the whitespace half of what lumen_name_variants_audit.sql
--- finds: trims leading/trailing spaces from area/item/rep/cluster in
+-- finds: trims leading/trailing spaces from area/item/rep/line in
 -- lumen_sales_records. Trimming can only ever MERGE rows that were always
 -- meant to be the same name (a stray space is never meaningful) — it never
 -- changes what a name means, so this is safe to run directly, unlike a
@@ -34,8 +34,8 @@ set rep = trim(rep)
 where rep is not null and rep <> trim(rep);
 
 update public.lumen_sales_records
-set cluster = trim(cluster)
-where cluster is not null and cluster <> trim(cluster);
+set line = trim(line)
+where line is not null and line <> trim(line);
 
 -- Re-run lumen_name_variants_audit.sql afterwards — any group that was
 -- purely a whitespace difference should no longer appear. Only genuine

@@ -3,13 +3,13 @@ import { createClient } from "@/lib/supabase/server";
 import type { JoinKey, LinkedFileMapping, LinkedFileType } from "@/lib/lumen/linkedFiles";
 
 const VALID_TYPES: LinkedFileType[] = ["achievement", "kpis", "other"];
-const VALID_KEYS: JoinKey[] = ["area", "rep", "cluster", "month"];
+const VALID_KEYS: JoinKey[] = ["area", "rep", "line", "month"];
 
 function isValidMapping(m: unknown): m is LinkedFileMapping {
   if (!m || typeof m !== "object") return false;
   const mapping = m as Record<string, unknown>;
   if (typeof mapping.month !== "string" || mapping.month.trim() === "") return false;
-  for (const key of ["area", "rep", "cluster"]) {
+  for (const key of ["area", "rep", "line"]) {
     if (mapping[key] !== null && typeof mapping[key] !== "string") return false;
   }
   return true;

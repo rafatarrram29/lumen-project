@@ -854,15 +854,15 @@ export default function LumenClient({
     });
   }
 
-  function findingsForItem(item: string): { areas: string[]; clusters: string[] } {
+  function findingsForItem(item: string): { areas: string[]; lines: string[] } {
     const areasForItem: string[] = [];
-    const clustersForItem: string[] = [];
-    if (!report || "error" in report) return { areas: areasForItem, clusters: clustersForItem };
+    const linesForItem: string[] = [];
+    if (!report || "error" in report) return { areas: areasForItem, lines: linesForItem };
     for (const f of report.findings) {
       if (f.type === "local_drop" && f.rootCauseFamily === item) areasForItem.push(f.area);
-      if (f.type === "systemic_drop" && f.rootCauseFamily === item) clustersForItem.push(f.cluster);
+      if (f.type === "systemic_drop" && f.rootCauseFamily === item) linesForItem.push(f.line);
     }
-    return { areas: areasForItem, clusters: clustersForItem };
+    return { areas: areasForItem, lines: linesForItem };
   }
 
   const hasError = report && "error" in report;
@@ -1119,7 +1119,7 @@ export default function LumenClient({
             />
             <StatTile
               label={t.dashboard.pattern}
-              value={report.isSystemicDrop ? t.dashboard.clusterWide : findingsByArea.size > 0 ? t.dashboard.localized : t.dashboard.stable}
+              value={report.isSystemicDrop ? t.dashboard.lineWide : findingsByArea.size > 0 ? t.dashboard.localized : t.dashboard.stable}
               tone={report.isSystemicDrop ? "red" : findingsByArea.size > 0 ? "amber" : "green"}
               delayMs={120}
             />
@@ -1155,7 +1155,7 @@ export default function LumenClient({
           {systemicFindings.map((f, i) => (
             <div key={i} className="mb-5 rounded-2xl border border-red/40 bg-red/10 p-5">
               <p className="mb-2 break-words text-sm">
-                {report.hasClusters && <span className="font-semibold text-white">{f.cluster}: </span>}
+                {report.hasLines && <span className="font-semibold text-white">{f.line}: </span>}
                 {findingSummary(f, report, t)}
               </p>
               <div className="break-words rounded-lg bg-surf2 px-3 py-2 text-sm">
@@ -1238,7 +1238,7 @@ export default function LumenClient({
                                 <TrendChart
                                   areaLabel={rep}
                                   areaSeries={repSeries}
-                                  clusterSeries={report.repAverageSeries}
+                                  lineSeries={report.repAverageSeries}
                                   compareShortLabel={t.chart.repAvg}
                                   compareLabel={t.chart.allRepsAverage}
                                 />
@@ -1258,21 +1258,21 @@ export default function LumenClient({
             {areas.map(([area, d]) => {
               const areaFindings = findingsByArea.get(area) ?? [];
               const isOpen = expanded.has(area);
-              const clusterSummary = report.clusters[d.cluster];
-              const areaClusterSystemic = clusterSummary?.isSystemicDrop ?? false;
+              const lineSummary = report.lines[d.line];
+              const areaLineSystemic = lineSummary?.isSystemicDrop ?? false;
               const causeLine =
                 areaFindings.length > 0
                   ? findingSummary(areaFindings[0], report, t)
-                  : areaClusterSystemic && d.pctChange !== null && d.pctChange <= -15
-                    ? t.dashboard.partOfClusterDrop
+                  : areaLineSystemic && d.pctChange !== null && d.pctChange <= -15
+                    ? t.dashboard.partOfLineDrop
                     : t.dashboard.noChangeThisMonth;
 
-              const clusterSeries = clusterSummary?.monthlySeries ?? [];
-              const clusterLast = clusterSeries[clusterSeries.length - 1];
-              const clusterPrev = clusterSeries[clusterSeries.length - 2];
-              const clusterPct =
-                clusterLast && clusterPrev && clusterPrev.avgValue !== 0
-                  ? Math.round(((clusterLast.avgValue - clusterPrev.avgValue) / clusterPrev.avgValue) * 1000) / 10
+              const lineSeries = lineSummary?.monthlySeries ?? [];
+              const lineLast = lineSeries[lineSeries.length - 1];
+              const linePrev = lineSeries[lineSeries.length - 2];
+              const linePct =
+                lineLast && linePrev && linePrev.avgValue !== 0
+                  ? Math.round(((lineLast.avgValue - linePrev.avgValue) / linePrev.avgValue) * 1000) / 10
                   : null;
 
               const areaAssignments = assignments.filter((a) => a.area === area);
@@ -1298,9 +1298,9 @@ export default function LumenClient({
                     <div className="min-w-0">
                       <div className="flex items-center gap-2">
                         <span className="truncate font-medium" dir="auto">{area}</span>
-                        {report.hasClusters && (
+                        {report.hasLines && (
                           <span className="shrink-0 rounded-full border border-bdr px-1.5 py-0.5 text-[10px] text-muted" dir="auto">
-                            {d.cluster}
+                            {d.line}
                           </span>
                         )}
                       </div>
@@ -1333,12 +1333,12 @@ export default function LumenClient({
                               {t.targets.underTargetBy(Math.round((100 - report.areaTargets[area].pctOfTarget!) * 10) / 10)}
                             </p>
                           )}
-                        {clusterPct !== null && (
+                        {linePct !== null && (
                           <p className="mb-2 text-xs text-muted">
                             {t.dashboard.areaMovedVs(
                               d.pctChange ?? 0,
-                              report.hasClusters ? d.cluster : t.dashboard.clusterWord,
-                              clusterPct,
+                              report.hasLines ? d.line : t.dashboard.lineWord,
+                              linePct,
                             )}
                           </p>
                         )}
@@ -1369,7 +1369,7 @@ export default function LumenClient({
                           <TrendChart
                             areaLabel={area}
                             areaSeries={d.monthlySeries}
-                            clusterSeries={clusterSeries}
+                            lineSeries={lineSeries}
                           />
                         </div>
                       )}
@@ -1390,7 +1390,7 @@ export default function LumenClient({
                                 .map(([a, changes]) => [a, changes[fam]] as const)
                                 .filter((entry): entry is [string, (typeof report.areaFamilyChanges)[string][string]] => entry[1] !== undefined)
                                 .sort((a, b) => b[1].currValue - a[1].currValue);
-                              const { areas: rootCauseAreas, clusters: rootCauseClusters } = findingsForItem(fam);
+                              const { areas: rootCauseAreas, lines: rootCauseLines } = findingsForItem(fam);
 
                               return (
                               <div key={fam} className="text-xs">
@@ -1476,13 +1476,13 @@ export default function LumenClient({
                                       </div>
                                     )}
 
-                                    {(rootCauseAreas.length > 0 || rootCauseClusters.length > 0) && (
+                                    {(rootCauseAreas.length > 0 || rootCauseLines.length > 0) && (
                                       <div className="text-[11px] text-muted">
                                         <span className="font-semibold text-amber">{t.dashboard.rootCauseFor} </span>
                                         {[
                                           ...rootCauseAreas,
-                                          ...rootCauseClusters.map((c) =>
-                                            c === "All areas" ? t.dashboard.theClusterWideDrop : t.dashboard.theClusterWideDropIn(c),
+                                          ...rootCauseLines.map((c) =>
+                                            c === "All areas" ? t.dashboard.theLineWideDrop : t.dashboard.theLineWideDropIn(c),
                                           ),
                                         ].join(", ")}
                                       </div>

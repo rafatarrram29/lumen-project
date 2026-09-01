@@ -1,6 +1,10 @@
 -- Prevents byte-identical duplicate rows in lumen_sales_records and
 -- lumen_dataset_records at the database level. Run this once in the
--- Supabase SQL Editor, after lumen_undo_migration.sql.
+-- Supabase SQL Editor, after lumen_undo_migration.sql AND after
+-- lumen_rename_cluster_to_line_migration.sql (this one references the
+-- "line" column by its new name — if you haven't renamed it yet, run
+-- that migration first or this one will fail with "column does not
+-- exist").
 --
 -- IMPORTANT — this is a corrected version. An earlier copy of this
 -- migration made the unique key just (dataset_id, year, month, area,
@@ -38,5 +42,5 @@ create unique index if not exists lumen_sales_records_exact_row_idx
 
 create unique index if not exists lumen_dataset_records_exact_row_idx
   on public.lumen_dataset_records (
-    file_id, year, month, coalesce(area, ''), coalesce(rep, ''), coalesce(cluster, ''), data
+    file_id, year, month, coalesce(area, ''), coalesce(rep, ''), coalesce(line, ''), data
   );
