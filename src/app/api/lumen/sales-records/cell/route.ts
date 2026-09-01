@@ -29,6 +29,7 @@ export async function PATCH(request: Request) {
   const area = typeof body?.area === "string" ? body.area : null;
   const family = typeof body?.family === "string" ? body.family : null;
   const newValue = Number(body?.newValue);
+  const isUndo = body?.isUndo === true;
 
   if (!datasetId) return NextResponse.json({ error: "Missing datasetId" }, { status: 400 });
   if (!Number.isInteger(year)) return NextResponse.json({ error: "Invalid year" }, { status: 400 });
@@ -103,6 +104,7 @@ export async function PATCH(request: Request) {
     old_value: String(oldTotal),
     new_value: String(newValue),
     edited_by: editedBy,
+    is_undo: isUndo,
   });
   if (logError) {
     return NextResponse.json({ error: logError.message }, { status: 500 });

@@ -7,4 +7,5 @@ export type DataEdit = {
   newValue: string;
   editedBy: string | null;
   createdAt: string;
+  isUndo: boolean;
 };

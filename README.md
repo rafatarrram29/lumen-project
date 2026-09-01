@@ -54,9 +54,11 @@ design reference only — it is not part of the running app.
 8. Then run `supabase/lumen_inline_edits_migration.sql`. This adds the
    `lumen_data_edits` table plus the missing UPDATE policies used by
    in-app inline editing (the **Correction log** described below).
-9. Open **Settings -> API** and copy the **Project URL** and the **anon
+9. Then run `supabase/lumen_undo_migration.sql`. This adds the `is_undo`
+   column used to flag an Undo entry in the Correction log.
+10. Open **Settings -> API** and copy the **Project URL** and the **anon
    public** key.
-10. Open **Authentication -> Sign In / Providers** and make sure **Email**
+11. Open **Authentication -> Sign In / Providers** and make sure **Email**
    is enabled (it is by default). For local development, under
    **Authentication -> URL Configuration**, you can leave the defaults —
    we'll add your real domain there once deployed.
@@ -179,9 +181,18 @@ refresh. The same click-to-edit works on any linked file's values
 display, per the "linked view" scope described above. An edited value shows
 a small ✎ next to it — hover it to see who made the edit and when.
 
+Right after saving an edit, an **Undo** toast appears at the bottom of the
+screen for a few seconds — click it (or press **Ctrl+Z** / **Cmd+Z** on a
+computer) to instantly restore the exact previous value, with the same
+automatic recalculation running in reverse. Undo only steps back the single
+most recent edit; the toast (and the Ctrl+Z shortcut) goes away once you
+make another edit, switch dataset or year, or a few seconds pass.
+
 Every edit is recorded automatically in that dataset's **Correction log**
 (sidebar) under "Edit history": what changed, from what value to what
-value, who made the change, and when.
+value, who made the change, and when — an Undo shows up there too, as its
+own "↺ Undone" entry, so the original edit stays in the log rather than
+being erased.
 
 Two more things can be fixed without deleting and re-uploading a whole
 dataset:

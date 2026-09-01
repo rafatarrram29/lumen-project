@@ -20,7 +20,7 @@ export async function GET(request: Request) {
 
   const { data, error } = await supabase
     .from("lumen_data_edits")
-    .select("id, target_label, old_value, new_value, edited_by, created_at")
+    .select("id, target_label, old_value, new_value, edited_by, created_at, is_undo")
     .eq("dataset_id", datasetId)
     .order("created_at", { ascending: false });
 
@@ -36,6 +36,7 @@ export async function GET(request: Request) {
       newValue: e.new_value as string,
       editedBy: e.edited_by as string | null,
       createdAt: e.created_at as string,
+      isUndo: Boolean(e.is_undo),
     })),
   });
 }

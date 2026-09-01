@@ -117,6 +117,9 @@ export type Translations = {
     logSectionTitle: string;
     logEmpty: string;
     changedFrom: (oldValue: string, newValue: string) => string;
+    undoToastMessage: string;
+    undoButton: string;
+    undoneBadge: string;
   };
   linkedFiles: {
     panelTitle: string;
@@ -359,6 +362,9 @@ const en: Translations = {
     logSectionTitle: "Edit history",
     logEmpty: "No values have been edited in this dataset yet.",
     changedFrom: (oldValue, newValue) => `${oldValue} → ${newValue}`,
+    undoToastMessage: "Value updated.",
+    undoButton: "Undo",
+    undoneBadge: "↺ Undone",
   },
   linkedFiles: {
     panelTitle: "Linked files",
@@ -607,6 +613,9 @@ const ar: Translations = {
     logSectionTitle: "سجل التعديلات",
     logEmpty: "لسه مفيش أرقام اتعدّلت في مجموعة البيانات دي.",
     changedFrom: (oldValue, newValue) => `${oldValue} ← ${newValue}`,
+    undoToastMessage: "اتعدّلت القيمة.",
+    undoButton: "تراجع",
+    undoneBadge: "↺ اتراجع عنه",
   },
   linkedFiles: {
     panelTitle: "الملفات المرتبطة",

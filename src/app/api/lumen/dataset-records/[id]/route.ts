@@ -26,6 +26,7 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
   const body = await request.json().catch(() => null);
   const key = typeof body?.key === "string" ? body.key : null;
   const rawNewValue = body?.newValue;
+  const isUndo = body?.isUndo === true;
 
   if (!key) return NextResponse.json({ error: "Missing key" }, { status: 400 });
   if (typeof rawNewValue !== "string" && typeof rawNewValue !== "number") {
@@ -79,10 +80,11 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
     old_value: String(oldValue ?? ""),
     new_value: String(newValue),
     edited_by: editedBy,
+    is_undo: isUndo,
   });
   if (logError) {
     return NextResponse.json({ error: logError.message }, { status: 500 });
   }
 
-  return NextResponse.json({ updated: true, newValue });
+  return NextResponse.json({ updated: true, oldValue, newValue });
 }
