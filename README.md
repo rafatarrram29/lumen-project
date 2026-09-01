@@ -266,6 +266,26 @@ file — use "Replace" on it, which shows the same editable mapping.
      with a clear error instead of being silently accepted, and an upload
      that fails partway through is automatically rolled back rather than
      leaving a month half-written.
+- **An area's total looks too low, but there's no duplicate-row problem**
+  (the audit above comes back clean) — two other things used to cause this
+  silently, and are now fixed going forward:
+  1. **Name-variant splitting.** If the same area/item/rep name appears in
+     the source file with a stray leading/trailing space or different
+     letter case on some rows (e.g. "Domiat 1" vs "Domiat 1 "), the app used
+     to treat those as two different areas — each with its own, smaller
+     total, with no error shown anywhere. New uploads are now trimmed on
+     the way in, so this can't happen again. To check whether it already
+     happened to existing data, run `supabase/lumen_name_variants_audit.sql`
+     (read-only); if it shows a whitespace-only split, `supabase/lumen_normalize_whitespace.sql`
+     safely merges those rows back together (case-only variants need a
+     manual look — see the comments in the audit script).
+  2. **Rows silently skipped during upload.** A month or value cell the
+     app couldn't read as a number (Arabic-Indic digits, a value exported
+     as text with a thousands-separator comma, or genuinely bad data) used
+     to make that row vanish from the upload with no warning. Arabic-Indic
+     digits and comma-formatted numbers are now parsed correctly, and any
+     row that still can't be read is now reported to you as a warning after
+     the upload finishes, instead of disappearing unnoticed.
 - If you created the `lumen_sales_records` table before the DELETE policy
   was added to `lumen_schema.sql`, run `supabase/lumen_add_delete_policy.sql`
   once — without it, re-uploading a month fails silently.

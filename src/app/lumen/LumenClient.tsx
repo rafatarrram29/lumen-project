@@ -330,7 +330,7 @@ export default function LumenClient({
     setUploadMessage(null);
 
     try {
-      const rows = applyTargetMapping(sheet, mapping);
+      const { rows, skipped } = applyTargetMapping(sheet, mapping);
 
       const currentDataset = datasets.find((d) => d.id === selectedDatasetId);
       const mappingUnchanged =
@@ -381,6 +381,11 @@ export default function LumenClient({
       }
 
       setUploadMessage(t.targets.uploadSuccess(inserted));
+      if (skipped.count > 0) {
+        setUploadError(
+          `Skipped ${skipped.count} row(s) that couldn't be read (${skipped.examples.join("; ") || "missing month/value"}) — check the source file for those rows.`,
+        );
+      }
       await fetchReport(selectedDatasetId, year);
     } catch (err) {
       setUploadError(err instanceof Error ? err.message : "Targets upload failed");
@@ -397,7 +402,7 @@ export default function LumenClient({
     fileName: string,
     fileLabel: string,
   ): Promise<{ inserted: number; warning?: string } | false> {
-    const rows = applyColumnMapping(sheet, mapping);
+    const { rows, skipped } = applyColumnMapping(sheet, mapping);
     const monthsInFile = Array.from(new Set(rows.map((r) => r.month))).sort((a, b) => a - b);
 
     const overlapRes = await fetch(
@@ -464,20 +469,27 @@ export default function LumenClient({
     // constraint both prevent a mismatch — but this is the one place we
     // can catch anything neither of those anticipated before the user
     // walks away trusting a silently wrong number.
-    let warning: string | undefined;
+    const warnings: string[] = [];
+    if (skipped.count > 0) {
+      warnings.push(
+        `${fileLabel}: skipped ${skipped.count} row(s) that couldn't be read (${skipped.examples.join("; ") || "missing area/item/value/month"}) — check the source file for those rows.`,
+      );
+    }
     try {
       const countRes = await fetch(
         `/api/lumen/sales-records/count?year=${year}&datasetId=${datasetId}&months=${monthsInFile.join(",")}`,
       );
       const countJson = await countRes.json();
       if (countRes.ok && typeof countJson.count === "number" && countJson.count !== inserted) {
-        warning = `${fileLabel}: expected ${inserted} rows for this upload, but the dataset now has ${countJson.count} for these months — please check the Correction log and this area's numbers before relying on them.`;
+        warnings.push(
+          `${fileLabel}: expected ${inserted} rows for this upload, but the dataset now has ${countJson.count} for these months — please check the Correction log and this area's numbers before relying on them.`,
+        );
       }
     } catch {
       // best-effort only; not being able to verify isn't itself an error
     }
 
-    return { inserted, warning };
+    return { inserted, warning: warnings.length > 0 ? warnings.join(" | ") : undefined };
   }
 
   async function handleWizardConfirm(choice: WizardChoice) {
