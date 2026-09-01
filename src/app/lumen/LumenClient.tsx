@@ -413,8 +413,13 @@ export default function LumenClient({
 
     const overlappingMonths: number[] = overlapJson.overlappingMonths ?? [];
     if (overlappingMonths.length > 0) {
+      const existingSourceFiles: string[] = overlapJson.existingSourceFiles ?? [];
+      const existingFilesNote =
+        existingSourceFiles.length > 0
+          ? ` The data currently there came from: ${existingSourceFiles.join(", ")}.`
+          : "";
       const proceed = window.confirm(
-        `${fileLabel} — month(s) ${overlappingMonths.join(", ")} already have data in this dataset for ${year}. ` +
+        `${fileLabel} — month(s) ${overlappingMonths.join(", ")} already have data in this dataset for ${year}.${existingFilesNote} ` +
           `Continuing will delete the existing rows for those months and replace them with ` +
           `this file. This cannot be undone. Continue?`,
       );
