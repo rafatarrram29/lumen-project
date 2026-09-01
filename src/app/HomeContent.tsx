@@ -35,7 +35,7 @@ export default function HomeContent({ userEmail }: { userEmail: string }) {
       </div>
 
       <div className="relative w-full max-w-2xl text-center">
-        <div className="mx-auto mb-6 flex h-16 w-16 items-center justify-center rounded-2xl bg-gradient-to-br from-amber to-[#d68820] text-3xl font-bold text-bg shadow-lg shadow-amber/20">
+        <div className="mx-auto mb-6 flex h-16 w-16 items-center justify-center rounded-2xl bg-gradient-to-br from-amber to-[var(--amber-2)] text-3xl font-bold text-on-accent shadow-lg shadow-amber/20">
           L
         </div>
         <h1 className="mb-3 text-4xl font-semibold tracking-tight sm:text-5xl">{t.common.appName}</h1>
@@ -50,7 +50,7 @@ export default function HomeContent({ userEmail }: { userEmail: string }) {
 
         <Link
           href="/lumen"
-          className="inline-flex items-center gap-2 rounded-lg bg-gradient-to-br from-amber to-[#d68820] px-8 py-3.5 text-sm font-semibold text-bg shadow-lg shadow-amber/20 transition-opacity hover:opacity-90"
+          className="inline-flex items-center gap-2 rounded-lg bg-gradient-to-br from-amber to-[var(--amber-2)] px-8 py-3.5 text-sm font-semibold text-on-accent shadow-lg shadow-amber/20 transition-opacity hover:opacity-90"
         >
           {t.home.startAnalysis} <span aria-hidden>{dir === "rtl" ? "←" : "→"}</span>
         </Link>

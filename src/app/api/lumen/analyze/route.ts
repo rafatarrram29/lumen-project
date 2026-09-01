@@ -25,14 +25,28 @@ export async function GET(request: Request) {
     return NextResponse.json({ error: "Missing datasetId" }, { status: 400 });
   }
 
-  const { data, error } = await fetchAllRows((from, to) =>
-    supabase
-      .from("lumen_sales_records")
-      .select("area, family, sales_value, sales_qty, month, cluster, rep, is_edited, edited_at, edited_by")
-      .eq("year", year)
-      .eq("dataset_id", datasetId)
-      .range(from, to),
-  );
+  // Neither query depends on the other's result — fetching them
+  // concurrently instead of one after another roughly halves this route's
+  // latency, which matters here since the client re-hits it on every
+  // dataset/year switch, not just the first page load.
+  const [{ data, error }, { data: targetData }] = await Promise.all([
+    fetchAllRows((from, to) =>
+      supabase
+        .from("lumen_sales_records")
+        .select("area, family, sales_value, sales_qty, month, cluster, rep, is_edited, edited_at, edited_by")
+        .eq("year", year)
+        .eq("dataset_id", datasetId)
+        .range(from, to),
+    ),
+    fetchAllRows((from, to) =>
+      supabase
+        .from("lumen_targets")
+        .select("area, rep, item, month, target_value")
+        .eq("year", year)
+        .eq("dataset_id", datasetId)
+        .range(from, to),
+    ),
+  ]);
 
   if (error) {
     return NextResponse.json({ error }, { status: 500 });
@@ -47,15 +61,6 @@ export async function GET(request: Request) {
     cluster: r.cluster as string | null,
     rep: r.rep as string | null,
   }));
-
-  const { data: targetData } = await fetchAllRows((from, to) =>
-    supabase
-      .from("lumen_targets")
-      .select("area, rep, item, month, target_value")
-      .eq("year", year)
-      .eq("dataset_id", datasetId)
-      .range(from, to),
-  );
 
   const targets: TargetRecord[] = (targetData ?? []).map((t) => ({
     area: t.area as string | null,

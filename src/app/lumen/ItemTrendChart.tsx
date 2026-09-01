@@ -44,17 +44,17 @@ export function ItemTrendChart({ label, series }: { label: string; series: Month
     <div className="h-40 w-full">
       <ResponsiveContainer width="100%" height="100%">
         <LineChart data={data} margin={{ top: 8, right: 8, left: -4, bottom: 0 }}>
-          <CartesianGrid stroke="#2a3559" strokeDasharray="3 3" vertical={false} />
+          <CartesianGrid stroke="var(--bdr)" strokeDasharray="3 3" vertical={false} />
           <XAxis
             dataKey="month"
-            stroke="#8b93b0"
+            stroke="var(--muted)"
             fontSize={10}
             tickLine={false}
-            axisLine={{ stroke: "#2a3559" }}
+            axisLine={{ stroke: "var(--bdr)" }}
             tickFormatter={(v: string) => v.replace("Month ", "M")}
           />
           <YAxis
-            stroke="#8b93b0"
+            stroke="var(--muted)"
             fontSize={10}
             tickLine={false}
             axisLine={false}
@@ -66,9 +66,9 @@ export function ItemTrendChart({ label, series }: { label: string; series: Month
             type="monotone"
             dataKey="value"
             name={label}
-            stroke="#f2a93b"
+            stroke="var(--amber)"
             strokeWidth={2}
-            dot={{ r: 3, fill: "#f2a93b" }}
+            dot={{ r: 3, fill: "var(--amber)" }}
             isAnimationActive
           />
         </LineChart>

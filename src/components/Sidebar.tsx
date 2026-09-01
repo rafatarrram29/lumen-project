@@ -5,6 +5,7 @@ import type { ReactNode } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { useLanguage } from "@/lib/i18n/LanguageProvider";
 import LanguageToggle from "./LanguageToggle";
+import ThemeToggle from "./ThemeToggle";
 
 export default function Sidebar({
   userEmail,
@@ -25,7 +26,7 @@ export default function Sidebar({
     <aside className="flex w-full shrink-0 flex-col border-b border-bdr bg-surf p-4 sm:w-72 sm:border-b-0 sm:border-e">
       <div className="mb-6 flex items-center justify-between gap-2">
         <Link href="/" className="flex min-w-0 items-center gap-2">
-          <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-gradient-to-br from-amber to-[#d68820] font-bold text-bg">
+          <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-gradient-to-br from-amber to-[var(--amber-2)] font-bold text-on-accent">
             L
           </div>
           <div className="min-w-0">
@@ -33,7 +34,10 @@ export default function Sidebar({
             <div className="truncate text-xs leading-tight text-muted">{t.common.tagline}</div>
           </div>
         </Link>
-        <LanguageToggle className="shrink-0" />
+        <div className="flex shrink-0 items-center gap-2">
+          <ThemeToggle />
+          <LanguageToggle />
+        </div>
       </div>
 
       {children}

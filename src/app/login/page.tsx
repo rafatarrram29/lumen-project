@@ -67,7 +67,7 @@ export default function LoginPage() {
       <div className="w-full max-w-sm rounded-2xl border border-bdr bg-surf p-8 shadow-xl">
         <div className="mb-6 flex items-center justify-between gap-2">
           <div className="flex items-center gap-2">
-            <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-gradient-to-br from-amber to-[#d68820] font-bold text-bg">
+            <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-gradient-to-br from-amber to-[var(--amber-2)] font-bold text-on-accent">
               L
             </div>
             <div className="text-lg font-semibold">{t.common.appName}</div>
@@ -126,7 +126,7 @@ export default function LoginPage() {
           <button
             type="submit"
             disabled={loading}
-            className="w-full rounded-lg bg-gradient-to-br from-amber to-[#d68820] py-2.5 text-sm font-semibold text-bg transition-opacity hover:opacity-90 disabled:opacity-60"
+            className="w-full rounded-lg bg-gradient-to-br from-amber to-[var(--amber-2)] py-2.5 text-sm font-semibold text-on-accent transition-opacity hover:opacity-90 disabled:opacity-60"
           >
             {loading
               ? t.login.pleaseWait

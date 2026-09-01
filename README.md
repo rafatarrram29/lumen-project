@@ -281,6 +281,17 @@ whether that card happened to be expanded or collapsed on screen when you
 clicked Export. The checklist reads straight from the report's data, never
 from what's currently rendered.
 
+## Appearance: Light / Dark mode
+
+Light is the default theme — white/soft-gray cards with subtle borders and
+shadows, and medium-toned red/green/amber for good contrast on a light
+background. A ☀/☾ toggle next to the language switch (top of the sidebar)
+switches to the original dark navy theme at any time; the choice is saved
+per browser and applied instantly on the next visit, before the page even
+paints (no flash of the wrong theme). Every interactive element — charts,
+tables, badges, the Export/Undo buttons — reads from the same theme tokens,
+so both modes stay fully legible everywhere, in either language.
+
 ## Notes on current scope
 
 - Excel parsing uses the `xlsx` npm package, which carries a known
@@ -305,3 +316,18 @@ from what's currently rendered.
   file, so troubleshooting it always means looking at
   `lumen_sales_records` itself for that dataset — see "Duplicate or
   wildly incorrect numbers in an area" above.
+- **/lumen navigation speed**: two real contributors were found and fixed.
+  (1) `xlsx` and `recharts` — both sizeable libraries only needed for
+  specific user actions (uploading a file; expanding a trend chart) — were
+  being bundled eagerly into every `/lumen` page load; both are now loaded
+  on demand via dynamic `import()`, cutting the route's eager JS from
+  ~752KB to ~377KB. (2) fetching a dataset's rows paged through Supabase
+  one page at a time, sequentially, and fetched sales rows then targets
+  one after the other — for a dataset spanning several pages this meant
+  several round trips back-to-back. Pages are now fetched in parallel
+  (measured ~2.5x faster for a 5-page dataset against simulated network
+  latency) and the sales/targets queries run concurrently, both on the
+  initial page load and on every dataset/year switch. A first request
+  after a period of inactivity can still be slower than a warm one — that's
+  the hosting platform's serverless cold start, not something a code change
+  here controls.

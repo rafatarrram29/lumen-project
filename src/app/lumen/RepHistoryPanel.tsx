@@ -152,7 +152,7 @@ export function RepHistoryPanel({
             type="button"
             onClick={handleSave}
             disabled={saving}
-            className="rounded-lg bg-gradient-to-br from-amber to-[#d68820] px-3 py-1.5 font-semibold text-bg disabled:opacity-50"
+            className="rounded-lg bg-gradient-to-br from-amber to-[var(--amber-2)] px-3 py-1.5 font-semibold text-on-accent disabled:opacity-50"
           >
             {t.repHistory.save}
           </button>

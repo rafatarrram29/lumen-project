@@ -1,8 +1,8 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import dynamic from "next/dynamic";
 import {
-  readWorkbookSheet,
   applyColumnMapping,
   applyTargetMapping,
   type ColumnMapping,
@@ -12,8 +12,6 @@ import {
 } from "@/lib/lumen/columnMapping";
 import type { Finding, Report } from "@/lib/lumen/engine";
 import { StatTile, AreaChangeBars, FamilyChangeBars, RepLeaderboard } from "./charts";
-import { TrendChart } from "./TrendChart";
-import { ItemTrendChart } from "./ItemTrendChart";
 import { colorForFamily } from "@/lib/lumen/familyColors";
 import Sidebar from "@/components/Sidebar";
 import { UploadWizardModal, type WizardChoice } from "./UploadWizardModal";
@@ -33,6 +31,14 @@ import { buildExportItems } from "@/lib/lumen/exportItems";
 import { useLanguage } from "@/lib/i18n/LanguageProvider";
 import { findingSummary, findingDecision } from "@/lib/i18n/findingText";
 import type { Translations } from "@/lib/i18n/translations";
+
+// recharts is a heavy dependency only ever needed once a trend chart is
+// actually shown (an area or item card expanded) — loading it eagerly
+// added real weight to every /lumen page load whether or not anyone ever
+// expanded a chart. Dynamic import splits it into its own chunk, fetched
+// only the first time one of these renders.
+const TrendChart = dynamic(() => import("./TrendChart").then((m) => m.TrendChart), { ssr: false });
+const ItemTrendChart = dynamic(() => import("./ItemTrendChart").then((m) => m.ItemTrendChart), { ssr: false });
 
 function areaCardId(area: string): string {
   return `area-card-${encodeURIComponent(area)}`;
@@ -284,6 +290,7 @@ export default function LumenClient({
   async function handleFilesSelected(files: File[]) {
     setUploadError(null);
     setUploadMessage(null);
+    const { readWorkbookSheet } = await import("@/lib/lumen/readWorkbookSheet");
     const read: { file: File; sheet: RawSheet }[] = [];
     const failed: string[] = [];
     for (const file of files) {
@@ -302,6 +309,7 @@ export default function LumenClient({
     setUploadError(null);
     setUploadMessage(null);
     try {
+      const { readWorkbookSheet } = await import("@/lib/lumen/readWorkbookSheet");
       const sheet = await readWorkbookSheet(file);
       setPendingTargetsFile(file);
       setPendingTargetsSheet(sheet);
@@ -552,6 +560,7 @@ export default function LumenClient({
     setUploadMessage(null);
     setReplacingLinkedFileId(null);
     try {
+      const { readWorkbookSheet } = await import("@/lib/lumen/readWorkbookSheet");
       const sheet = await readWorkbookSheet(file);
       setPendingLinkedFile({ file, sheet });
     } catch (err) {
@@ -564,6 +573,7 @@ export default function LumenClient({
     setUploadMessage(null);
     setReplacingLinkedFileId(fileId);
     try {
+      const { readWorkbookSheet } = await import("@/lib/lumen/readWorkbookSheet");
       const sheet = await readWorkbookSheet(file);
       setPendingLinkedFile({ file, sheet });
     } catch (err) {
@@ -902,7 +912,7 @@ export default function LumenClient({
             if (selectedDatasetId) fetchReport(selectedDatasetId, year);
           }}
           disabled={loadingReport || !selectedDatasetId}
-          className="w-full rounded-lg bg-gradient-to-br from-amber to-[#d68820] px-4 py-2 text-sm font-semibold text-bg disabled:opacity-50"
+          className="w-full rounded-lg bg-gradient-to-br from-amber to-[var(--amber-2)] px-4 py-2 text-sm font-semibold text-on-accent disabled:opacity-50"
         >
           {loadingReport ? t.sidebar.loading : t.sidebar.analyze}
         </button>

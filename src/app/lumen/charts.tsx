@@ -103,8 +103,8 @@ function DivergingBarChart({
                     transitionDuration: "700ms",
                     transitionDelay: `${i * 40}ms`,
                     background: isDrop
-                      ? "linear-gradient(90deg, #fb7185, #f43f5e)"
-                      : "linear-gradient(90deg, #4ade80, #22c55e)",
+                      ? "linear-gradient(90deg, var(--red), var(--red-2))"
+                      : "linear-gradient(90deg, var(--green), var(--green-2))",
                   }}
                 />
               </div>
@@ -220,7 +220,7 @@ export function RepLeaderboard({
                   width: mounted ? `${(row.metric / maxMetric) * 100}%` : "0%",
                   transitionDuration: "700ms",
                   transitionDelay: `${i * 40}ms`,
-                  background: "linear-gradient(90deg, #f2a93b, #d68820)",
+                  background: "linear-gradient(90deg, var(--amber), var(--amber-2))",
                 }}
               />
             </div>
