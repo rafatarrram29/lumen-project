@@ -89,3 +89,28 @@ from public.lumen_sales_records s
 join dupes d on d.dataset_id = s.dataset_id and lower(trim(s.rep)) = d.norm
 group by s.dataset_id, s.rep
 order by s.dataset_id, lower(trim(s.rep)), s.rep;
+
+-- CLUSTER variants (skips rows with no cluster at all)
+with variants as (
+  select id, dataset_id, cluster, lower(trim(cluster)) as norm
+  from public.lumen_sales_records
+  where cluster is not null
+),
+dupes as (
+  select dataset_id, norm
+  from variants
+  group by dataset_id, norm
+  having count(distinct cluster) > 1
+)
+select
+  'cluster' as column_checked,
+  s.dataset_id,
+  s.cluster as raw_value,
+  count(*) as row_count,
+  sum(s.sales_value) as total_value,
+  min(s.month) as min_month,
+  max(s.month) as max_month
+from public.lumen_sales_records s
+join dupes d on d.dataset_id = s.dataset_id and lower(trim(s.cluster)) = d.norm
+group by s.dataset_id, s.cluster
+order by s.dataset_id, lower(trim(s.cluster)), s.cluster;
