@@ -5,13 +5,12 @@ import { isValidImsMapping, type ImsColumnMapping } from "@/lib/lumen/imsMapping
 function isValidMapping(m: unknown): m is ImsColumnMapping {
   if (!m || typeof m !== "object") return false;
   const mapping = m as Record<string, unknown>;
-  for (const key of ["area", "product", "company"]) {
+  for (const key of ["area", "product", "month", "company"]) {
     if (mapping[key] !== null && typeof mapping[key] !== "string") return false;
   }
-  for (const key of ["marketShare", "month"]) {
-    if (typeof mapping[key] !== "string" || (mapping[key] as string).trim() === "") return false;
-  }
-  return isValidImsMapping(mapping as ImsColumnMapping);
+  if (typeof mapping.marketShare !== "string" || mapping.marketShare.trim() === "") return false;
+  if (mapping.fixedMonth !== null && typeof mapping.fixedMonth !== "number") return false;
+  return isValidImsMapping(mapping as unknown as ImsColumnMapping);
 }
 
 export async function GET(request: Request) {
