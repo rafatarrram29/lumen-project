@@ -780,9 +780,12 @@ export default function LumenClient({
     }
   }
 
+  // Imports a single mapped table into a new IMS file. Doesn't close the
+  // upload modal itself — AddImsFileModal owns that decision, since one PDF
+  // upload can queue up several selected tables to import one after
+  // another, and the modal only closes once the whole queue is done.
   async function handleImsFileConfirm(save: ImsFileSave) {
     const pending = pendingImsFile;
-    setPendingImsFile(null);
     if (!pending || !selectedDatasetId) return;
 
     setUploading(true);
@@ -1068,9 +1071,6 @@ export default function LumenClient({
           </>
         )}
 
-        {uploadError && <p className="mb-2 break-words text-xs text-red">{uploadError}</p>}
-        {uploadMessage && <p className="mb-2 break-words text-xs text-green">{uploadMessage}</p>}
-
         <label className="mb-2 flex items-center justify-between gap-2 text-sm text-muted">
           {t.sidebar.year}
           <input
@@ -1092,6 +1092,11 @@ export default function LumenClient({
         </button>
         </>
         )}
+
+        {/* Shared by both the Sales and IMS upload flows, so this stays
+            visible regardless of which tab is active. */}
+        {uploadError && <p className="mb-2 mt-2 break-words text-xs text-red">{uploadError}</p>}
+        {uploadMessage && <p className="mb-2 mt-2 break-words text-xs text-green">{uploadMessage}</p>}
 
         {datasets.length > 0 && (
           <div className="mt-4 border-t border-bdr pt-4">
