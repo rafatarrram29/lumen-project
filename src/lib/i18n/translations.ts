@@ -83,6 +83,7 @@ export type Translations = {
     deselectAll: string;
     groupSummary: string;
     groupAreas: string;
+    groupItems: string;
     groupDecisions: string;
     groupCharts: string;
     groupSections: string;
@@ -328,6 +329,7 @@ const en: Translations = {
     deselectAll: "Deselect all",
     groupSummary: "Summary",
     groupAreas: "Areas",
+    groupItems: "Items",
     groupDecisions: "Decisions",
     groupCharts: "Charts",
     groupSections: "Other sections",
@@ -579,6 +581,7 @@ const ar: Translations = {
     deselectAll: "إلغاء تحديد الكل",
     groupSummary: "الملخص",
     groupAreas: "المناطق",
+    groupItems: "الأصناف",
     groupDecisions: "القرارات",
     groupCharts: "الرسوم البيانية",
     groupSections: "أقسام تانية",

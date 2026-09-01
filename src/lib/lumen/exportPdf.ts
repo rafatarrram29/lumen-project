@@ -1,6 +1,6 @@
 import jsPDF from "jspdf";
 import html2canvas from "html2canvas";
-import { sanitizeFileName, type SuccessReport } from "./exportItems";
+import { sanitizeFileName, findingsForArea, findingsForItem, areaRankingForItem, rootCauseText, type SuccessReport } from "./exportItems";
 import type { Lang, Translations } from "@/lib/i18n/translations";
 import { findingSummary, findingDecision } from "@/lib/i18n/findingText";
 
@@ -60,6 +60,8 @@ function ltrSpan(text: string): HTMLSpanElement {
   return span;
 }
 
+const BLOCK_GAP = 20;
+
 function makeBlock(rtl: boolean): HTMLDivElement {
   return div({
     width: `${CONTENT_W}px`,
@@ -67,7 +69,7 @@ function makeBlock(rtl: boolean): HTMLDivElement {
     fontFamily: "Arial, Helvetica, sans-serif",
     direction: rtl ? "rtl" : "ltr",
     textAlign: rtl ? "right" : "left",
-    marginBottom: "20px",
+    marginBottom: `${BLOCK_GAP}px`,
   });
 }
 
@@ -136,9 +138,78 @@ function buildDecisionBlock(finding: SuccessReport["findings"][number], ctx: Exp
   return b;
 }
 
-function buildAreaBlock(area: string, ctx: ExportContext, rtl: boolean): HTMLDivElement {
+// A month-by-month numbers table — one row per series (e.g. the area vs.
+// its cluster average, or a single item's own trend). Always built
+// straight from report data, never from what happens to be rendered on
+// screen, so it's identical whether the matching dashboard card was
+// expanded or collapsed when Export was clicked.
+function buildMonthlyTrendBlock(
+  title: string,
+  months: number[],
+  series: { label: string; values: (number | null)[] }[],
+  t: Translations,
+  rtl: boolean,
+): HTMLDivElement {
+  const b = makeBlock(rtl);
+  b.appendChild(div({ fontSize: "16px", fontWeight: "700", color: COLORS.white, marginBottom: "10px" }, [title]));
+  const table = div({ background: COLORS.surface, border: `1px solid ${COLORS.border}`, borderRadius: "8px", padding: "10px 14px" });
+  const headerRow = div({ display: "flex", fontSize: "11px", color: COLORS.muted, padding: "4px 0", borderBottom: `1px solid ${COLORS.border}` }, [
+    div({ flex: "1" }, [""]),
+    ...months.map((m) => div({ flex: "1", textAlign: "center" }, [t.common.month(m)])),
+  ]);
+  table.appendChild(headerRow);
+  series.forEach(({ label, values }) => {
+    table.appendChild(
+      div({ display: "flex", fontSize: "13px", color: COLORS.white, padding: "6px 0" }, [
+        div({ flex: "1", color: COLORS.muted }, [label]),
+        ...values.map((v) => div({ flex: "1", textAlign: "center", fontFamily: "monospace" }, [v === null ? "—" : formatNum(v)])),
+      ]),
+    );
+  });
+  b.appendChild(table);
+  return b;
+}
+
+// A prev -> curr -> %change table — used for an area's full by-item
+// breakdown (every family, not just the ones the user happened to expand).
+function buildChangeTableBlock(
+  title: string,
+  rows: { label: string; prevValue: number; currValue: number; pctChange: number | null }[],
+  t: Translations,
+  rtl: boolean,
+): HTMLDivElement | null {
+  if (rows.length === 0) return null;
+  const b = makeBlock(rtl);
+  b.appendChild(div({ fontSize: "16px", fontWeight: "700", color: COLORS.white, marginBottom: "10px" }, [title]));
+  const table = div({ background: COLORS.surface, border: `1px solid ${COLORS.border}`, borderRadius: "8px", padding: "10px 14px" });
+  const headerRow = div({ display: "flex", fontSize: "11px", color: COLORS.muted, padding: "4px 0", borderBottom: `1px solid ${COLORS.border}` }, [
+    div({ flex: "2" }, [""]),
+    div({ flex: "1" }, [""]),
+    div({ flex: "1", textAlign: "center" }, [t.export.valueLabel]),
+    div({ flex: "1", textAlign: "center" }, [t.export.changeLabel]),
+  ]);
+  table.appendChild(headerRow);
+  rows.forEach(({ label, currValue, pctChange }) => {
+    const pctColor = pctChange !== null && pctChange < 0 ? COLORS.red : COLORS.green;
+    table.appendChild(
+      div({ display: "flex", alignItems: "center", fontSize: "13px", color: COLORS.white, padding: "6px 0" }, [
+        div({ flex: "2", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }, [label]),
+        div({ flex: "1" }, [""]),
+        div({ flex: "1", textAlign: "center", fontFamily: "monospace", fontWeight: "700" }, [formatNum(currValue)]),
+        div({ flex: "1", textAlign: "center", fontFamily: "monospace", color: pctColor }, [
+          pctChange === null ? "n/a" : ltrSpan(`${pctChange > 0 ? "+" : ""}${pctChange}%`),
+        ]),
+      ]),
+    );
+  });
+  b.appendChild(table);
+  return b;
+}
+
+function buildAreaBlock(area: string, ctx: ExportContext, rtl: boolean): HTMLDivElement[] {
   const { report, t } = ctx;
   const d = report.areas[area];
+  const blocks: HTMLDivElement[] = [];
   const b = makeBlock(rtl);
   const header = div({ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "10px" });
   header.appendChild(div({ fontSize: "18px", fontWeight: "700", color: COLORS.white }, [area]));
@@ -175,7 +246,92 @@ function buildAreaBlock(area: string, ctx: ExportContext, rtl: boolean): HTMLDiv
     );
   });
   b.appendChild(table);
-  return b;
+
+  const areaFindings = findingsForArea(report, area);
+  if (areaFindings.length > 0) {
+    b.appendChild(
+      div({ fontSize: "12px", color: COLORS.muted, marginTop: "10px", lineHeight: "1.5" }, [findingSummary(areaFindings[0], report, t)]),
+    );
+  }
+  blocks.push(b);
+
+  // Full trend, straight from report data — independent of whether this
+  // area's card happened to be expanded on screen.
+  if (d.monthlySeries.length >= 2) {
+    const months = d.monthlySeries.map((s) => s.month);
+    const series: { label: string; values: (number | null)[] }[] = [
+      { label: area, values: d.monthlySeries.map((s) => s.value) },
+    ];
+    const clusterSummary = report.hasClusters ? report.clusters[d.cluster] : undefined;
+    if (clusterSummary) {
+      const byMonth = new Map(clusterSummary.monthlySeries.map((s) => [s.month, s.avgValue]));
+      series.push({ label: t.dashboard.clusterWord, values: months.map((m) => byMonth.get(m) ?? null) });
+    }
+    blocks.push(buildMonthlyTrendBlock(t.dashboard.trendLastMonths(months.length), months, series, t, rtl));
+  }
+
+  // Full by-item breakdown for this area — every family, not just the
+  // ones the user happened to expand.
+  const familyEntries = Object.entries(report.areaFamilyChanges[area] ?? {}).sort((a, b) => b[1].absDrop - a[1].absDrop);
+  if (familyEntries.length > 0) {
+    const rows = familyEntries.map(([fam, fc]) => ({ label: fam, prevValue: fc.prevValue, currValue: fc.currValue, pctChange: fc.pctChange }));
+    const block = buildChangeTableBlock(t.dashboard.byItem, rows, t, rtl);
+    if (block) blocks.push(block);
+  }
+
+  return blocks;
+}
+
+function buildItemBlock(family: string, ctx: ExportContext, rtl: boolean): HTMLDivElement[] {
+  const { report, t } = ctx;
+  const blocks: HTMLDivElement[] = [];
+  const fc = report.familyChanges[family];
+
+  const b = makeBlock(rtl);
+  const header = div({ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "10px" });
+  header.appendChild(div({ fontSize: "18px", fontWeight: "700", color: COLORS.white }, [family]));
+  const pctColor = fc.pctChange !== null && fc.pctChange < 0 ? COLORS.red : COLORS.green;
+  header.appendChild(
+    div({ fontSize: "16px", fontWeight: "700", color: pctColor }, [
+      fc.pctChange !== null ? ltrSpan(`${fc.pctChange > 0 ? "+" : ""}${fc.pctChange}%`) : "n/a",
+    ]),
+  );
+  b.appendChild(header);
+  b.appendChild(
+    div({ fontSize: "13px", color: COLORS.muted }, [
+      `${t.common.month(report.comparedToMonth)}: ${formatNum(fc.prevValue)} -> ${t.common.month(report.latestMonth)}: ${formatNum(fc.currValue)}`,
+    ]),
+  );
+  const { areas: rootCauseAreas, clusters: rootCauseClusters } = findingsForItem(report, family);
+  const rootCause = rootCauseText(t, rootCauseAreas, rootCauseClusters);
+  if (rootCause) {
+    b.appendChild(div({ fontSize: "12px", color: COLORS.amber, marginTop: "10px" }, [rootCause]));
+  }
+  blocks.push(b);
+
+  const itemSeries = report.itemMonthlySeries[family] ?? [];
+  if (itemSeries.length >= 2) {
+    const months = itemSeries.map((s) => s.month);
+    blocks.push(
+      buildMonthlyTrendBlock(
+        t.dashboard.trendLastMonths(months.length),
+        months,
+        [{ label: family, values: itemSeries.map((s) => s.value) }],
+        t,
+        rtl,
+      ),
+    );
+  }
+
+  const ranking = areaRankingForItem(report, family);
+  const rankedBlock = buildRankedListBlock(
+    t.dashboard.byAreaMonth(report.latestMonth),
+    ranking.map(([area, value]) => [area, formatNum(value)] as [string, string]),
+    rtl,
+  );
+  if (rankedBlock) blocks.push(rankedBlock);
+
+  return blocks;
 }
 
 function buildBarChartBlock(title: string, rows: [string, number][], rtl: boolean): HTMLDivElement | null {
@@ -260,10 +416,22 @@ async function paginateAndCapture(blocks: HTMLDivElement[], rtl: boolean): Promi
   document.body.appendChild(scratch);
 
   // Measure each block's natural height by rendering it standalone first.
+  // getBoundingClientRect() excludes margin, but every block carries a
+  // marginBottom (BLOCK_GAP) — and the title block additionally sets a
+  // large marginTop — that still take up real vertical space once
+  // stacked. Reading the declared margins directly (rather than assuming
+  // BLOCK_GAP alone) covers both: omitting either under-counts the page's
+  // true content height, so later blocks can silently overflow past
+  // CONTENT_H and get clipped by the page container's overflow:hidden
+  // instead of flowing to a new page.
   const heights: number[] = [];
   for (const block of blocks) {
     scratch.appendChild(block);
-    heights.push(block.getBoundingClientRect().height);
+    const rect = block.getBoundingClientRect();
+    const style = window.getComputedStyle(block);
+    const marginTop = parseFloat(style.marginTop) || 0;
+    const marginBottom = parseFloat(style.marginBottom) || 0;
+    heights.push(rect.height + marginTop + marginBottom);
     scratch.removeChild(block);
   }
 
@@ -314,7 +482,11 @@ export async function exportToPdf(ctx: ExportContext): Promise<void> {
   });
 
   for (const area of Object.keys(report.areas)) {
-    if (isSelected(ctx, `area:${area}`)) blocks.push(buildAreaBlock(area, ctx, rtl));
+    if (isSelected(ctx, `area:${area}`)) blocks.push(...buildAreaBlock(area, ctx, rtl));
+  }
+
+  for (const family of Object.keys(report.familyChanges)) {
+    if (isSelected(ctx, `item:${family}`)) blocks.push(...buildItemBlock(family, ctx, rtl));
   }
 
   if (isSelected(ctx, "chart:biggest-movers")) {
