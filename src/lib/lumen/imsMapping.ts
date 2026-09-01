@@ -25,6 +25,15 @@
 // prior-month column just reads "—" with nothing to compare against) —
 // this only removes the requirement to have a real month column to begin
 // with, it doesn't add any new display logic.
+//
+// fixedProduct is the same idea for Product: a real competitor-comparison
+// table (e.g. a "Row Labels" column of rival company names for a single
+// product/molecule the whole page is about) has no per-row product
+// column at all — the product is implied once, by the page/table itself.
+// Without this, that "Row Labels" column has nowhere to go but Product,
+// which then makes every competitor look like its own unrelated product
+// with no company set — exactly why "Top competitor" comes back empty for
+// this table shape even though the source file has real competitor data.
 import { parseNumeric, type RawSheet } from "./columnMapping";
 import type { SkippedRowInfo } from "./columnMapping";
 
@@ -34,6 +43,7 @@ export type ImsColumnMapping = {
   marketShare: string;
   month: string | null;
   fixedMonth: number | null;
+  fixedProduct: string | null;
   company: string | null;
 };
 
@@ -101,9 +111,12 @@ export function isValidImsMapping(mapping: {
   marketShare: string | null;
   month: string | null;
   fixedMonth?: number | null;
+  fixedProduct?: string | null;
 }): boolean {
   return Boolean(
-    (mapping.area || mapping.product) && mapping.marketShare && (mapping.month || mapping.fixedMonth != null),
+    (mapping.area || mapping.product || mapping.fixedProduct) &&
+      mapping.marketShare &&
+      (mapping.month || mapping.fixedMonth != null),
   );
 }
 
@@ -111,10 +124,29 @@ export function isValidImsMapping(mapping: {
 // a fraction like 0.234 — normalized to a 0-100 percentage either way, on
 // top of the same Arabic-Indic/comma handling parseNumeric already does.
 function parseShare(raw: unknown): number {
+  // Whether to treat 0 < n <= 1 as a bare fraction ("0.234" meaning 23.4%)
+  // has to be decided from the ORIGINAL text, before the "%" is stripped —
+  // once it's gone, "0.1%" (a real, small-but-valid 0.1 percent share) and
+  // a bare "0.1" (missing its % sign, really meaning 10%) are indistinguishable,
+  // and guessing wrong silently turns a real small competitor's share into
+  // 100x its actual value.
+  const hadPercentSign = typeof raw === "string" && raw.includes("%");
   const cleaned = typeof raw === "string" ? raw.replace("%", "").trim() : raw;
   const n = parseNumeric(cleaned);
   if (Number.isNaN(n)) return NaN;
+  if (hadPercentSign) return n;
   return n > 0 && n <= 1 ? n * 100 : n;
+}
+
+// A pivot table's own "Grand Total" (or "Total"/"Subtotal") row is a
+// summary of the other rows, not a real product/area/company — keeping it
+// as ordinary data would let it outrank every real entry in "top mover" or
+// "top competitor" comparisons purely because its numbers are the sum of
+// everyone else's. Matched as a whole trimmed cell value, case-insensitive,
+// so it never catches a real name that merely contains "total".
+const AGGREGATE_LABELS = new Set(["grand total", "total", "subtotal", "totals"]);
+function isAggregateLabel(value: string | null): boolean {
+  return value !== null && AGGREGATE_LABELS.has(value.toLowerCase());
 }
 
 export function applyImsMapping(
@@ -150,6 +182,14 @@ export function applyImsMapping(
       continue;
     }
 
+    const areaStr = areaVal != null ? String(areaVal).trim() : null;
+    const productStr = productVal != null ? String(productVal).trim() : null;
+    if (isAggregateLabel(areaStr) || isAggregateLabel(productStr)) {
+      skippedCount++;
+      if (examples.length < 5) examples.push(`skipped a "${areaStr ?? productStr}" summary row`);
+      continue;
+    }
+
     const marketShare = parseShare(shareVal);
     const month = mapping.month ? Math.trunc(parseNumeric(monthVal)) : mapping.fixedMonth!;
     if (Number.isNaN(marketShare) || Number.isNaN(month)) {
@@ -167,8 +207,8 @@ export function applyImsMapping(
     const companyRaw = mapping.company ? r[mapping.company] : null;
 
     rows.push({
-      area: areaVal != null ? String(areaVal).trim() : null,
-      product: productVal != null ? String(productVal).trim() : null,
+      area: areaStr,
+      product: productStr ?? mapping.fixedProduct,
       company: companyRaw != null ? String(companyRaw).trim() : null,
       marketShare,
       month,
@@ -221,7 +261,13 @@ export function tableToRawSheet(table: { headers: string[]; rows: string[][] }):
   const rows = table.rows.map((row) => {
     const record: Record<string, unknown> = {};
     headers.forEach((h, i) => {
-      if (i < row.length) record[h] = row[i];
+      // A genuinely blank cell (a pivot table's "Grand Total" row usually
+      // has no value in its leading column, e.g. Rank) comes through as ""
+      // once cells are aligned by column position rather than array order
+      // — normalized to null here so it's treated as "no value" the same
+      // way a cell missing from the row entirely would be, instead of as
+      // the literal empty string.
+      record[h] = i < row.length && row[i] !== "" ? row[i] : null;
     });
     return record;
   });

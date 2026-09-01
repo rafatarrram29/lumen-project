@@ -793,7 +793,7 @@ export default function LumenClient({
     setUploadMessage(null);
 
     try {
-      const { rows } = applyImsMapping(save.sheet, save.mapping);
+      const { rows, skipped } = applyImsMapping(save.sheet, save.mapping);
 
       const createRes = await fetch("/api/lumen/ims-files", {
         method: "POST",
@@ -832,7 +832,11 @@ export default function LumenClient({
         inserted += json.inserted;
       }
 
-      setUploadMessage(t.ims.uploadSuccess(inserted));
+      setUploadMessage(
+        skipped.count > 0
+          ? `${t.ims.uploadSuccess(inserted)} Skipped ${skipped.count} row(s) (${skipped.examples.join("; ") || "invalid values"}).`
+          : t.ims.uploadSuccess(inserted),
+      );
       await fetchImsFiles(selectedDatasetId);
       await fetchImsReport(selectedDatasetId, year);
     } catch (err) {

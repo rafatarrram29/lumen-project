@@ -66,6 +66,24 @@ function groupIntoLines(cells: Cell[]): Line[] {
   return lines;
 }
 
+// A pivot table's own "Grand Total" row routinely leaves its leading
+// column blank (e.g. no "Rank" for a total), which shifts every later
+// cell one position to the left relative to the header the moment cells
+// are read off in sequence — tried realigning cells to header columns by
+// X-position instead, but that's a worse trade: real columns here are
+// packed close enough together that nearest-X often grabs a neighboring
+// column's value instead, and it also stops the row-length check from
+// telling a real data row apart from a narrative-text fragment that
+// happens to land in the same column span. Far safer to keep the
+// original sequential read and instead recognize a "Grand Total" (or
+// equivalent) row for what it is — by scanning for that literal cell
+// text anywhere in the row, not by position — and drop it before it ever
+// becomes a misaligned data row.
+const AGGREGATE_ROW_LABELS = new Set(["grand total", "total", "subtotal", "totals"]);
+function isAggregateRow(cells: Cell[]): boolean {
+  return cells.some((c) => AGGREGATE_ROW_LABELS.has(c.text.trim().toLowerCase()));
+}
+
 // Scans top-to-bottom for a header-like line (label-heavy, not numeric),
 // then greedily consumes following lines whose cells fall within that
 // header's column span as candidate data rows, stopping the moment a line
@@ -92,8 +110,14 @@ function detectTables(lines: Line[]): ExtractedTable[] {
       const candidate = lines[j];
       const inRange = candidate.cells.filter((c) => c.x0 >= xBounds[0] - 60 && c.x0 <= xBounds[1] + 5);
       if (inRange.length === 0) break;
-      rows.push(inRange.map((c) => c.text));
       consumedTo = j;
+      // Still counts as part of this table (so scanning moves past it
+      // correctly) but never becomes a data row — its cells are exactly
+      // as likely to be positionally shifted as any other row here, and
+      // there is no safe way to place a "Grand Total" back into columns
+      // that aren't really about any single product/company any more.
+      if (isAggregateRow(inRange)) continue;
+      rows.push(inRange.map((c) => c.text));
     }
 
     const headerCells = line.cells.map((c) => c.text);
