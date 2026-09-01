@@ -22,7 +22,11 @@ import { RepHistoryPanel } from "./RepHistoryPanel";
 import { repResponsibleInMonth, type RepAssignment } from "@/lib/lumen/repAssignments";
 import { LinkedFilesPanel } from "./LinkedFilesPanel";
 import { AddLinkedFileModal, type LinkedFileSave } from "./AddLinkedFileModal";
-import { applyLinkedMapping, recordsForAreaMonth, type LinkedFile, type LinkedRecord } from "@/lib/lumen/linkedFiles";
+import { applyLinkedMapping, recordsForAreaMonth, type JoinKey, type LinkedFile, type LinkedRecord } from "@/lib/lumen/linkedFiles";
+import { FlagIssueModal } from "./FlagIssueModal";
+import { CorrectionLogModal } from "./CorrectionLogModal";
+import { EditSalesMappingModal } from "./EditSalesMappingModal";
+import type { Correction, IssueType } from "@/lib/lumen/corrections";
 import { useLanguage } from "@/lib/i18n/LanguageProvider";
 import { findingSummary, findingDecision } from "@/lib/i18n/findingText";
 import type { Translations } from "@/lib/i18n/translations";
@@ -118,6 +122,10 @@ export default function LumenClient({
   const [linkedRecords, setLinkedRecords] = useState<LinkedRecord[]>([]);
   const [pendingLinkedFile, setPendingLinkedFile] = useState<{ file: File; sheet: RawSheet } | null>(null);
   const [replacingLinkedFileId, setReplacingLinkedFileId] = useState<string | null>(null);
+  const [corrections, setCorrections] = useState<Correction[]>([]);
+  const [flagTarget, setFlagTarget] = useState<string | null>(null);
+  const [showCorrectionLog, setShowCorrectionLog] = useState(false);
+  const [showEditSalesMapping, setShowEditSalesMapping] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const targetsFileInputRef = useRef<HTMLInputElement>(null);
 
@@ -126,6 +134,7 @@ export default function LumenClient({
       fetchAssignments(initialDatasetId, initialYear);
       fetchLinkedFiles(initialDatasetId);
       fetchLinkedRecords(initialDatasetId, initialYear);
+      fetchCorrections(initialDatasetId);
     }
     // Only on mount — subsequent dataset/year changes go through fetchReport.
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -161,6 +170,16 @@ export default function LumenClient({
     }
   }
 
+  async function fetchCorrections(datasetId: string) {
+    try {
+      const res = await fetch(`/api/lumen/corrections?datasetId=${datasetId}`);
+      const json = await res.json();
+      setCorrections(res.ok ? (json.corrections ?? []) : []);
+    } catch {
+      setCorrections([]);
+    }
+  }
+
   async function fetchReport(datasetId: string, y: number) {
     setLoadingReport(true);
     try {
@@ -175,6 +194,7 @@ export default function LumenClient({
     fetchAssignments(datasetId, y);
     fetchLinkedFiles(datasetId);
     fetchLinkedRecords(datasetId, y);
+    fetchCorrections(datasetId);
   }
 
   function selectDataset(datasetId: string) {
@@ -547,6 +567,75 @@ export default function LumenClient({
     }
   }
 
+  async function handleEditJoinKeys(fileId: string, joinKeys: JoinKey[]) {
+    if (!selectedDatasetId) return;
+    try {
+      const res = await fetch(`/api/lumen/dataset-files/${fileId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ joinKeys }),
+      });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error || "Could not update the link");
+      await fetchLinkedFiles(selectedDatasetId);
+    } catch (err) {
+      setUploadError(err instanceof Error ? err.message : "Could not update the link");
+    }
+  }
+
+  async function handleSaveSalesMapping(mapping: ColumnMapping) {
+    if (!selectedDatasetId) return;
+    try {
+      const res = await fetch(`/api/lumen/datasets/${selectedDatasetId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ columnMapping: mapping }),
+      });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error || "Could not update the mapping");
+      setDatasets((prev) => prev.map((d) => (d.id === selectedDatasetId ? { ...d, columnMapping: mapping } : d)));
+      setShowEditSalesMapping(false);
+    } catch (err) {
+      setUploadError(err instanceof Error ? err.message : "Could not update the mapping");
+    }
+  }
+
+  function openFlagModal(label: string) {
+    setFlagTarget(label);
+  }
+
+  async function handleFlagSubmit(issueType: IssueType, comment: string) {
+    if (!selectedDatasetId || !flagTarget) return;
+    try {
+      const res = await fetch("/api/lumen/corrections", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ datasetId: selectedDatasetId, issueType, targetLabel: flagTarget, comment }),
+      });
+      if (res.ok) {
+        setUploadMessage(t.corrections.submitSuccess);
+        await fetchCorrections(selectedDatasetId);
+      }
+    } finally {
+      setFlagTarget(null);
+    }
+  }
+
+  async function handleToggleCorrectionStatus(correction: Correction) {
+    if (!selectedDatasetId) return;
+    const nextStatus = correction.status === "open" ? "resolved" : "open";
+    try {
+      const res = await fetch(`/api/lumen/corrections/${correction.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ status: nextStatus }),
+      });
+      if (res.ok) await fetchCorrections(selectedDatasetId);
+    } catch {
+      // best-effort; the log simply keeps its previous state if this fails
+    }
+  }
+
   function toggle(area: string) {
     setExpanded((prev) => {
       const next = new Set(prev);
@@ -704,14 +793,24 @@ export default function LumenClient({
                       {d.name}
                     </button>
                     {isSelected && d.userId === userId && (
-                      <button
-                        onClick={() => handleDeleteDataset(d)}
-                        title={t.sidebar.deleteDataset(d.name)}
-                        aria-label={t.sidebar.deleteDataset(d.name)}
-                        className="shrink-0 rounded-lg border border-bdr px-2.5 py-1.5 text-muted transition-colors hover:border-red hover:text-red"
-                      >
-                        ×
-                      </button>
+                      <>
+                        <button
+                          onClick={() => setShowEditSalesMapping(true)}
+                          title={t.editMapping.editSalesButton}
+                          aria-label={t.editMapping.editSalesButton}
+                          className="shrink-0 rounded-lg border border-bdr px-2.5 py-1.5 text-muted transition-colors hover:border-amber hover:text-amber"
+                        >
+                          ⚙
+                        </button>
+                        <button
+                          onClick={() => handleDeleteDataset(d)}
+                          title={t.sidebar.deleteDataset(d.name)}
+                          aria-label={t.sidebar.deleteDataset(d.name)}
+                          className="shrink-0 rounded-lg border border-bdr px-2.5 py-1.5 text-muted transition-colors hover:border-red hover:text-red"
+                        >
+                          ×
+                        </button>
+                      </>
                     )}
                   </div>
                 );
@@ -727,7 +826,22 @@ export default function LumenClient({
             onAddFile={handleAddLinkedFile}
             onReplaceFile={handleReplaceLinkedFile}
             onDeleteFile={handleDeleteLinkedFile}
+            onEditJoinKeys={handleEditJoinKeys}
           />
+        )}
+
+        {selectedDatasetId && (
+          <button
+            onClick={() => setShowCorrectionLog(true)}
+            className="mt-4 w-full rounded-lg border border-bdr px-3 py-2 text-xs text-muted transition-colors hover:border-amber hover:text-white"
+          >
+            {t.corrections.logButton}
+            {corrections.filter((c) => c.status === "open").length > 0 && (
+              <span className="ms-1.5 rounded-full bg-amber/20 px-1.5 py-0.5 text-[10px] text-amber">
+                {corrections.filter((c) => c.status === "open").length}
+              </span>
+            )}
+          </button>
         )}
       </Sidebar>
 
@@ -767,6 +881,30 @@ export default function LumenClient({
             setReplacingLinkedFileId(null);
           }}
           onConfirm={handleLinkedFileConfirm}
+        />
+      )}
+
+      {flagTarget && (
+        <FlagIssueModal
+          targetLabel={flagTarget}
+          onCancel={() => setFlagTarget(null)}
+          onSubmit={handleFlagSubmit}
+        />
+      )}
+
+      {showCorrectionLog && (
+        <CorrectionLogModal
+          corrections={corrections}
+          onToggleStatus={handleToggleCorrectionStatus}
+          onClose={() => setShowCorrectionLog(false)}
+        />
+      )}
+
+      {showEditSalesMapping && selectedDatasetId && (
+        <EditSalesMappingModal
+          mapping={datasets.find((d) => d.id === selectedDatasetId)!.columnMapping}
+          onCancel={() => setShowEditSalesMapping(false)}
+          onSave={handleSaveSalesMapping}
         />
       )}
 
@@ -825,10 +963,20 @@ export default function LumenClient({
 
           {systemicFindings.map((f, i) => (
             <div key={i} className="mb-5 rounded-2xl border border-red/40 bg-red/10 p-5">
-              <p className="mb-2 break-words text-sm">
-                {report.hasClusters && <span className="font-semibold text-white">{f.cluster}: </span>}
-                {findingSummary(f, report, t)}
-              </p>
+              <div className="mb-2 flex items-start justify-between gap-2">
+                <p className="break-words text-sm">
+                  {report.hasClusters && <span className="font-semibold text-white">{f.cluster}: </span>}
+                  {findingSummary(f, report, t)}
+                </p>
+                <button
+                  type="button"
+                  onClick={() => openFlagModal(`Systemic drop: ${f.cluster}`)}
+                  title={t.corrections.flagButton}
+                  className="shrink-0 text-xs text-muted hover:text-amber"
+                >
+                  🚩
+                </button>
+              </div>
               <div className="break-words rounded-lg bg-surf2 px-3 py-2 text-sm">
                 <span className="font-semibold text-amber">{t.dashboard.decision} </span>
                 {findingDecision(f, t)}
@@ -959,9 +1107,12 @@ export default function LumenClient({
                   id={areaCardId(area)}
                   className="scroll-mt-4 rounded-2xl border border-bdr bg-surf p-5 transition-colors"
                 >
-                  <button
+                  <div
                     onClick={() => toggle(area)}
-                    className="flex w-full items-center justify-between gap-3 text-start"
+                    role="button"
+                    tabIndex={0}
+                    onKeyDown={(e) => e.key === "Enter" && toggle(area)}
+                    className="flex w-full cursor-pointer items-center justify-between gap-3 text-start"
                   >
                     <div className="min-w-0">
                       <div className="flex items-center gap-2">
@@ -975,11 +1126,22 @@ export default function LumenClient({
                       <div className="truncate text-xs text-muted">{causeLine}</div>
                     </div>
                     <div className="flex shrink-0 items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          openFlagModal(`Area: ${area}`);
+                        }}
+                        title={t.corrections.flagButton}
+                        className="text-xs text-muted hover:text-amber"
+                      >
+                        🚩
+                      </button>
                       <TargetChip progress={report.areaTargets[area]} threshold={targetThreshold} t={t} />
                       <Badge pctChange={d.pctChange} />
                       <span className="text-xs text-muted">{isOpen ? t.common.hide : t.common.details}</span>
                     </div>
-                  </button>
+                  </div>
 
                   {isOpen && (
                     <div className="mt-4 space-y-5 border-t border-bdr pt-4 text-sm">
@@ -1062,9 +1224,12 @@ export default function LumenClient({
 
                               return (
                               <div key={fam} className="text-xs">
-                                <button
+                                <div
                                   onClick={() => toggleItem(fam)}
-                                  className="flex w-full items-center gap-2 rounded-lg text-start transition-colors hover:bg-surf2/60"
+                                  role="button"
+                                  tabIndex={0}
+                                  onKeyDown={(e) => e.key === "Enter" && toggleItem(fam)}
+                                  className="flex w-full cursor-pointer items-center gap-2 rounded-lg text-start transition-colors hover:bg-surf2/60"
                                 >
                                   <span
                                     className="h-2 w-2 shrink-0 rounded-full"
@@ -1080,8 +1245,19 @@ export default function LumenClient({
                                     {fc.pctChange ?? "—"}
                                     {fc.pctChange !== null ? "%" : ""}
                                   </span>
+                                  <button
+                                    type="button"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      openFlagModal(`Item: ${fam} (${area})`);
+                                    }}
+                                    title={t.corrections.flagButton}
+                                    className="shrink-0 text-[10px] text-muted hover:text-amber"
+                                  >
+                                    🚩
+                                  </button>
                                   <span className="shrink-0 text-[10px] text-muted">{itemOpen ? t.common.hide : t.common.details}</span>
-                                </button>
+                                </div>
                                 <div className="ps-4 font-mono text-[11px] break-words text-muted">
                                   {t.common.month(report.comparedToMonth)}: {formatNumber(fc.prevValue)} →{" "}
                                   {t.common.month(report.latestMonth)}: {formatNumber(fc.currValue)}
@@ -1186,7 +1362,17 @@ export default function LumenClient({
 
                       {areaFindings.map((f, i) => (
                         <div key={i} className="break-words rounded-lg bg-surf2 px-3 py-2.5">
-                          <p className="mb-1.5">{findingSummary(f, report, t)}</p>
+                          <div className="mb-1.5 flex items-start justify-between gap-2">
+                            <p>{findingSummary(f, report, t)}</p>
+                            <button
+                              type="button"
+                              onClick={() => openFlagModal(`Decision: ${area} — ${findingDecision(f, t)}`)}
+                              title={t.corrections.flagButton}
+                              className="shrink-0 text-xs text-muted hover:text-amber"
+                            >
+                              🚩
+                            </button>
+                          </div>
                           {"rootCauseFamily" in f && (
                             <p className="mb-1.5 text-xs text-muted">
                               {t.dashboard.rootCauseItem}{" "}

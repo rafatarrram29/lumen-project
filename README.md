@@ -51,9 +51,12 @@ design reference only — it is not part of the running app.
    files, described below. Purely additive — it does not touch
    `lumen_datasets` or `lumen_sales_records`, so every existing dataset
    keeps working exactly as it does today.
-8. Open **Settings -> API** and copy the **Project URL** and the **anon
+8. Then run `supabase/lumen_corrections_migration.sql`. This adds the
+   `lumen_corrections` table used by the flag-issue / correction log
+   feature described below.
+9. Open **Settings -> API** and copy the **Project URL** and the **anon
    public** key.
-9. Open **Authentication -> Sign In / Providers** and make sure **Email**
+10. Open **Authentication -> Sign In / Providers** and make sure **Email**
    is enabled (it is by default). For local development, under
    **Authentication -> URL Configuration**, you can leave the defaults —
    we'll add your real domain there once deployed.
@@ -161,6 +164,31 @@ file's numbers appear together as context for the same drop, without
 changing the underlying sales analysis itself. A file whose join keys
 don't include Area won't appear there. Datasets with no linked files are
 completely unaffected.
+
+## Correcting mistakes in-app
+
+Every area, item row, and decision has a 🚩 **Flag issue** button — pick
+what's wrong (a wrong number, files linked incorrectly, a decision that
+doesn't make sense, or something else) and describe it in a sentence. Every
+flag is saved to that dataset's **Correction log** (sidebar), showing what
+was flagged, when, and whether it's still open or marked resolved.
+
+Two things can be fixed without deleting and re-uploading a whole dataset:
+
+- **Which columns feed the sales mapping** (⚙ next to the dataset name) —
+  useful when the wrong column was picked (e.g. "Zone" instead of "Area").
+  This only affects new uploads to that dataset going forward; numbers
+  already uploaded aren't retroactively changed (re-upload the affected
+  month instead, using the existing overlap-replace flow).
+- **Which dimensions link a file back to the sales data** (⚙ next to a
+  linked file) — if the system picked the wrong join (e.g. joined by Rep
+  only when it should also join by Area), correcting it takes effect
+  immediately with no re-upload, since the area/rep/cluster/month values
+  were already extracted from that file when it was uploaded.
+
+Fixing which *source column* feeds a linked file (as opposed to which
+already-extracted dimension it joins by) does require re-uploading that
+file — use "Replace" on it, which shows the same editable mapping.
 
 ## Troubleshooting
 

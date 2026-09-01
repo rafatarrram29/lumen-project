@@ -34,7 +34,7 @@ export async function GET() {
   });
 }
 
-function isValidMapping(m: unknown): m is ColumnMapping {
+export function isValidMapping(m: unknown): m is ColumnMapping {
   if (!m || typeof m !== "object") return false;
   const mapping = m as Record<string, unknown>;
 

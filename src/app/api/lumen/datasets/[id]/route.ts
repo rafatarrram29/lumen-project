@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import type { TargetColumnMapping } from "@/lib/lumen/columnMapping";
+import { isValidMapping } from "../route";
 
 function isValidTargetMapping(m: unknown): m is TargetColumnMapping {
   if (!m || typeof m !== "object") return false;
@@ -17,6 +18,11 @@ function isValidTargetMapping(m: unknown): m is TargetColumnMapping {
 // Saves the column mapping used for a dataset's Targets file, so
 // re-uploading an updated targets file in the same format doesn't ask
 // again — same idea as the sales column_mapping saved at dataset creation.
+// Can also correct the dataset's own sales column_mapping directly — this
+// only affects how future uploads to this dataset are parsed, since past
+// rows already went through the old mapping and the original file isn't
+// kept; fixing already-uploaded numbers still means re-uploading the
+// affected month (the existing overlap/replace flow covers that).
 export async function PATCH(request: Request, { params }: { params: Promise<{ id: string }> }) {
   const supabase = await createClient();
 
@@ -35,13 +41,28 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
 
   const body = await request.json().catch(() => null);
   const targetColumnMapping = body?.targetColumnMapping;
-  if (!isValidTargetMapping(targetColumnMapping)) {
-    return NextResponse.json({ error: "Invalid target column mapping" }, { status: 400 });
+  const columnMapping = body?.columnMapping;
+
+  const updates: Record<string, unknown> = {};
+  if (targetColumnMapping !== undefined) {
+    if (!isValidTargetMapping(targetColumnMapping)) {
+      return NextResponse.json({ error: "Invalid target column mapping" }, { status: 400 });
+    }
+    updates.target_column_mapping = targetColumnMapping;
+  }
+  if (columnMapping !== undefined) {
+    if (!isValidMapping(columnMapping)) {
+      return NextResponse.json({ error: "Invalid column mapping" }, { status: 400 });
+    }
+    updates.column_mapping = columnMapping;
+  }
+  if (Object.keys(updates).length === 0) {
+    return NextResponse.json({ error: "Nothing to update" }, { status: 400 });
   }
 
   const { error, count } = await supabase
     .from("lumen_datasets")
-    .update({ target_column_mapping: targetColumnMapping }, { count: "exact" })
+    .update(updates, { count: "exact" })
     .eq("id", id);
 
   if (error) {

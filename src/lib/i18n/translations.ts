@@ -73,6 +73,34 @@ export type Translations = {
     thresholdLabel: string;
     uploadSuccess: (n: number) => string;
   };
+  corrections: {
+    flagButton: string;
+    modalTitle: string;
+    issueTypeLabel: string;
+    typeWrongNumber: string;
+    typeWrongLink: string;
+    typeBadDecision: string;
+    typeOther: string;
+    commentLabel: string;
+    commentPlaceholder: string;
+    submit: string;
+    submitSuccess: string;
+    logTitle: string;
+    logButton: string;
+    logEmpty: string;
+    statusOpen: string;
+    statusResolved: string;
+    markResolved: string;
+    markOpen: string;
+  };
+  editMapping: {
+    editSalesButton: string;
+    editSalesTitle: string;
+    editSalesWarning: string;
+    editLinkButton: string;
+    editLinkTitle: string;
+    save: string;
+  };
   linkedFiles: {
     panelTitle: string;
     addButton: string;
@@ -269,6 +297,34 @@ const en: Translations = {
     underTargetBy: (pct) => `Under target by ${pct}%`,
     thresholdLabel: "Alert threshold",
     uploadSuccess: (n) => `Uploaded ${n} target rows.`,
+  },
+  corrections: {
+    flagButton: "🚩 Flag issue",
+    modalTitle: "Flag an issue",
+    issueTypeLabel: "What's wrong?",
+    typeWrongNumber: "Wrong number",
+    typeWrongLink: "Files linked incorrectly",
+    typeBadDecision: "Decision doesn't make sense",
+    typeOther: "Something else",
+    commentLabel: "Describe the issue",
+    commentPlaceholder: "What looks wrong, and what did you expect instead?",
+    submit: "Submit",
+    submitSuccess: "Thanks — logged.",
+    logTitle: "Correction log",
+    logButton: "📋 Correction log",
+    logEmpty: "No issues flagged for this dataset yet.",
+    statusOpen: "Open",
+    statusResolved: "Resolved",
+    markResolved: "Mark resolved",
+    markOpen: "Reopen",
+  },
+  editMapping: {
+    editSalesButton: "Edit mapping",
+    editSalesTitle: "Edit sales column mapping",
+    editSalesWarning: "This only affects new uploads to this dataset — it doesn't change numbers already uploaded. To fix a month you already uploaded, re-upload it instead.",
+    editLinkButton: "Edit link",
+    editLinkTitle: "Edit how this file is linked",
+    save: "Save",
   },
   linkedFiles: {
     panelTitle: "Linked files",
@@ -472,6 +528,34 @@ const ar: Translations = {
     underTargetBy: (pct) => `تحت الهدف بنسبة ${pct}%`,
     thresholdLabel: "نسبة التنبيه",
     uploadSuccess: (n) => `تم رفع ${n} صف هدف.`,
+  },
+  corrections: {
+    flagButton: "🚩 الإبلاغ عن مشكلة",
+    modalTitle: "الإبلاغ عن مشكلة",
+    issueTypeLabel: "إيه المشكلة؟",
+    typeWrongNumber: "رقم غلط",
+    typeWrongLink: "ربط ملفات غلط",
+    typeBadDecision: "القرار مش منطقي",
+    typeOther: "حاجة تانية",
+    commentLabel: "اوصف المشكلة",
+    commentPlaceholder: "إيه اللي شكله غلط، وإيه اللي كنت متوقعه بدل كده؟",
+    submit: "إرسال",
+    submitSuccess: "شكرًا — اتسجلت.",
+    logTitle: "سجل التصحيحات",
+    logButton: "📋 سجل التصحيحات",
+    logEmpty: "لسه مفيش مشاكل متبلّغ عنها في مجموعة البيانات دي.",
+    statusOpen: "مفتوحة",
+    statusResolved: "اتحلت",
+    markResolved: "تحديد كمُتحلة",
+    markOpen: "إعادة فتح",
+  },
+  editMapping: {
+    editSalesButton: "تعديل الربط",
+    editSalesTitle: "تعديل ربط أعمدة المبيعات",
+    editSalesWarning: "ده هيأثر بس على الملفات الجديدة اللي هترفعها لمجموعة البيانات دي — مش هيغيّر أرقام اترفعت قبل كده. لو عايز تصلح شهر سبق رفعه، ارفعه تاني بدل كده.",
+    editLinkButton: "تعديل الربط",
+    editLinkTitle: "تعديل طريقة ربط الملف ده",
+    save: "حفظ",
   },
   linkedFiles: {
     panelTitle: "الملفات المرتبطة",
