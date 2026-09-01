@@ -28,7 +28,6 @@ export type ExportContext = {
   t: Translations;
   lang: Lang;
   datasetName: string;
-  openCorrectionsCount: number;
   selectedIds: Set<string>;
 };
 
@@ -87,14 +86,6 @@ function buildTitleBlock(ctx: ExportContext, rtl: boolean): HTMLDivElement {
       [ctx.report.isSystemicDrop ? ctx.t.dashboard.systemicDetected : ctx.t.dashboard.noSystemicPattern],
     ),
   );
-  if (ctx.openCorrectionsCount > 0) {
-    b.appendChild(
-      div(
-        { fontSize: "12px", color: COLORS.amber, marginTop: "24px", fontStyle: "italic" },
-        [ctx.t.export.pendingReviewNotice],
-      ),
-    );
-  }
   b.appendChild(
     div({ fontSize: "11px", color: COLORS.muted, marginTop: "40px" }, [
       ctx.t.export.generatedOn(new Date().toLocaleDateString(rtl ? "ar-EG" : "en-US")),

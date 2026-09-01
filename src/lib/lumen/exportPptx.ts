@@ -17,7 +17,6 @@ export type ExportContext = {
   t: Translations;
   lang: Lang;
   datasetName: string;
-  openCorrectionsCount: number;
   selectedIds: Set<string>;
 };
 
@@ -60,18 +59,6 @@ export async function exportToPptx(ctx: ExportContext): Promise<void> {
     report.isSystemicDrop ? t.dashboard.systemicDetected : t.dashboard.noSystemicPattern,
     { x: 0.5, y: 3.1, w: 9, h: 0.4, fontSize: 14, color: report.isSystemicDrop ? RED : GREEN, align },
   );
-  if (ctx.openCorrectionsCount > 0) {
-    title.addText(t.export.pendingReviewNotice, {
-      x: 0.5,
-      y: 4.8,
-      w: 9,
-      h: 0.4,
-      fontSize: 12,
-      italic: true,
-      color: AMBER,
-      align,
-    });
-  }
 
   // --- Summary slide ---
   if (isSelected(ctx, "summary")) {

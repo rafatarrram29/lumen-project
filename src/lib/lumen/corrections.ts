@@ -1,17 +1,5 @@
-export type IssueType = "wrong_number" | "wrong_link" | "bad_decision" | "other";
-
-export type Correction = {
-  id: string;
-  issueType: IssueType;
-  targetLabel: string | null;
-  comment: string;
-  status: "open" | "resolved";
-  createdAt: string;
-  resolvedAt: string | null;
-};
-
 // A structured entry logged automatically whenever someone edits a value
-// inline (as opposed to a free-text Correction, which is a manual report).
+// inline — who changed it, when, and from what value to what value.
 export type DataEdit = {
   id: string;
   targetLabel: string;
