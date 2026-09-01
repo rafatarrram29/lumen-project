@@ -1,8 +1,8 @@
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
-import { buildReport, type Report, type SalesRecord } from "@/lib/lumen/engine";
+import { buildReport, type Report, type SalesRecord, type TargetRecord } from "@/lib/lumen/engine";
 import { fetchAllRows } from "@/lib/lumen/fetchAllRows";
-import type { ColumnMapping, Dataset } from "@/lib/lumen/columnMapping";
+import type { ColumnMapping, Dataset, TargetColumnMapping } from "@/lib/lumen/columnMapping";
 import LumenClient from "./LumenClient";
 
 export default async function LumenPage() {
@@ -18,13 +18,14 @@ export default async function LumenPage() {
 
   const { data: datasetRows } = await supabase
     .from("lumen_datasets")
-    .select("id, name, column_mapping, created_at, user_id")
+    .select("id, name, column_mapping, target_column_mapping, created_at, user_id")
     .order("created_at", { ascending: false });
 
   const datasets: Dataset[] = (datasetRows ?? []).map((d) => ({
     id: d.id as string,
     name: d.name as string,
     columnMapping: d.column_mapping as ColumnMapping,
+    targetColumnMapping: d.target_column_mapping as TargetColumnMapping | null,
     createdAt: d.created_at as string,
     userId: d.user_id as string | null,
   }));
@@ -54,7 +55,24 @@ export default async function LumenPage() {
       rep: r.rep as string | null,
     }));
 
-    initialReport = buildReport(records, year);
+    const { data: targetData } = await fetchAllRows((from, to) =>
+      supabase
+        .from("lumen_targets")
+        .select("area, rep, item, month, target_value")
+        .eq("year", year)
+        .eq("dataset_id", initialDatasetId)
+        .range(from, to),
+    );
+
+    const targets: TargetRecord[] = (targetData ?? []).map((t) => ({
+      area: t.area as string | null,
+      rep: t.rep as string | null,
+      item: t.item as string | null,
+      month: Number(t.month),
+      targetValue: Number(t.target_value),
+    }));
+
+    initialReport = buildReport(records, year, targets);
   }
 
   return (

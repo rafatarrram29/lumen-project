@@ -1,7 +1,15 @@
 "use client";
 
 import { useRef, useState } from "react";
-import { readWorkbookSheet, applyColumnMapping, type ColumnMapping, type Dataset, type RawSheet } from "@/lib/lumen/columnMapping";
+import {
+  readWorkbookSheet,
+  applyColumnMapping,
+  applyTargetMapping,
+  type ColumnMapping,
+  type Dataset,
+  type RawSheet,
+  type TargetColumnMapping,
+} from "@/lib/lumen/columnMapping";
 import type { Finding, Report } from "@/lib/lumen/engine";
 import { StatTile, AreaChangeBars, FamilyChangeBars } from "./charts";
 import { TrendChart } from "./TrendChart";
@@ -9,8 +17,10 @@ import { ItemTrendChart } from "./ItemTrendChart";
 import { colorForFamily } from "@/lib/lumen/familyColors";
 import Sidebar from "@/components/Sidebar";
 import { UploadWizardModal, type WizardChoice } from "./UploadWizardModal";
+import { UploadTargetsModal } from "./UploadTargetsModal";
 import { useLanguage } from "@/lib/i18n/LanguageProvider";
 import { findingSummary, findingDecision } from "@/lib/i18n/findingText";
+import type { Translations } from "@/lib/i18n/translations";
 
 function areaCardId(area: string): string {
   return `area-card-${encodeURIComponent(area)}`;
@@ -39,6 +49,29 @@ function Badge({ pctChange }: { pctChange: number | null }) {
     >
       {positive ? "+" : ""}
       {pctChange}%
+    </span>
+  );
+}
+
+function TargetChip({
+  progress,
+  threshold,
+  t,
+}: {
+  progress: { targetValue: number; pctOfTarget: number | null } | undefined;
+  threshold: number;
+  t: Translations;
+}) {
+  if (!progress || progress.pctOfTarget === null) return null;
+  const under = progress.pctOfTarget < threshold;
+  return (
+    <span
+      className={`shrink-0 rounded-full border px-2 py-0.5 font-mono text-[10px] font-semibold ${
+        under ? "border-red/40 bg-red/20 text-red" : "border-green/40 bg-green/20 text-green"
+      }`}
+      title={under ? t.targets.underTarget : undefined}
+    >
+      {t.targets.ofTarget(progress.pctOfTarget)}
     </span>
   );
 }
@@ -73,7 +106,11 @@ export default function LumenClient({
   const [expandedReps, setExpandedReps] = useState<Set<string>>(new Set());
   const [pendingFile, setPendingFile] = useState<File | null>(null);
   const [pendingSheet, setPendingSheet] = useState<RawSheet | null>(null);
+  const [pendingTargetsFile, setPendingTargetsFile] = useState<File | null>(null);
+  const [pendingTargetsSheet, setPendingTargetsSheet] = useState<RawSheet | null>(null);
+  const [targetThreshold, setTargetThreshold] = useState(70);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const targetsFileInputRef = useRef<HTMLInputElement>(null);
 
   async function fetchReport(datasetId: string, y: number) {
     setLoadingReport(true);
@@ -131,6 +168,90 @@ export default function LumenClient({
       setPendingSheet(sheet);
     } catch (err) {
       setUploadError(err instanceof Error ? err.message : "Could not read that file.");
+    }
+  }
+
+  async function handleTargetsFileSelected(file: File) {
+    setUploadError(null);
+    setUploadMessage(null);
+    try {
+      const sheet = await readWorkbookSheet(file);
+      setPendingTargetsFile(file);
+      setPendingTargetsSheet(sheet);
+    } catch (err) {
+      setUploadError(err instanceof Error ? err.message : "Could not read that file.");
+    }
+  }
+
+  async function handleTargetsConfirm(mapping: TargetColumnMapping) {
+    const file = pendingTargetsFile;
+    const sheet = pendingTargetsSheet;
+    setPendingTargetsFile(null);
+    setPendingTargetsSheet(null);
+    if (!file || !sheet || !selectedDatasetId) return;
+
+    setUploading(true);
+    setUploadError(null);
+    setUploadMessage(null);
+
+    try {
+      const rows = applyTargetMapping(sheet, mapping);
+
+      const currentDataset = datasets.find((d) => d.id === selectedDatasetId);
+      const mappingUnchanged =
+        currentDataset?.targetColumnMapping &&
+        currentDataset.targetColumnMapping.area === mapping.area &&
+        currentDataset.targetColumnMapping.rep === mapping.rep &&
+        currentDataset.targetColumnMapping.item === mapping.item &&
+        currentDataset.targetColumnMapping.month === mapping.month &&
+        currentDataset.targetColumnMapping.value === mapping.value;
+
+      if (!mappingUnchanged) {
+        const patchRes = await fetch(`/api/lumen/datasets/${selectedDatasetId}`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ targetColumnMapping: mapping }),
+        });
+        if (patchRes.ok) {
+          setDatasets((prev) =>
+            prev.map((d) => (d.id === selectedDatasetId ? { ...d, targetColumnMapping: mapping } : d)),
+          );
+        }
+      }
+
+      const replaceRes = await fetch("/api/lumen/targets/replace", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ year, datasetId: selectedDatasetId }),
+      });
+      const replaceJson = await replaceRes.json();
+      if (!replaceRes.ok) throw new Error(replaceJson.error || "Could not clear existing targets");
+
+      const batches = [];
+      for (let i = 0; i < rows.length; i += UPLOAD_BATCH_SIZE) {
+        batches.push(rows.slice(i, i + UPLOAD_BATCH_SIZE));
+      }
+
+      let inserted = 0;
+      for (let i = 0; i < batches.length; i++) {
+        setUploadProgress(`Uploading batch ${i + 1} of ${batches.length}…`);
+        const res = await fetch("/api/lumen/targets", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ year, datasetId: selectedDatasetId, rows: batches[i] }),
+        });
+        const json = await res.json();
+        if (!res.ok) throw new Error(json.error || "Targets upload failed");
+        inserted += json.inserted;
+      }
+
+      setUploadMessage(t.targets.uploadSuccess(inserted));
+      await fetchReport(selectedDatasetId, year);
+    } catch (err) {
+      setUploadError(err instanceof Error ? err.message : "Targets upload failed");
+    } finally {
+      setUploading(false);
+      setUploadProgress(null);
     }
   }
 
@@ -327,6 +448,30 @@ export default function LumenClient({
         >
           {uploading ? uploadProgress ?? t.sidebar.uploading : t.sidebar.upload}
         </button>
+
+        {selectedDatasetId && (
+          <>
+            <input
+              ref={targetsFileInputRef}
+              type="file"
+              accept=".xlsx,.xls,.xlsm,.csv,.tsv,.txt,.ods"
+              className="hidden"
+              onChange={(e) => {
+                const file = e.target.files?.[0];
+                if (file) handleTargetsFileSelected(file);
+                e.target.value = "";
+              }}
+            />
+            <button
+              onClick={() => targetsFileInputRef.current?.click()}
+              disabled={uploading}
+              className="mb-2 w-full rounded-lg border border-dashed border-bdr px-3 py-2.5 text-sm text-muted transition-colors hover:border-amber hover:text-white disabled:opacity-60"
+            >
+              {t.sidebar.uploadTargets}
+            </button>
+          </>
+        )}
+
         {uploadError && <p className="mb-2 break-words text-xs text-red">{uploadError}</p>}
         {uploadMessage && <p className="mb-2 break-words text-xs text-green">{uploadMessage}</p>}
 
@@ -399,6 +544,19 @@ export default function LumenClient({
         />
       )}
 
+      {pendingTargetsFile && pendingTargetsSheet && selectedDatasetId && (
+        <UploadTargetsModal
+          fileName={pendingTargetsFile.name}
+          sheet={pendingTargetsSheet}
+          dataset={datasets.find((d) => d.id === selectedDatasetId)!}
+          onCancel={() => {
+            setPendingTargetsFile(null);
+            setPendingTargetsSheet(null);
+          }}
+          onConfirm={handleTargetsConfirm}
+        />
+      )}
+
       <main className="min-w-0 flex-1 overflow-y-auto px-6 py-6">
       <div className="mx-auto max-w-4xl">
       {hasError && (
@@ -426,13 +584,29 @@ export default function LumenClient({
             <StatTile label={t.dashboard.decisionsRaised} value={String(report.findings.length)} tone="amber" delayMs={180} />
           </div>
 
-          <div className="mb-4 text-sm text-muted">
-            {t.dashboard.comparingMonth(report.comparedToMonth, report.latestMonth)}
-            {" — "}
-            {report.isSystemicDrop ? (
-              <span className="font-semibold text-red">{t.dashboard.systemicDetected}</span>
-            ) : (
-              <span className="text-green">{t.dashboard.noSystemicPattern}</span>
+          <div className="mb-4 flex flex-wrap items-center justify-between gap-2 text-sm text-muted">
+            <div>
+              {t.dashboard.comparingMonth(report.comparedToMonth, report.latestMonth)}
+              {" — "}
+              {report.isSystemicDrop ? (
+                <span className="font-semibold text-red">{t.dashboard.systemicDetected}</span>
+              ) : (
+                <span className="text-green">{t.dashboard.noSystemicPattern}</span>
+              )}
+            </div>
+            {report.hasTargets && (
+              <label className="flex items-center gap-2 text-xs text-muted">
+                {t.targets.thresholdLabel}
+                <input
+                  type="number"
+                  min={0}
+                  max={100}
+                  value={targetThreshold}
+                  onChange={(e) => setTargetThreshold(Number(e.target.value))}
+                  className="w-16 rounded-lg border border-bdr bg-surf2 px-2 py-1 font-mono text-xs text-white outline-none focus:border-amber"
+                />
+                %
+              </label>
             )}
           </div>
 
@@ -488,24 +662,36 @@ export default function LumenClient({
                             {rc.pctChange ?? "—"}
                             {rc.pctChange !== null ? "%" : ""}
                           </span>
+                          <TargetChip progress={report.repTargets[rep]} threshold={targetThreshold} t={t} />
                           <span className="shrink-0 text-[10px] text-muted">{repOpen ? t.common.hide : t.common.details}</span>
                         </button>
                         <div className="ps-4 font-mono text-[11px] break-words text-muted">
                           {t.common.month(report.comparedToMonth)}: {formatNumber(rc.prevValue)} →{" "}
                           {t.common.month(report.latestMonth)}: {formatNumber(rc.currValue)}
                         </div>
-                        {repOpen && repSeries.length >= 2 && (
-                          <div className="ms-4 mt-2 space-y-1 rounded-lg bg-surf2/60 p-3">
-                            <div className="mb-1 text-[11px] font-semibold text-white">
-                              {t.dashboard.trendLastMonths(repSeries.length)}
-                            </div>
-                            <TrendChart
-                              areaLabel={rep}
-                              areaSeries={repSeries}
-                              clusterSeries={report.repAverageSeries}
-                              compareShortLabel={t.chart.repAvg}
-                              compareLabel={t.chart.allRepsAverage}
-                            />
+                        {repOpen && (
+                          <div className="ms-4 mt-2 space-y-2 rounded-lg bg-surf2/60 p-3">
+                            {report.repTargets[rep] &&
+                              report.repTargets[rep].pctOfTarget !== null &&
+                              report.repTargets[rep].pctOfTarget! < targetThreshold && (
+                                <p className="rounded-lg bg-red/10 px-2 py-1.5 text-[11px] font-semibold text-red">
+                                  {t.targets.underTargetBy(Math.round((100 - report.repTargets[rep].pctOfTarget!) * 10) / 10)}
+                                </p>
+                              )}
+                            {repSeries.length >= 2 && (
+                              <div>
+                                <div className="mb-1 text-[11px] font-semibold text-white">
+                                  {t.dashboard.trendLastMonths(repSeries.length)}
+                                </div>
+                                <TrendChart
+                                  areaLabel={rep}
+                                  areaSeries={repSeries}
+                                  clusterSeries={report.repAverageSeries}
+                                  compareShortLabel={t.chart.repAvg}
+                                  compareLabel={t.chart.allRepsAverage}
+                                />
+                              </div>
+                            )}
                           </div>
                         )}
                       </div>
@@ -558,7 +744,8 @@ export default function LumenClient({
                       </div>
                       <div className="truncate text-xs text-muted">{causeLine}</div>
                     </div>
-                    <div className="flex shrink-0 items-center gap-3">
+                    <div className="flex shrink-0 items-center gap-2">
+                      <TargetChip progress={report.areaTargets[area]} threshold={targetThreshold} t={t} />
                       <Badge pctChange={d.pctChange} />
                       <span className="text-xs text-muted">{isOpen ? t.common.hide : t.common.details}</span>
                     </div>
@@ -577,6 +764,13 @@ export default function LumenClient({
                           {t.common.month(report.latestMonth)}:{" "}
                           <span className="font-mono text-white">{formatNumber(d.currQty)}</span>.
                         </p>
+                        {report.areaTargets[area] &&
+                          report.areaTargets[area].pctOfTarget !== null &&
+                          report.areaTargets[area].pctOfTarget! < targetThreshold && (
+                            <p className="mb-2 rounded-lg bg-red/10 px-3 py-2 text-xs font-semibold text-red">
+                              {t.targets.underTargetBy(Math.round((100 - report.areaTargets[area].pctOfTarget!) * 10) / 10)}
+                            </p>
+                          )}
                         {clusterPct !== null && (
                           <p className="mb-2 text-xs text-muted">
                             {t.dashboard.areaMovedVs(

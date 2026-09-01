@@ -58,6 +58,20 @@ export type Translations = {
     loading: string;
     datasets: string;
     deleteDataset: (name: string) => string;
+    uploadTargets: string;
+  };
+  targets: {
+    uploadButton: string;
+    modalTitle: (fileName: string) => string;
+    subtitle: string;
+    fieldTargetValue: string;
+    atLeastOneRequired: string;
+    replaceWarning: string;
+    ofTarget: (pct: number) => string;
+    underTarget: string;
+    underTargetBy: (pct: number) => string;
+    thresholdLabel: string;
+    uploadSuccess: (n: number) => string;
   };
   wizard: {
     uploadTitle: (fileName: string) => string;
@@ -201,6 +215,21 @@ const en: Translations = {
     loading: "Loading…",
     datasets: "Datasets",
     deleteDataset: (name) => `Delete ${name}`,
+    uploadTargets: "+ Upload targets",
+  },
+  targets: {
+    uploadButton: "+ Upload targets",
+    modalTitle: (fileName) => `Upload targets — ${fileName}`,
+    subtitle:
+      "Match each column to what it means. Uploading replaces every existing target for this dataset and year.",
+    fieldTargetValue: "Target value",
+    atLeastOneRequired: "Map at least one of Area, Rep, or Item so targets can be matched to actuals.",
+    replaceWarning: "This replaces all existing targets for this dataset. This cannot be undone.",
+    ofTarget: (pct) => `${pct}% of target`,
+    underTarget: "Under target",
+    underTargetBy: (pct) => `Under target by ${pct}%`,
+    thresholdLabel: "Alert threshold",
+    uploadSuccess: (n) => `Uploaded ${n} target rows.`,
   },
   wizard: {
     uploadTitle: (fileName) => `Upload ${fileName}`,
@@ -351,6 +380,20 @@ const ar: Translations = {
     loading: "جاري التحميل…",
     datasets: "مجموعات البيانات",
     deleteDataset: (name) => `حذف ${name}`,
+    uploadTargets: "+ رفع الأهداف",
+  },
+  targets: {
+    uploadButton: "+ رفع الأهداف",
+    modalTitle: (fileName) => `رفع أهداف — ${fileName}`,
+    subtitle: "اربط كل عمود بمعناه. الرفع ده هيستبدل كل الأهداف الحالية لمجموعة البيانات والسنة دي.",
+    fieldTargetValue: "قيمة الهدف",
+    atLeastOneRequired: "اربط عمود واحد على الأقل من المنطقة أو المندوب أو الصنف عشان الأهداف تتطابق مع الفعلي.",
+    replaceWarning: "ده هيستبدل كل الأهداف الحالية لمجموعة البيانات دي. الخطوة دي مينفعش نرجع فيها.",
+    ofTarget: (pct) => `${pct}% من الهدف`,
+    underTarget: "تحت الهدف",
+    underTargetBy: (pct) => `تحت الهدف بنسبة ${pct}%`,
+    thresholdLabel: "نسبة التنبيه",
+    uploadSuccess: (n) => `تم رفع ${n} صف هدف.`,
   },
   wizard: {
     uploadTitle: (fileName) => `رفع ${fileName}`,

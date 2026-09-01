@@ -36,6 +36,16 @@ export type SalesRecord = {
 
 export type MonthPoint = { month: number; value: number; qty: number };
 
+export type TargetRecord = {
+  area: string | null;
+  rep: string | null;
+  item: string | null;
+  month: number;
+  targetValue: number;
+};
+
+export type TargetProgress = { targetValue: number; pctOfTarget: number | null };
+
 type AreaChange = {
   cluster: string;
   prevValue: number;
@@ -113,6 +123,9 @@ export type Report =
       repChanges: Record<string, FamilyChange>;
       repMonthlySeries: Record<string, MonthPoint[]>;
       repAverageSeries: { month: number; avgValue: number }[];
+      hasTargets: boolean;
+      areaTargets: Record<string, TargetProgress>;
+      repTargets: Record<string, TargetProgress>;
     };
 
 function pctChange(prev: number | null | undefined, curr: number): number | null {
@@ -214,7 +227,7 @@ function familyTotalsFor(
   return result;
 }
 
-export function buildReport(records: SalesRecord[], year: number): Report {
+export function buildReport(records: SalesRecord[], year: number, targets: TargetRecord[] = []): Report {
   if (records.length === 0) {
     return { error: `No data found for year ${year}.` };
   }
@@ -491,6 +504,35 @@ export function buildReport(records: SalesRecord[], year: number): Report {
     return { month: m, avgValue };
   });
 
+  // --- Targets vs Actual (optional; empty when no targets file was
+  // uploaded for this dataset). Only the latest month is compared against
+  // its target — a target row attributes to an area and/or a rep whenever
+  // that dimension is set on it, so the same row can count toward both. ---
+  const hasTargets = targets.some((t) => t.month === latest);
+  const areaTargetTotals = new Map<string, number>();
+  const repTargetTotals = new Map<string, number>();
+  for (const t of targets) {
+    if (t.month !== latest) continue;
+    if (t.area) areaTargetTotals.set(t.area, (areaTargetTotals.get(t.area) ?? 0) + t.targetValue);
+    if (t.rep) repTargetTotals.set(t.rep, (repTargetTotals.get(t.rep) ?? 0) + t.targetValue);
+  }
+  const areaTargets: Record<string, TargetProgress> = {};
+  for (const [area, targetValue] of areaTargetTotals) {
+    const actual = areaChanges[area]?.currValue;
+    areaTargets[area] = {
+      targetValue: Math.round(targetValue),
+      pctOfTarget: actual !== undefined && targetValue > 0 ? Math.round((actual / targetValue) * 1000) / 10 : null,
+    };
+  }
+  const repTargets: Record<string, TargetProgress> = {};
+  for (const [rep, targetValue] of repTargetTotals) {
+    const actual = repChanges[rep]?.currValue;
+    repTargets[rep] = {
+      targetValue: Math.round(targetValue),
+      pctOfTarget: actual !== undefined && targetValue > 0 ? Math.round((actual / targetValue) * 1000) / 10 : null,
+    };
+  }
+
   return {
     year,
     latestMonth: latest,
@@ -507,5 +549,8 @@ export function buildReport(records: SalesRecord[], year: number): Report {
     repChanges,
     repMonthlySeries,
     repAverageSeries,
+    hasTargets,
+    areaTargets,
+    repTargets,
   };
 }

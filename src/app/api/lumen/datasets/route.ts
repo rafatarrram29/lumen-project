@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
-import type { ColumnMapping } from "@/lib/lumen/columnMapping";
+import type { ColumnMapping, TargetColumnMapping } from "@/lib/lumen/columnMapping";
 
 export async function GET() {
   const supabase = await createClient();
@@ -15,7 +15,7 @@ export async function GET() {
 
   const { data, error } = await supabase
     .from("lumen_datasets")
-    .select("id, name, column_mapping, created_at, user_id")
+    .select("id, name, column_mapping, target_column_mapping, created_at, user_id")
     .order("created_at", { ascending: false });
 
   if (error) {
@@ -27,6 +27,7 @@ export async function GET() {
       id: d.id as string,
       name: d.name as string,
       columnMapping: d.column_mapping as ColumnMapping,
+      targetColumnMapping: d.target_column_mapping as TargetColumnMapping | null,
       createdAt: d.created_at as string,
       userId: d.user_id as string | null,
     })),
@@ -75,7 +76,7 @@ export async function POST(request: Request) {
   const { data, error } = await supabase
     .from("lumen_datasets")
     .insert({ name, column_mapping: columnMapping, user_id: user.id })
-    .select("id, name, column_mapping, created_at, user_id")
+    .select("id, name, column_mapping, target_column_mapping, created_at, user_id")
     .single();
 
   if (error) {
@@ -87,6 +88,7 @@ export async function POST(request: Request) {
       id: data.id as string,
       name: data.name as string,
       columnMapping: data.column_mapping as ColumnMapping,
+      targetColumnMapping: data.target_column_mapping as TargetColumnMapping | null,
       createdAt: data.created_at as string,
       userId: data.user_id as string | null,
     },
