@@ -57,7 +57,14 @@ const GUESS_RULES: GuessRule[] = [
   // real keywords like "product" or "brand" still win if present.
   { field: "product", keywords: ["product", "item", "molecule", "brand", "sku", "row labels", "row label"] },
   { field: "marketShare", keywords: ["market share", "share", "ms%", "ms %", "ms"] },
-  { field: "month", keywords: ["month", "period"] },
+  // Deliberately NOT matching literal month names ("Jan", "Feb", ...) here.
+  // Those show up as a WIDE table's own column headers (one column per
+  // month, e.g. a pivoted trend export) — a completely different shape
+  // from a single "Month" column whose per-row VALUES are a month. Guessing
+  // one of those as the Month field would map real sales/share figures
+  // into the month slot and silently corrupt every row instead of leaving
+  // it for the user to fill in — worse than not guessing at all.
+  { field: "month", keywords: ["month", "period", "date"] },
   { field: "company", keywords: ["company", "manufacturer", "competitor", "player"] },
 ];
 
