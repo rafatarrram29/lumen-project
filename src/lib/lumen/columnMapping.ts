@@ -31,10 +31,27 @@ export type RawSheet = {
   rows: Record<string, unknown>[];
 };
 
+export type TargetColumnMapping = {
+  area: string | null;
+  rep: string | null;
+  item: string | null;
+  month: string;
+  value: string;
+};
+
+export type ParsedTargetRow = {
+  area: string | null;
+  rep: string | null;
+  item: string | null;
+  month: number;
+  targetValue: number;
+};
+
 export type Dataset = {
   id: string;
   name: string;
   columnMapping: ColumnMapping;
+  targetColumnMapping: TargetColumnMapping | null;
   createdAt: string;
   userId: string | null;
 };
@@ -119,6 +136,73 @@ export function guessMapping(headers: string[]): Partial<Record<keyof ColumnMapp
   }
 
   return guess;
+}
+
+const TARGET_GUESS_RULES: GuessRule[] = [
+  { field: "area", keywords: ["area", "region", "territory"] },
+  { field: "rep", keywords: ["rep", "representative", "salesperson", "agent"] },
+  { field: "item", keywords: ["item", "product", "sku", "material"] },
+  { field: "month", keywords: ["month", "period"] },
+  { field: "value", keywords: ["target value", "target", "goal", "quota"] },
+];
+
+export function guessTargetMapping(headers: string[]): Partial<Record<keyof TargetColumnMapping, string>> {
+  const guess: Partial<Record<keyof TargetColumnMapping, string>> = {};
+  const used = new Set<string>();
+
+  for (const rule of TARGET_GUESS_RULES) {
+    let best: string | null = null;
+    let bestScore = 0;
+    for (const header of headers) {
+      if (used.has(header)) continue;
+      const normalized = header.trim().toLowerCase();
+      for (const keyword of rule.keywords) {
+        const score = normalized === keyword ? keyword.length + 1000 : normalized.includes(keyword) ? keyword.length : 0;
+        if (score > bestScore) {
+          best = header;
+          bestScore = score;
+        }
+      }
+    }
+    if (best) {
+      guess[rule.field as keyof TargetColumnMapping] = best;
+      used.add(best);
+    }
+  }
+
+  return guess;
+}
+
+export function applyTargetMapping(sheet: RawSheet, mapping: TargetColumnMapping): ParsedTargetRow[] {
+  const rows: ParsedTargetRow[] = [];
+
+  for (const r of sheet.rows) {
+    const monthVal = r[mapping.month];
+    const valueVal = r[mapping.value];
+    if (monthVal == null || valueVal == null) continue;
+
+    const month = Math.trunc(Number(monthVal));
+    const targetValue = Number(valueVal);
+    if (Number.isNaN(month) || Number.isNaN(targetValue)) continue;
+
+    const areaVal = mapping.area ? r[mapping.area] : null;
+    const repVal = mapping.rep ? r[mapping.rep] : null;
+    const itemVal = mapping.item ? r[mapping.item] : null;
+
+    rows.push({
+      area: areaVal != null ? String(areaVal) : null,
+      rep: repVal != null ? String(repVal) : null,
+      item: itemVal != null ? String(itemVal) : null,
+      month,
+      targetValue,
+    });
+  }
+
+  if (rows.length === 0) {
+    throw new Error("No usable rows found after applying the target column mapping.");
+  }
+
+  return rows;
 }
 
 export function applyColumnMapping(sheet: RawSheet, mapping: ColumnMapping): ParsedSalesRow[] {

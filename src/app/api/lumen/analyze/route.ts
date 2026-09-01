@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
-import { buildReport, type SalesRecord } from "@/lib/lumen/engine";
+import { buildReport, type SalesRecord, type TargetRecord } from "@/lib/lumen/engine";
 import { fetchAllRows } from "@/lib/lumen/fetchAllRows";
 
 export async function GET(request: Request) {
@@ -28,7 +28,7 @@ export async function GET(request: Request) {
   const { data, error } = await fetchAllRows((from, to) =>
     supabase
       .from("lumen_sales_records")
-      .select("area, family, sales_value, sales_qty, month, cluster")
+      .select("area, family, sales_value, sales_qty, month, cluster, rep")
       .eq("year", year)
       .eq("dataset_id", datasetId)
       .range(from, to),
@@ -45,8 +45,26 @@ export async function GET(request: Request) {
     salesQty: r.sales_qty !== null ? Number(r.sales_qty) : null,
     month: Number(r.month),
     cluster: r.cluster as string | null,
+    rep: r.rep as string | null,
   }));
 
-  const report = buildReport(records, year);
+  const { data: targetData } = await fetchAllRows((from, to) =>
+    supabase
+      .from("lumen_targets")
+      .select("area, rep, item, month, target_value")
+      .eq("year", year)
+      .eq("dataset_id", datasetId)
+      .range(from, to),
+  );
+
+  const targets: TargetRecord[] = (targetData ?? []).map((t) => ({
+    area: t.area as string | null,
+    rep: t.rep as string | null,
+    item: t.item as string | null,
+    month: Number(t.month),
+    targetValue: Number(t.target_value),
+  }));
+
+  const report = buildReport(records, year, targets);
   return NextResponse.json(report);
 }

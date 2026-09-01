@@ -58,6 +58,33 @@ export type Translations = {
     loading: string;
     datasets: string;
     deleteDataset: (name: string) => string;
+    uploadTargets: string;
+  };
+  targets: {
+    uploadButton: string;
+    modalTitle: (fileName: string) => string;
+    subtitle: string;
+    fieldTargetValue: string;
+    atLeastOneRequired: string;
+    replaceWarning: string;
+    ofTarget: (pct: number) => string;
+    underTarget: string;
+    underTargetBy: (pct: number) => string;
+    thresholdLabel: string;
+    uploadSuccess: (n: number) => string;
+  };
+  repHistory: {
+    title: string;
+    addPeriod: string;
+    startMonth: string;
+    endMonth: string;
+    repNameLabel: string;
+    vacantPlaceholder: string;
+    vacant: string;
+    save: string;
+    invalidRange: string;
+    responsibleInMonth: (month: string, rep: string) => string;
+    deletePeriod: string;
   };
   wizard: {
     uploadTitle: (fileName: string) => string;
@@ -119,13 +146,18 @@ export type Translations = {
     noDatasets: string;
     couldNotLoad: string;
     deleteDatasetConfirm: (name: string) => string;
+    byRep: string;
+    repComparison: string;
+    repLeaderboard: string;
   };
   chart: {
-    indexedCaption: (areaLabel: string) => string;
+    indexedCaption: (areaLabel: string, compareLabel: string) => string;
     thisArea: string;
     clusterAvg: string;
     clusterAverage: string;
     idx: string;
+    repAvg: string;
+    allRepsAverage: string;
   };
   findings: {
     inCluster: (cluster: string) => string;
@@ -197,6 +229,34 @@ const en: Translations = {
     loading: "Loading…",
     datasets: "Datasets",
     deleteDataset: (name) => `Delete ${name}`,
+    uploadTargets: "+ Upload targets",
+  },
+  targets: {
+    uploadButton: "+ Upload targets",
+    modalTitle: (fileName) => `Upload targets — ${fileName}`,
+    subtitle:
+      "Match each column to what it means. Uploading replaces every existing target for this dataset and year.",
+    fieldTargetValue: "Target value",
+    atLeastOneRequired: "Map at least one of Area, Rep, or Item so targets can be matched to actuals.",
+    replaceWarning: "This replaces all existing targets for this dataset. This cannot be undone.",
+    ofTarget: (pct) => `${pct}% of target`,
+    underTarget: "Under target",
+    underTargetBy: (pct) => `Under target by ${pct}%`,
+    thresholdLabel: "Alert threshold",
+    uploadSuccess: (n) => `Uploaded ${n} target rows.`,
+  },
+  repHistory: {
+    title: "Rep history",
+    addPeriod: "+ Add period",
+    startMonth: "From month",
+    endMonth: "To month",
+    repNameLabel: "Rep",
+    vacantPlaceholder: "Vacant (leave empty)",
+    vacant: "Vacant",
+    save: "Save",
+    invalidRange: "End month must be on or after the start month.",
+    responsibleInMonth: (month, rep) => `Responsible in ${month}: ${rep}`,
+    deletePeriod: "Delete this period",
   },
   wizard: {
     uploadTitle: (fileName) => `Upload ${fileName}`,
@@ -262,14 +322,19 @@ const en: Translations = {
     couldNotLoad: "Could not load the report.",
     deleteDatasetConfirm: (name) =>
       `Delete "${name}"? This permanently removes all of its uploaded data. This cannot be undone.`,
+    byRep: "By rep",
+    repComparison: "Rep comparison",
+    repLeaderboard: "Rep leaderboard",
   },
   chart: {
-    indexedCaption: (areaLabel) =>
-      `Indexed to 100 at the first month shown, so ${areaLabel} and the cluster average are comparable regardless of scale.`,
+    indexedCaption: (areaLabel, compareLabel) =>
+      `Indexed to 100 at the first month shown, so ${areaLabel} and the ${compareLabel.toLowerCase()} are comparable regardless of scale.`,
     thisArea: "This area:",
     clusterAvg: "Cluster avg:",
     clusterAverage: "Cluster average",
     idx: "(idx)",
+    repAvg: "Rep avg:",
+    allRepsAverage: "Average across reps",
   },
   findings: {
     inCluster: (cluster) => ` in ${cluster}`,
@@ -343,6 +408,33 @@ const ar: Translations = {
     loading: "جاري التحميل…",
     datasets: "مجموعات البيانات",
     deleteDataset: (name) => `حذف ${name}`,
+    uploadTargets: "+ رفع الأهداف",
+  },
+  targets: {
+    uploadButton: "+ رفع الأهداف",
+    modalTitle: (fileName) => `رفع أهداف — ${fileName}`,
+    subtitle: "اربط كل عمود بمعناه. الرفع ده هيستبدل كل الأهداف الحالية لمجموعة البيانات والسنة دي.",
+    fieldTargetValue: "قيمة الهدف",
+    atLeastOneRequired: "اربط عمود واحد على الأقل من المنطقة أو المندوب أو الصنف عشان الأهداف تتطابق مع الفعلي.",
+    replaceWarning: "ده هيستبدل كل الأهداف الحالية لمجموعة البيانات دي. الخطوة دي مينفعش نرجع فيها.",
+    ofTarget: (pct) => `${pct}% من الهدف`,
+    underTarget: "تحت الهدف",
+    underTargetBy: (pct) => `تحت الهدف بنسبة ${pct}%`,
+    thresholdLabel: "نسبة التنبيه",
+    uploadSuccess: (n) => `تم رفع ${n} صف هدف.`,
+  },
+  repHistory: {
+    title: "سجل المناديب",
+    addPeriod: "+ إضافة فترة",
+    startMonth: "من شهر",
+    endMonth: "لشهر",
+    repNameLabel: "المندوب",
+    vacantPlaceholder: "شاغرة (اتركه فارغًا)",
+    vacant: "شاغرة",
+    save: "حفظ",
+    invalidRange: "شهر النهاية لازم يكون بعد أو نفس شهر البداية.",
+    responsibleInMonth: (month, rep) => `المسؤول في ${month}: ${rep}`,
+    deletePeriod: "حذف الفترة دي",
   },
   wizard: {
     uploadTitle: (fileName) => `رفع ${fileName}`,
@@ -408,14 +500,19 @@ const ar: Translations = {
     couldNotLoad: "معرفناش نجيب التقرير.",
     deleteDatasetConfirm: (name) =>
       `حذف "${name}"؟ ده هيمسح كل البيانات اللي اترفعت فيها نهائيًا. الخطوة دي مينفعش نرجع فيها.`,
+    byRep: "حسب المندوب",
+    repComparison: "مقارنة المناديب",
+    repLeaderboard: "ترتيب المناديب",
   },
   chart: {
-    indexedCaption: (areaLabel) =>
-      `الأرقام محسوبة كمؤشر يبدأ من 100 في أول شهر، عشان ${areaLabel} ومتوسط الكلستر يبقوا قابلين للمقارنة مهما اختلف حجم الأرقام.`,
+    indexedCaption: (areaLabel, compareLabel) =>
+      `الأرقام محسوبة كمؤشر يبدأ من 100 في أول شهر، عشان ${areaLabel} و${compareLabel} يبقوا قابلين للمقارنة مهما اختلف حجم الأرقام.`,
     thisArea: "المنطقة دي:",
     clusterAvg: "متوسط الكلستر:",
     clusterAverage: "متوسط الكلستر",
     idx: "(مؤشر)",
+    repAvg: "متوسط المناديب:",
+    allRepsAverage: "متوسط كل المناديب",
   },
   findings: {
     inCluster: (cluster) => ` في ${cluster}`,

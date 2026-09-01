@@ -152,8 +152,10 @@ export function AreaChangeBars({
 
 export function FamilyChangeBars({
   families,
+  title,
 }: {
   families: Record<string, { pctChange: number | null }>;
+  title?: string;
 }) {
   const { t } = useLanguage();
   const rows: BarRow[] = Object.entries(families)
@@ -165,10 +167,69 @@ export function FamilyChangeBars({
   return (
     <div className="rounded-2xl border border-bdr bg-surf p-4 sm:p-5">
       <div className="mb-3 flex items-center justify-between gap-2">
-        <h2 className="text-sm font-semibold text-white">{t.dashboard.itemComparison}</h2>
+        <h2 className="text-sm font-semibold text-white">{title ?? t.dashboard.itemComparison}</h2>
         <Legend />
       </div>
       <DivergingBarChart rows={rows} maxRows={10} />
+    </div>
+  );
+}
+
+export function RepLeaderboard({
+  repChanges,
+  repTargets,
+  hasTargets,
+}: {
+  repChanges: Record<string, { currValue: number }>;
+  repTargets: Record<string, { pctOfTarget: number | null }>;
+  hasTargets: boolean;
+}) {
+  const { t } = useLanguage();
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => {
+    const id = requestAnimationFrame(() => setMounted(true));
+    return () => cancelAnimationFrame(id);
+  }, []);
+
+  const rows = Object.entries(repChanges)
+    .map(([rep, rc]) => {
+      const pct = repTargets[rep]?.pctOfTarget ?? null;
+      const usesPct = hasTargets && pct !== null;
+      return { rep, metric: usesPct ? pct! : rc.currValue, usesPct, pct, currValue: rc.currValue };
+    })
+    .sort((a, b) => b.metric - a.metric)
+    .slice(0, 10);
+
+  if (rows.length === 0) return null;
+  const maxMetric = Math.max(...rows.map((r) => r.metric), 1);
+
+  return (
+    <div className="rounded-2xl border border-bdr bg-surf p-4 sm:p-5">
+      <h2 className="mb-3 text-sm font-semibold text-white">{t.dashboard.repLeaderboard}</h2>
+      <div className="space-y-2.5">
+        {rows.map((row, i) => (
+          <div key={row.rep} className="flex items-center gap-2 text-xs">
+            <span className="w-4 shrink-0 text-center font-mono text-muted">{i + 1}</span>
+            <span className="w-20 shrink-0 truncate text-muted sm:w-32" dir="auto" title={row.rep}>
+              {row.rep}
+            </span>
+            <div className="relative h-2.5 min-w-0 flex-1 rounded-full bg-surf2">
+              <div
+                className="absolute inset-y-0 start-0 rounded-full transition-[width] ease-out"
+                style={{
+                  width: mounted ? `${(row.metric / maxMetric) * 100}%` : "0%",
+                  transitionDuration: "700ms",
+                  transitionDelay: `${i * 40}ms`,
+                  background: "linear-gradient(90deg, #f2a93b, #d68820)",
+                }}
+              />
+            </div>
+            <div className="w-16 shrink-0 text-end font-mono text-white">
+              {row.usesPct ? `${row.pct}%` : row.currValue.toLocaleString("en-US")}
+            </div>
+          </div>
+        ))}
+      </div>
     </div>
   );
 }
