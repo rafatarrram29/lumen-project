@@ -1,12 +1,19 @@
-// Finds rows inside a single incoming batch that share the same identity
-// key (the same columns the database's unique index checks) before we
-// ever attempt to insert them — this is what actually caused a real
-// production duplication bug: a batch with repeated area/item/month rows
-// inserted cleanly (no DB error, since there was no uniqueness
-// constraint at all at the time), silently inflating that period's
-// totals. Catching it here gives a specific, actionable error instead of
-// a generic Postgres constraint-violation message once the DB-level
-// safeguard is also in place.
+// Finds rows inside a single incoming batch that share the same key
+// (whatever keyFn extracts — see each caller for exactly which columns
+// that is) before we ever attempt to insert them.
+//
+// Callers must key on a FULL exact-duplicate identity — every stored
+// column, including the measured value(s), not just the "which
+// area/item/month is this" columns. A source file can legitimately have
+// several distinct rows sharing the same area/item/month (one row per
+// invoice or per branch, say), all correctly summed by the report; only
+// a row that's identical in every column to another is an actual
+// duplicate. An earlier version of this keyed on identity columns alone
+// and would have rejected that entirely normal multi-row data as
+// duplicates — this is what actually caused a real production
+// duplication *investigation* to nearly ship a fix that broke legitimate
+// uploads instead of just the genuine "a whole row got inserted twice"
+// bug (a retried upload, a double-submit) it was meant to catch.
 export function findDuplicateKeys<T>(items: T[], keyFn: (item: T) => string): { key: string; count: number }[] {
   const counts = new Map<string, number>();
   for (const item of items) {
