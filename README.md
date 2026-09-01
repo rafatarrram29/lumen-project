@@ -37,9 +37,16 @@ design reference only — it is not part of the running app.
    other's data. Datasets created before this migration (e.g. "Legacy data")
    stay shared and usable by everyone, exactly as before, but can no longer
    be deleted through the app.
-5. Open **Settings -> API** and copy the **Project URL** and the **anon
+5. Then run `supabase/lumen_targets_migration.sql`. This adds the Targets
+   file support described below (a `lumen_targets` table, plus the
+   `target_column_mapping` column and its missing UPDATE policy on
+   `lumen_datasets`).
+6. Then run `supabase/lumen_rep_assignments_migration.sql`. This adds the
+   `lumen_rep_assignments` table used by the rep history timeline described
+   below.
+7. Open **Settings -> API** and copy the **Project URL** and the **anon
    public** key.
-6. Open **Authentication -> Sign In / Providers** and make sure **Email**
+8. Open **Authentication -> Sign In / Providers** and make sure **Email**
    is enabled (it is by default). For local development, under
    **Authentication -> URL Configuration**, you can leave the defaults —
    we'll add your real domain there once deployed.
@@ -93,6 +100,40 @@ in, then upload a monthly sales export — `.xlsx`, `.xls`, `.xlsm`, `.csv`,
    area, as a candidate to replicate elsewhere.
 5. **Decision, not description** — every finding ends in one concrete
    action, never a bare observation.
+
+## Rep performance (optional)
+
+If a dataset's column mapping includes a **Rep** column, the dashboard adds
+a rep dimension alongside area and item: a rep comparison chart, a per-rep
+trend against the all-reps average, and a **Rep leaderboard** ranking reps
+by their sales (or by % of target, once a targets file is uploaded — see
+below). Datasets with no Rep column are completely unaffected.
+
+## Target vs Actual (optional)
+
+A dataset can have a separate **Targets** file uploaded alongside its sales
+data (the "+ Upload targets" button in the sidebar, once a dataset is
+selected). Like the sales file, its columns are mapped once — Month and
+Target value are required, plus at least one of Area, Rep, or Item so a
+target can be matched back to an actual. Uploading a targets file replaces
+every existing target for that dataset and year; it's meant to hold the
+current plan, not a history of edits.
+
+Once targets exist for the latest month, the dashboard shows **% of
+target** next to each area's and rep's raw numbers, with a clear "Under
+target by X%" alert when either falls below an adjustable threshold
+(70% by default). Datasets with no targets file work exactly as before.
+
+## Rep assignment history (optional)
+
+Each area's details include a **Rep history** timeline — who was
+responsible for that area during which months, including "Vacant" stretches
+with no rep at all (add/remove periods inline). This is purely informational:
+an area's trend, systemic-drop, and root-cause analysis always treats it as
+one continuous unit, regardless of rep handoffs recorded here. When a period
+covers the latest month, the area's details also note who that was (or
+"Vacant") next to its numbers. Areas with no recorded history are
+unaffected.
 
 ## Troubleshooting
 
