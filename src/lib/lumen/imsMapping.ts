@@ -49,7 +49,13 @@ type GuessRule = { field: keyof ImsColumnMapping; keywords: string[] };
 
 const GUESS_RULES: GuessRule[] = [
   { field: "area", keywords: ["area", "region", "territory"] },
-  { field: "product", keywords: ["product", "item", "molecule", "brand", "sku"] },
+  // "Row Labels" is Excel PivotTable's own default header for whatever
+  // dimension was dragged into the Rows box — never renamed by whoever
+  // built the export. A PDF made from a pivoted IQVIA/market-share sheet
+  // (the common case) almost always has that dimension be the
+  // product/brand, so it's included here as a lower-priority fallback:
+  // real keywords like "product" or "brand" still win if present.
+  { field: "product", keywords: ["product", "item", "molecule", "brand", "sku", "row labels", "row label"] },
   { field: "marketShare", keywords: ["market share", "share", "ms%", "ms %", "ms"] },
   { field: "month", keywords: ["month", "period"] },
   { field: "company", keywords: ["company", "manufacturer", "competitor", "player"] },
