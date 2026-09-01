@@ -73,6 +73,58 @@ export type Translations = {
     thresholdLabel: string;
     uploadSuccess: (n: number) => string;
   };
+  corrections: {
+    flagButton: string;
+    modalTitle: string;
+    issueTypeLabel: string;
+    typeWrongNumber: string;
+    typeWrongLink: string;
+    typeBadDecision: string;
+    typeOther: string;
+    commentLabel: string;
+    commentPlaceholder: string;
+    submit: string;
+    submitSuccess: string;
+    logTitle: string;
+    logButton: string;
+    logEmpty: string;
+    statusOpen: string;
+    statusResolved: string;
+    markResolved: string;
+    markOpen: string;
+  };
+  editMapping: {
+    editSalesButton: string;
+    editSalesTitle: string;
+    editSalesWarning: string;
+    editLinkButton: string;
+    editLinkTitle: string;
+    save: string;
+  };
+  linkedFiles: {
+    panelTitle: string;
+    addButton: string;
+    fileTypeLabel: string;
+    typeAchievement: string;
+    typeKpis: string;
+    typeOther: string;
+    displayNameLabel: string;
+    mappingHelp: string;
+    joinKeysLabel: string;
+    joinKeyArea: string;
+    joinKeyRep: string;
+    joinKeyCluster: string;
+    joinKeyMonth: string;
+    joinKeysHint: string;
+    atLeastOneJoinKey: string;
+    replaceButton: string;
+    deleteButton: string;
+    deleteConfirm: (name: string) => string;
+    modalTitle: (fileName: string) => string;
+    replaceModalTitle: (fileName: string) => string;
+    uploadSuccess: (n: number) => string;
+    linkedContextTitle: string;
+  };
   repHistory: {
     title: string;
     addPeriod: string;
@@ -245,6 +297,58 @@ const en: Translations = {
     underTargetBy: (pct) => `Under target by ${pct}%`,
     thresholdLabel: "Alert threshold",
     uploadSuccess: (n) => `Uploaded ${n} target rows.`,
+  },
+  corrections: {
+    flagButton: "🚩 Flag issue",
+    modalTitle: "Flag an issue",
+    issueTypeLabel: "What's wrong?",
+    typeWrongNumber: "Wrong number",
+    typeWrongLink: "Files linked incorrectly",
+    typeBadDecision: "Decision doesn't make sense",
+    typeOther: "Something else",
+    commentLabel: "Describe the issue",
+    commentPlaceholder: "What looks wrong, and what did you expect instead?",
+    submit: "Submit",
+    submitSuccess: "Thanks — logged.",
+    logTitle: "Correction log",
+    logButton: "📋 Correction log",
+    logEmpty: "No issues flagged for this dataset yet.",
+    statusOpen: "Open",
+    statusResolved: "Resolved",
+    markResolved: "Mark resolved",
+    markOpen: "Reopen",
+  },
+  editMapping: {
+    editSalesButton: "Edit mapping",
+    editSalesTitle: "Edit sales column mapping",
+    editSalesWarning: "This only affects new uploads to this dataset — it doesn't change numbers already uploaded. To fix a month you already uploaded, re-upload it instead.",
+    editLinkButton: "Edit link",
+    editLinkTitle: "Edit how this file is linked",
+    save: "Save",
+  },
+  linkedFiles: {
+    panelTitle: "Linked files",
+    addButton: "+ Add linked file",
+    fileTypeLabel: "File type",
+    typeAchievement: "Achievement",
+    typeKpis: "KPIs",
+    typeOther: "Other",
+    displayNameLabel: "Display name",
+    mappingHelp: "Match this file's columns to the dimensions that link it back to your sales data.",
+    joinKeysLabel: "Link this file by",
+    joinKeyArea: "Area",
+    joinKeyRep: "Rep",
+    joinKeyCluster: "Cluster",
+    joinKeyMonth: "Month",
+    joinKeysHint: "Pick which columns connect this file to the same areas and months as your sales data.",
+    atLeastOneJoinKey: "Month must be linked, along with at least one of Area, Rep, or Cluster.",
+    replaceButton: "Replace",
+    deleteButton: "Delete",
+    deleteConfirm: (name) => `Delete "${name}"? This permanently removes all of its data. This cannot be undone.`,
+    modalTitle: (fileName) => `Add linked file — ${fileName}`,
+    replaceModalTitle: (fileName) => `Replace with ${fileName}`,
+    uploadSuccess: (n) => `Uploaded ${n} rows.`,
+    linkedContextTitle: "Linked data",
   },
   repHistory: {
     title: "Rep history",
@@ -424,6 +528,58 @@ const ar: Translations = {
     underTargetBy: (pct) => `تحت الهدف بنسبة ${pct}%`,
     thresholdLabel: "نسبة التنبيه",
     uploadSuccess: (n) => `تم رفع ${n} صف هدف.`,
+  },
+  corrections: {
+    flagButton: "🚩 الإبلاغ عن مشكلة",
+    modalTitle: "الإبلاغ عن مشكلة",
+    issueTypeLabel: "إيه المشكلة؟",
+    typeWrongNumber: "رقم غلط",
+    typeWrongLink: "ربط ملفات غلط",
+    typeBadDecision: "القرار مش منطقي",
+    typeOther: "حاجة تانية",
+    commentLabel: "اوصف المشكلة",
+    commentPlaceholder: "إيه اللي شكله غلط، وإيه اللي كنت متوقعه بدل كده؟",
+    submit: "إرسال",
+    submitSuccess: "شكرًا — اتسجلت.",
+    logTitle: "سجل التصحيحات",
+    logButton: "📋 سجل التصحيحات",
+    logEmpty: "لسه مفيش مشاكل متبلّغ عنها في مجموعة البيانات دي.",
+    statusOpen: "مفتوحة",
+    statusResolved: "اتحلت",
+    markResolved: "تحديد كمُتحلة",
+    markOpen: "إعادة فتح",
+  },
+  editMapping: {
+    editSalesButton: "تعديل الربط",
+    editSalesTitle: "تعديل ربط أعمدة المبيعات",
+    editSalesWarning: "ده هيأثر بس على الملفات الجديدة اللي هترفعها لمجموعة البيانات دي — مش هيغيّر أرقام اترفعت قبل كده. لو عايز تصلح شهر سبق رفعه، ارفعه تاني بدل كده.",
+    editLinkButton: "تعديل الربط",
+    editLinkTitle: "تعديل طريقة ربط الملف ده",
+    save: "حفظ",
+  },
+  linkedFiles: {
+    panelTitle: "الملفات المرتبطة",
+    addButton: "+ إضافة ملف مرتبط",
+    fileTypeLabel: "نوع الملف",
+    typeAchievement: "التحقيق (Achievement)",
+    typeKpis: "مؤشرات الأداء (KPIs)",
+    typeOther: "تاني",
+    displayNameLabel: "اسم العرض",
+    mappingHelp: "اربط أعمدة الملف ده بالأبعاد اللي هتوصله ببيانات المبيعات.",
+    joinKeysLabel: "اربط الملف ده عن طريق",
+    joinKeyArea: "المنطقة",
+    joinKeyRep: "المندوب",
+    joinKeyCluster: "الكلستر",
+    joinKeyMonth: "الشهر",
+    joinKeysHint: "اختار الأعمدة اللي هتوصل الملف ده بنفس المناطق والشهور بتاعة بيانات المبيعات.",
+    atLeastOneJoinKey: "الشهر لازم يتربط، بالإضافة لواحد على الأقل من المنطقة أو المندوب أو الكلستر.",
+    replaceButton: "استبدال",
+    deleteButton: "حذف",
+    deleteConfirm: (name) => `حذف "${name}"؟ ده هيمسح كل بياناته نهائيًا. الخطوة دي مينفعش نرجع فيها.`,
+    modalTitle: (fileName) => `إضافة ملف مرتبط — ${fileName}`,
+    replaceModalTitle: (fileName) => `استبدال بـ ${fileName}`,
+    uploadSuccess: (n) => `تم رفع ${n} صف.`,
+    linkedContextTitle: "بيانات مرتبطة",
   },
   repHistory: {
     title: "سجل المناديب",

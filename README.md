@@ -46,9 +46,17 @@ design reference only — it is not part of the running app.
 6. Then run `supabase/lumen_rep_assignments_migration.sql`. This adds the
    `lumen_rep_assignments` table used by the rep history timeline described
    below.
-7. Open **Settings -> API** and copy the **Project URL** and the **anon
+7. Then run `supabase/lumen_linked_files_migration.sql`. This adds the
+   `lumen_dataset_files` and `lumen_dataset_records` tables used by linked
+   files, described below. Purely additive — it does not touch
+   `lumen_datasets` or `lumen_sales_records`, so every existing dataset
+   keeps working exactly as it does today.
+8. Then run `supabase/lumen_corrections_migration.sql`. This adds the
+   `lumen_corrections` table used by the flag-issue / correction log
+   feature described below.
+9. Open **Settings -> API** and copy the **Project URL** and the **anon
    public** key.
-8. Open **Authentication -> Sign In / Providers** and make sure **Email**
+10. Open **Authentication -> Sign In / Providers** and make sure **Email**
    is enabled (it is by default). For local development, under
    **Authentication -> URL Configuration**, you can leave the defaults —
    we'll add your real domain there once deployed.
@@ -136,6 +144,51 @@ one continuous unit, regardless of rep handoffs recorded here. When a period
 covers the latest month, the area's details also note who that was (or
 "Vacant") next to its numbers. Areas with no recorded history are
 unaffected.
+
+## Linked files (optional)
+
+A dataset's primary Sales file can have extra **linked files** attached —
+Achievement, KPIs, or anything else ("+ Add linked file" in the sidebar,
+once a dataset is selected). Uploading one guesses its file type and which
+columns (Area/Rep/Cluster/Month) connect it back to the same areas and
+months as the sales data, based on its column names — always shown for
+review and edit before saving, never applied silently. A file can be
+replaced (re-upload with a corrected mapping, wholesale replacing its old
+rows) or deleted independently, without touching the dataset's other files.
+
+This is a **linked view**, not a fused one: each file is stored and
+matched on its own terms. In an area's details, any linked file with a
+matching Area + latest-month row shows up as a "Linked data" block next to
+that area's finding and decision — e.g. an Achievement file's % and a KPIs
+file's numbers appear together as context for the same drop, without
+changing the underlying sales analysis itself. A file whose join keys
+don't include Area won't appear there. Datasets with no linked files are
+completely unaffected.
+
+## Correcting mistakes in-app
+
+Every area, item row, and decision has a 🚩 **Flag issue** button — pick
+what's wrong (a wrong number, files linked incorrectly, a decision that
+doesn't make sense, or something else) and describe it in a sentence. Every
+flag is saved to that dataset's **Correction log** (sidebar), showing what
+was flagged, when, and whether it's still open or marked resolved.
+
+Two things can be fixed without deleting and re-uploading a whole dataset:
+
+- **Which columns feed the sales mapping** (⚙ next to the dataset name) —
+  useful when the wrong column was picked (e.g. "Zone" instead of "Area").
+  This only affects new uploads to that dataset going forward; numbers
+  already uploaded aren't retroactively changed (re-upload the affected
+  month instead, using the existing overlap-replace flow).
+- **Which dimensions link a file back to the sales data** (⚙ next to a
+  linked file) — if the system picked the wrong join (e.g. joined by Rep
+  only when it should also join by Area), correcting it takes effect
+  immediately with no re-upload, since the area/rep/cluster/month values
+  were already extracted from that file when it was uploaded.
+
+Fixing which *source column* feeds a linked file (as opposed to which
+already-extracted dimension it joins by) does require re-uploading that
+file — use "Replace" on it, which shows the same editable mapping.
 
 ## Troubleshooting
 

@@ -20,6 +20,13 @@ import { UploadWizardModal, type WizardChoice } from "./UploadWizardModal";
 import { UploadTargetsModal } from "./UploadTargetsModal";
 import { RepHistoryPanel } from "./RepHistoryPanel";
 import { repResponsibleInMonth, type RepAssignment } from "@/lib/lumen/repAssignments";
+import { LinkedFilesPanel } from "./LinkedFilesPanel";
+import { AddLinkedFileModal, type LinkedFileSave } from "./AddLinkedFileModal";
+import { applyLinkedMapping, recordsForAreaMonth, type JoinKey, type LinkedFile, type LinkedRecord } from "@/lib/lumen/linkedFiles";
+import { FlagIssueModal } from "./FlagIssueModal";
+import { CorrectionLogModal } from "./CorrectionLogModal";
+import { EditSalesMappingModal } from "./EditSalesMappingModal";
+import type { Correction, IssueType } from "@/lib/lumen/corrections";
 import { useLanguage } from "@/lib/i18n/LanguageProvider";
 import { findingSummary, findingDecision } from "@/lib/i18n/findingText";
 import type { Translations } from "@/lib/i18n/translations";
@@ -111,11 +118,24 @@ export default function LumenClient({
   const [pendingTargetsSheet, setPendingTargetsSheet] = useState<RawSheet | null>(null);
   const [targetThreshold, setTargetThreshold] = useState(70);
   const [assignments, setAssignments] = useState<RepAssignment[]>([]);
+  const [linkedFiles, setLinkedFiles] = useState<LinkedFile[]>([]);
+  const [linkedRecords, setLinkedRecords] = useState<LinkedRecord[]>([]);
+  const [pendingLinkedFile, setPendingLinkedFile] = useState<{ file: File; sheet: RawSheet } | null>(null);
+  const [replacingLinkedFileId, setReplacingLinkedFileId] = useState<string | null>(null);
+  const [corrections, setCorrections] = useState<Correction[]>([]);
+  const [flagTarget, setFlagTarget] = useState<string | null>(null);
+  const [showCorrectionLog, setShowCorrectionLog] = useState(false);
+  const [showEditSalesMapping, setShowEditSalesMapping] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const targetsFileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
-    if (initialDatasetId) fetchAssignments(initialDatasetId, initialYear);
+    if (initialDatasetId) {
+      fetchAssignments(initialDatasetId, initialYear);
+      fetchLinkedFiles(initialDatasetId);
+      fetchLinkedRecords(initialDatasetId, initialYear);
+      fetchCorrections(initialDatasetId);
+    }
     // Only on mount — subsequent dataset/year changes go through fetchReport.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -127,6 +147,36 @@ export default function LumenClient({
       setAssignments(res.ok ? (json.assignments ?? []) : []);
     } catch {
       setAssignments([]);
+    }
+  }
+
+  async function fetchLinkedFiles(datasetId: string) {
+    try {
+      const res = await fetch(`/api/lumen/dataset-files?datasetId=${datasetId}`);
+      const json = await res.json();
+      setLinkedFiles(res.ok ? (json.files ?? []) : []);
+    } catch {
+      setLinkedFiles([]);
+    }
+  }
+
+  async function fetchLinkedRecords(datasetId: string, y: number) {
+    try {
+      const res = await fetch(`/api/lumen/dataset-records?year=${y}&datasetId=${datasetId}`);
+      const json = await res.json();
+      setLinkedRecords(res.ok ? (json.records ?? []) : []);
+    } catch {
+      setLinkedRecords([]);
+    }
+  }
+
+  async function fetchCorrections(datasetId: string) {
+    try {
+      const res = await fetch(`/api/lumen/corrections?datasetId=${datasetId}`);
+      const json = await res.json();
+      setCorrections(res.ok ? (json.corrections ?? []) : []);
+    } catch {
+      setCorrections([]);
     }
   }
 
@@ -142,6 +192,9 @@ export default function LumenClient({
       setLoadingReport(false);
     }
     fetchAssignments(datasetId, y);
+    fetchLinkedFiles(datasetId);
+    fetchLinkedRecords(datasetId, y);
+    fetchCorrections(datasetId);
   }
 
   function selectDataset(datasetId: string) {
@@ -404,6 +457,185 @@ export default function LumenClient({
     }
   }
 
+  async function handleAddLinkedFile(file: File) {
+    setUploadError(null);
+    setUploadMessage(null);
+    setReplacingLinkedFileId(null);
+    try {
+      const sheet = await readWorkbookSheet(file);
+      setPendingLinkedFile({ file, sheet });
+    } catch (err) {
+      setUploadError(err instanceof Error ? err.message : "Could not read that file.");
+    }
+  }
+
+  async function handleReplaceLinkedFile(fileId: string, file: File) {
+    setUploadError(null);
+    setUploadMessage(null);
+    setReplacingLinkedFileId(fileId);
+    try {
+      const sheet = await readWorkbookSheet(file);
+      setPendingLinkedFile({ file, sheet });
+    } catch (err) {
+      setUploadError(err instanceof Error ? err.message : "Could not read that file.");
+    }
+  }
+
+  async function handleLinkedFileConfirm(save: LinkedFileSave) {
+    const pending = pendingLinkedFile;
+    const replaceId = replacingLinkedFileId;
+    setPendingLinkedFile(null);
+    setReplacingLinkedFileId(null);
+    if (!pending || !selectedDatasetId) return;
+
+    setUploading(true);
+    setUploadError(null);
+    setUploadMessage(null);
+
+    try {
+      const rows = applyLinkedMapping(pending.sheet, save.mapping);
+
+      let fileId: string;
+      if (replaceId) {
+        const replaceRes = await fetch(`/api/lumen/dataset-files/${replaceId}/replace`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ displayName: save.displayName, columnMapping: save.mapping, joinKeys: save.joinKeys }),
+        });
+        const replaceJson = await replaceRes.json();
+        if (!replaceRes.ok) throw new Error(replaceJson.error || "Could not replace the file");
+        fileId = replaceId;
+      } else {
+        const createRes = await fetch("/api/lumen/dataset-files", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            datasetId: selectedDatasetId,
+            fileType: save.fileType,
+            displayName: save.displayName,
+            sourceFile: pending.file.name,
+            columnMapping: save.mapping,
+            joinKeys: save.joinKeys,
+          }),
+        });
+        const createJson = await createRes.json();
+        if (!createRes.ok) throw new Error(createJson.error || "Could not create the linked file");
+        fileId = createJson.file.id;
+      }
+
+      const batches = [];
+      for (let i = 0; i < rows.length; i += UPLOAD_BATCH_SIZE) {
+        batches.push(rows.slice(i, i + UPLOAD_BATCH_SIZE));
+      }
+
+      let inserted = 0;
+      for (let i = 0; i < batches.length; i++) {
+        setUploadProgress(`Uploading batch ${i + 1} of ${batches.length}…`);
+        const res = await fetch(`/api/lumen/dataset-files/${fileId}/records`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ datasetId: selectedDatasetId, year, rows: batches[i] }),
+        });
+        const json = await res.json();
+        if (!res.ok) throw new Error(json.error || "Upload failed");
+        inserted += json.inserted;
+      }
+
+      setUploadMessage(t.linkedFiles.uploadSuccess(inserted));
+      await fetchLinkedFiles(selectedDatasetId);
+      await fetchLinkedRecords(selectedDatasetId, year);
+    } catch (err) {
+      setUploadError(err instanceof Error ? err.message : "Upload failed");
+    } finally {
+      setUploading(false);
+      setUploadProgress(null);
+    }
+  }
+
+  async function handleDeleteLinkedFile(file: LinkedFile) {
+    const proceed = window.confirm(t.linkedFiles.deleteConfirm(file.displayName));
+    if (!proceed || !selectedDatasetId) return;
+
+    try {
+      const res = await fetch(`/api/lumen/dataset-files/${file.id}`, { method: "DELETE" });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error || "Could not delete the file");
+      await fetchLinkedFiles(selectedDatasetId);
+      await fetchLinkedRecords(selectedDatasetId, year);
+    } catch (err) {
+      setUploadError(err instanceof Error ? err.message : "Could not delete the file");
+    }
+  }
+
+  async function handleEditJoinKeys(fileId: string, joinKeys: JoinKey[]) {
+    if (!selectedDatasetId) return;
+    try {
+      const res = await fetch(`/api/lumen/dataset-files/${fileId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ joinKeys }),
+      });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error || "Could not update the link");
+      await fetchLinkedFiles(selectedDatasetId);
+    } catch (err) {
+      setUploadError(err instanceof Error ? err.message : "Could not update the link");
+    }
+  }
+
+  async function handleSaveSalesMapping(mapping: ColumnMapping) {
+    if (!selectedDatasetId) return;
+    try {
+      const res = await fetch(`/api/lumen/datasets/${selectedDatasetId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ columnMapping: mapping }),
+      });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error || "Could not update the mapping");
+      setDatasets((prev) => prev.map((d) => (d.id === selectedDatasetId ? { ...d, columnMapping: mapping } : d)));
+      setShowEditSalesMapping(false);
+    } catch (err) {
+      setUploadError(err instanceof Error ? err.message : "Could not update the mapping");
+    }
+  }
+
+  function openFlagModal(label: string) {
+    setFlagTarget(label);
+  }
+
+  async function handleFlagSubmit(issueType: IssueType, comment: string) {
+    if (!selectedDatasetId || !flagTarget) return;
+    try {
+      const res = await fetch("/api/lumen/corrections", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ datasetId: selectedDatasetId, issueType, targetLabel: flagTarget, comment }),
+      });
+      if (res.ok) {
+        setUploadMessage(t.corrections.submitSuccess);
+        await fetchCorrections(selectedDatasetId);
+      }
+    } finally {
+      setFlagTarget(null);
+    }
+  }
+
+  async function handleToggleCorrectionStatus(correction: Correction) {
+    if (!selectedDatasetId) return;
+    const nextStatus = correction.status === "open" ? "resolved" : "open";
+    try {
+      const res = await fetch(`/api/lumen/corrections/${correction.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ status: nextStatus }),
+      });
+      if (res.ok) await fetchCorrections(selectedDatasetId);
+    } catch {
+      // best-effort; the log simply keeps its previous state if this fails
+    }
+  }
+
   function toggle(area: string) {
     setExpanded((prev) => {
       const next = new Set(prev);
@@ -561,20 +793,55 @@ export default function LumenClient({
                       {d.name}
                     </button>
                     {isSelected && d.userId === userId && (
-                      <button
-                        onClick={() => handleDeleteDataset(d)}
-                        title={t.sidebar.deleteDataset(d.name)}
-                        aria-label={t.sidebar.deleteDataset(d.name)}
-                        className="shrink-0 rounded-lg border border-bdr px-2.5 py-1.5 text-muted transition-colors hover:border-red hover:text-red"
-                      >
-                        ×
-                      </button>
+                      <>
+                        <button
+                          onClick={() => setShowEditSalesMapping(true)}
+                          title={t.editMapping.editSalesButton}
+                          aria-label={t.editMapping.editSalesButton}
+                          className="shrink-0 rounded-lg border border-bdr px-2.5 py-1.5 text-muted transition-colors hover:border-amber hover:text-amber"
+                        >
+                          ⚙
+                        </button>
+                        <button
+                          onClick={() => handleDeleteDataset(d)}
+                          title={t.sidebar.deleteDataset(d.name)}
+                          aria-label={t.sidebar.deleteDataset(d.name)}
+                          className="shrink-0 rounded-lg border border-bdr px-2.5 py-1.5 text-muted transition-colors hover:border-red hover:text-red"
+                        >
+                          ×
+                        </button>
+                      </>
                     )}
                   </div>
                 );
               })}
             </div>
           </div>
+        )}
+
+        {selectedDatasetId && (
+          <LinkedFilesPanel
+            files={linkedFiles}
+            disabled={uploading}
+            onAddFile={handleAddLinkedFile}
+            onReplaceFile={handleReplaceLinkedFile}
+            onDeleteFile={handleDeleteLinkedFile}
+            onEditJoinKeys={handleEditJoinKeys}
+          />
+        )}
+
+        {selectedDatasetId && (
+          <button
+            onClick={() => setShowCorrectionLog(true)}
+            className="mt-4 w-full rounded-lg border border-bdr px-3 py-2 text-xs text-muted transition-colors hover:border-amber hover:text-white"
+          >
+            {t.corrections.logButton}
+            {corrections.filter((c) => c.status === "open").length > 0 && (
+              <span className="ms-1.5 rounded-full bg-amber/20 px-1.5 py-0.5 text-[10px] text-amber">
+                {corrections.filter((c) => c.status === "open").length}
+              </span>
+            )}
+          </button>
         )}
       </Sidebar>
 
@@ -600,6 +867,44 @@ export default function LumenClient({
             setPendingTargetsSheet(null);
           }}
           onConfirm={handleTargetsConfirm}
+        />
+      )}
+
+      {pendingLinkedFile && selectedDatasetId && (
+        <AddLinkedFileModal
+          fileName={pendingLinkedFile.file.name}
+          sheet={pendingLinkedFile.sheet}
+          salesMapping={datasets.find((d) => d.id === selectedDatasetId)!.columnMapping}
+          existingFile={replacingLinkedFileId ? linkedFiles.find((f) => f.id === replacingLinkedFileId) : undefined}
+          onCancel={() => {
+            setPendingLinkedFile(null);
+            setReplacingLinkedFileId(null);
+          }}
+          onConfirm={handleLinkedFileConfirm}
+        />
+      )}
+
+      {flagTarget && (
+        <FlagIssueModal
+          targetLabel={flagTarget}
+          onCancel={() => setFlagTarget(null)}
+          onSubmit={handleFlagSubmit}
+        />
+      )}
+
+      {showCorrectionLog && (
+        <CorrectionLogModal
+          corrections={corrections}
+          onToggleStatus={handleToggleCorrectionStatus}
+          onClose={() => setShowCorrectionLog(false)}
+        />
+      )}
+
+      {showEditSalesMapping && selectedDatasetId && (
+        <EditSalesMappingModal
+          mapping={datasets.find((d) => d.id === selectedDatasetId)!.columnMapping}
+          onCancel={() => setShowEditSalesMapping(false)}
+          onSave={handleSaveSalesMapping}
         />
       )}
 
@@ -658,10 +963,20 @@ export default function LumenClient({
 
           {systemicFindings.map((f, i) => (
             <div key={i} className="mb-5 rounded-2xl border border-red/40 bg-red/10 p-5">
-              <p className="mb-2 break-words text-sm">
-                {report.hasClusters && <span className="font-semibold text-white">{f.cluster}: </span>}
-                {findingSummary(f, report, t)}
-              </p>
+              <div className="mb-2 flex items-start justify-between gap-2">
+                <p className="break-words text-sm">
+                  {report.hasClusters && <span className="font-semibold text-white">{f.cluster}: </span>}
+                  {findingSummary(f, report, t)}
+                </p>
+                <button
+                  type="button"
+                  onClick={() => openFlagModal(`Systemic drop: ${f.cluster}`)}
+                  title={t.corrections.flagButton}
+                  className="shrink-0 text-xs text-muted hover:text-amber"
+                >
+                  🚩
+                </button>
+              </div>
               <div className="break-words rounded-lg bg-surf2 px-3 py-2 text-sm">
                 <span className="font-semibold text-amber">{t.dashboard.decision} </span>
                 {findingDecision(f, t)}
@@ -782,15 +1097,22 @@ export default function LumenClient({
               const areaAssignments = assignments.filter((a) => a.area === area);
               const responsibleInLatest = repResponsibleInMonth(areaAssignments, area, report.latestMonth);
 
+              const linkedContext = linkedFiles
+                .map((f) => ({ file: f, records: recordsForAreaMonth(f, linkedRecords, area, report.latestMonth) }))
+                .filter((entry) => entry.records.length > 0);
+
               return (
                 <div
                   key={area}
                   id={areaCardId(area)}
                   className="scroll-mt-4 rounded-2xl border border-bdr bg-surf p-5 transition-colors"
                 >
-                  <button
+                  <div
                     onClick={() => toggle(area)}
-                    className="flex w-full items-center justify-between gap-3 text-start"
+                    role="button"
+                    tabIndex={0}
+                    onKeyDown={(e) => e.key === "Enter" && toggle(area)}
+                    className="flex w-full cursor-pointer items-center justify-between gap-3 text-start"
                   >
                     <div className="min-w-0">
                       <div className="flex items-center gap-2">
@@ -804,11 +1126,22 @@ export default function LumenClient({
                       <div className="truncate text-xs text-muted">{causeLine}</div>
                     </div>
                     <div className="flex shrink-0 items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          openFlagModal(`Area: ${area}`);
+                        }}
+                        title={t.corrections.flagButton}
+                        className="text-xs text-muted hover:text-amber"
+                      >
+                        🚩
+                      </button>
                       <TargetChip progress={report.areaTargets[area]} threshold={targetThreshold} t={t} />
                       <Badge pctChange={d.pctChange} />
                       <span className="text-xs text-muted">{isOpen ? t.common.hide : t.common.details}</span>
                     </div>
-                  </button>
+                  </div>
 
                   {isOpen && (
                     <div className="mt-4 space-y-5 border-t border-bdr pt-4 text-sm">
@@ -891,9 +1224,12 @@ export default function LumenClient({
 
                               return (
                               <div key={fam} className="text-xs">
-                                <button
+                                <div
                                   onClick={() => toggleItem(fam)}
-                                  className="flex w-full items-center gap-2 rounded-lg text-start transition-colors hover:bg-surf2/60"
+                                  role="button"
+                                  tabIndex={0}
+                                  onKeyDown={(e) => e.key === "Enter" && toggleItem(fam)}
+                                  className="flex w-full cursor-pointer items-center gap-2 rounded-lg text-start transition-colors hover:bg-surf2/60"
                                 >
                                   <span
                                     className="h-2 w-2 shrink-0 rounded-full"
@@ -909,8 +1245,19 @@ export default function LumenClient({
                                     {fc.pctChange ?? "—"}
                                     {fc.pctChange !== null ? "%" : ""}
                                   </span>
+                                  <button
+                                    type="button"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      openFlagModal(`Item: ${fam} (${area})`);
+                                    }}
+                                    title={t.corrections.flagButton}
+                                    className="shrink-0 text-[10px] text-muted hover:text-amber"
+                                  >
+                                    🚩
+                                  </button>
                                   <span className="shrink-0 text-[10px] text-muted">{itemOpen ? t.common.hide : t.common.details}</span>
-                                </button>
+                                </div>
                                 <div className="ps-4 font-mono text-[11px] break-words text-muted">
                                   {t.common.month(report.comparedToMonth)}: {formatNumber(fc.prevValue)} →{" "}
                                   {t.common.month(report.latestMonth)}: {formatNumber(fc.currValue)}
@@ -986,9 +1333,46 @@ export default function LumenClient({
                         onChanged={() => selectedDatasetId && fetchAssignments(selectedDatasetId, year)}
                       />
 
+                      {linkedContext.length > 0 && (
+                        <div>
+                          <div className="mb-2 text-xs font-semibold text-white">{t.linkedFiles.linkedContextTitle}</div>
+                          <div className="space-y-2">
+                            {linkedContext.map(({ file, records }) => (
+                              <div key={file.id} className="rounded-lg bg-surf2/60 p-3 text-xs">
+                                <div className="mb-1 flex items-center gap-1.5">
+                                  <span className="shrink-0 rounded-full border border-bdr px-1.5 py-0.5 text-[10px] text-muted">
+                                    {{ achievement: t.linkedFiles.typeAchievement, kpis: t.linkedFiles.typeKpis, other: t.linkedFiles.typeOther }[file.fileType]}
+                                  </span>
+                                  <span className="font-semibold text-white" dir="auto">{file.displayName}</span>
+                                </div>
+                                {records.map((r) => (
+                                  <div key={r.id} className="ps-1 text-muted">
+                                    {Object.entries(r.data).map(([k, v]) => (
+                                      <div key={k} dir="auto">
+                                        <span className="text-white">{k}:</span> {String(v)}
+                                      </div>
+                                    ))}
+                                  </div>
+                                ))}
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+
                       {areaFindings.map((f, i) => (
                         <div key={i} className="break-words rounded-lg bg-surf2 px-3 py-2.5">
-                          <p className="mb-1.5">{findingSummary(f, report, t)}</p>
+                          <div className="mb-1.5 flex items-start justify-between gap-2">
+                            <p>{findingSummary(f, report, t)}</p>
+                            <button
+                              type="button"
+                              onClick={() => openFlagModal(`Decision: ${area} — ${findingDecision(f, t)}`)}
+                              title={t.corrections.flagButton}
+                              className="shrink-0 text-xs text-muted hover:text-amber"
+                            >
+                              🚩
+                            </button>
+                          </div>
                           {"rootCauseFamily" in f && (
                             <p className="mb-1.5 text-xs text-muted">
                               {t.dashboard.rootCauseItem}{" "}
