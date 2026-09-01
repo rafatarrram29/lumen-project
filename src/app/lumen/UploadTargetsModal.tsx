@@ -117,7 +117,7 @@ export function UploadTargetsModal({
             type="button"
             onClick={handleConfirm}
             disabled={!complete}
-            className="rounded-lg bg-gradient-to-br from-amber to-[#d68820] px-4 py-2 text-sm font-semibold text-bg disabled:opacity-50"
+            className="rounded-lg bg-gradient-to-br from-amber to-[var(--amber-2)] px-4 py-2 text-sm font-semibold text-on-accent disabled:opacity-50"
           >
             {t.common.continueLabel}
           </button>

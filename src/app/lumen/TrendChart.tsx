@@ -104,16 +104,16 @@ export function TrendChart({
       <div className="h-56 w-full">
         <ResponsiveContainer width="100%" height="100%">
           <LineChart data={data} margin={{ top: 8, right: 8, left: -4, bottom: 0 }}>
-            <CartesianGrid stroke="#2a3559" strokeDasharray="3 3" vertical={false} />
+            <CartesianGrid stroke="var(--bdr)" strokeDasharray="3 3" vertical={false} />
             <XAxis
               dataKey="month"
-              stroke="#8b93b0"
+              stroke="var(--muted)"
               fontSize={11}
               tickLine={false}
-              axisLine={{ stroke: "#2a3559" }}
+              axisLine={{ stroke: "var(--bdr)" }}
               tickFormatter={(v: string) => v.replace("Month ", "M")}
             />
-            <YAxis stroke="#8b93b0" fontSize={11} tickLine={false} axisLine={false} width={40} />
+            <YAxis stroke="var(--muted)" fontSize={11} tickLine={false} axisLine={false} width={40} />
             <Tooltip
               content={(props) => (
                 <CustomTooltip {...props} t={t} thisLabel={thisShortLabel} compareLabel={resolvedCompareShort} />
@@ -124,19 +124,19 @@ export function TrendChart({
               type="monotone"
               dataKey="areaIndex"
               name={areaLabel}
-              stroke="#f2a93b"
+              stroke="var(--amber)"
               strokeWidth={2}
-              dot={{ r: 3, fill: "#f2a93b" }}
+              dot={{ r: 3, fill: "var(--amber)" }}
               isAnimationActive
             />
             <Line
               type="monotone"
               dataKey="clusterIndex"
               name={resolvedCompareLabel}
-              stroke="#5eead4"
+              stroke="var(--cyan)"
               strokeWidth={2}
               strokeDasharray="4 3"
-              dot={{ r: 3, fill: "#5eead4" }}
+              dot={{ r: 3, fill: "var(--cyan)" }}
               isAnimationActive
             />
           </LineChart>

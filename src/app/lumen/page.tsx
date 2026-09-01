@@ -36,14 +36,27 @@ export default async function LumenPage() {
   let initialReport: Report = { error: "No datasets yet — upload a file to get started." };
 
   if (initialDatasetId) {
-    const { data } = await fetchAllRows((from, to) =>
-      supabase
-        .from("lumen_sales_records")
-        .select("area, family, sales_value, sales_qty, month, cluster, rep")
-        .eq("year", year)
-        .eq("dataset_id", initialDatasetId)
-        .range(from, to),
-    );
+    // Neither query depends on the other's result — fetching them
+    // concurrently instead of one after another roughly halves this
+    // part of the page's server-side latency.
+    const [{ data }, { data: targetData }] = await Promise.all([
+      fetchAllRows((from, to) =>
+        supabase
+          .from("lumen_sales_records")
+          .select("area, family, sales_value, sales_qty, month, cluster, rep")
+          .eq("year", year)
+          .eq("dataset_id", initialDatasetId)
+          .range(from, to),
+      ),
+      fetchAllRows((from, to) =>
+        supabase
+          .from("lumen_targets")
+          .select("area, rep, item, month, target_value")
+          .eq("year", year)
+          .eq("dataset_id", initialDatasetId)
+          .range(from, to),
+      ),
+    ]);
 
     const records: SalesRecord[] = (data ?? []).map((r) => ({
       area: r.area as string,
@@ -54,15 +67,6 @@ export default async function LumenPage() {
       cluster: r.cluster as string | null,
       rep: r.rep as string | null,
     }));
-
-    const { data: targetData } = await fetchAllRows((from, to) =>
-      supabase
-        .from("lumen_targets")
-        .select("area, rep, item, month, target_value")
-        .eq("year", year)
-        .eq("dataset_id", initialDatasetId)
-        .range(from, to),
-    );
 
     const targets: TargetRecord[] = (targetData ?? []).map((t) => ({
       area: t.area as string | null,

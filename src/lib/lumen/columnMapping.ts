@@ -1,9 +1,10 @@
 // Generic sales-file ingestion: no fixed column names or file layout is
 // assumed. Reading a file is two steps — find its header row and hand back
-// the raw column names (readWorkbookSheet), then turn those raw rows into
-// normalized records once the caller supplies a mapping from this
+// the raw column names (readWorkbookSheet, in its own file so the `xlsx`
+// library it needs isn't pulled into every bundle that just wants these
+// types or the pure mapping functions below), then turn those raw rows
+// into normalized records once the caller supplies a mapping from this
 // dataset's own column names to the engine's fields (applyColumnMapping).
-import * as XLSX from "xlsx";
 
 export type ColumnMapping = {
   area: string;
@@ -55,47 +56,6 @@ export type Dataset = {
   createdAt: string;
   userId: string | null;
 };
-
-const MAX_HEADER_SCAN_ROWS = 10;
-
-// Real exports vary: some have headers on row 1, some have a title row
-// above them. Rather than assume either shape, scan the first few rows for
-// the first one that looks like a header row (multiple non-empty text
-// cells) and treat that as the header.
-export async function readWorkbookSheet(file: File): Promise<RawSheet> {
-  const buffer = await file.arrayBuffer();
-  const workbook = XLSX.read(buffer, { type: "array" });
-  const sheet = workbook.Sheets[workbook.SheetNames[0]];
-
-  const grid = XLSX.utils.sheet_to_json<unknown[]>(sheet, {
-    header: 1,
-    defval: null,
-    blankrows: false,
-  });
-
-  let headerRowIndex = 0;
-  for (let i = 0; i < Math.min(MAX_HEADER_SCAN_ROWS, grid.length); i++) {
-    const row = grid[i] ?? [];
-    const nonEmptyStringCells = row.filter(
-      (c) => typeof c === "string" && c.trim() !== "",
-    ).length;
-    if (nonEmptyStringCells >= 2) {
-      headerRowIndex = i;
-      break;
-    }
-  }
-
-  const raw = XLSX.utils.sheet_to_json<Record<string, unknown>>(sheet, {
-    range: headerRowIndex,
-    defval: null,
-  });
-
-  if (raw.length === 0) {
-    throw new Error("Couldn't find any data rows in that file.");
-  }
-
-  return { headers: Object.keys(raw[0]), rows: raw };
-}
 
 type GuessRule = { field: keyof ColumnMapping; keywords: string[] };
 
