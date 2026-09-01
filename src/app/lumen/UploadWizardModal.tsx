@@ -46,6 +46,7 @@ export type WizardChoice =
 
 export function UploadWizardModal({
   fileName,
+  extraFilesCount = 0,
   sheet,
   datasets,
   defaultDatasetId,
@@ -53,6 +54,7 @@ export function UploadWizardModal({
   onConfirm,
 }: {
   fileName: string;
+  extraFilesCount?: number;
   sheet: RawSheet;
   datasets: Dataset[];
   defaultDatasetId: string | null;
@@ -113,7 +115,12 @@ export function UploadWizardModal({
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
       <div className="max-h-[85vh] w-full max-w-lg overflow-y-auto rounded-2xl border border-bdr bg-surf p-5">
         <h2 className="mb-1 truncate text-base font-semibold text-white">{t.wizard.uploadTitle(fileName)}</h2>
-        <p className="mb-4 text-xs text-muted">{t.wizard.subtitle}</p>
+        <p className={extraFilesCount > 0 ? "mb-1 text-xs text-muted" : "mb-4 text-xs text-muted"}>
+          {t.wizard.subtitle}
+        </p>
+        {extraFilesCount > 0 && (
+          <p className="mb-4 text-xs text-amber">{t.wizard.multiFileNote(extraFilesCount)}</p>
+        )}
 
         {datasets.length > 0 && (
           <div className="mb-4 flex gap-2">
