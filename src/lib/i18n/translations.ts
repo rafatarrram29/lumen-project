@@ -185,6 +185,8 @@ export type Translations = {
     pdfMappingStepOf: (i: number, n: number) => string;
     pdfManualAdded: string;
     pdfRemove: string;
+    pdfApplyToAllSimilar: (n: number) => string;
+    pdfAppliedToSimilar: (n: number) => string;
     save: string;
     uploadSuccess: (n: number) => string;
     deleteButton: string;
@@ -490,6 +492,8 @@ const en: Translations = {
     pdfMappingStepOf: (i, n) => `Table ${i} of ${n}`,
     pdfManualAdded: "✓ Added to selection",
     pdfRemove: "Remove",
+    pdfApplyToAllSimilar: (n) => `Apply to all ${n} similar table${n === 1 ? "" : "s"}`,
+    pdfAppliedToSimilar: (n) => `Applied to ${n} similar table${n === 1 ? "" : "s"} too.`,
     save: "Save",
     uploadSuccess: (n) => `Uploaded ${n} rows.`,
     deleteButton: "Delete",
@@ -810,6 +814,8 @@ const ar: Translations = {
     pdfMappingStepOf: (i, n) => `جدول ${i} من ${n}`,
     pdfManualAdded: "✓ اتضاف للاختيار",
     pdfRemove: "إزالة",
+    pdfApplyToAllSimilar: (n) => `طبّق على ${n} جدول مشابه كمان`,
+    pdfAppliedToSimilar: (n) => `اتطبّق على ${n} جدول مشابه كمان.`,
     save: "حفظ",
     uploadSuccess: (n) => `تم رفع ${n} صف.`,
     deleteButton: "حذف",

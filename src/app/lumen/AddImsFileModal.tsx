@@ -202,6 +202,7 @@ function MappingStep({
   initialDisplayName,
   initialFixedMonth,
   stepLabel,
+  similarCount,
   onCancel,
   onBack,
   onConfirm,
@@ -211,9 +212,13 @@ function MappingStep({
   initialDisplayName?: string;
   initialFixedMonth?: string;
   stepLabel?: string;
+  // Other not-yet-imported queued tables with this exact same header row —
+  // almost always the same underlying report repeated (e.g. one page per
+  // product in a deck), so this mapping is very likely right for them too.
+  similarCount?: number;
   onCancel: () => void;
   onBack?: () => void;
-  onConfirm: (save: ImsFileSave) => void;
+  onConfirm: (save: ImsFileSave, applyToAllSimilar: boolean) => void;
 }) {
   const { t } = useLanguage();
 
@@ -264,21 +269,24 @@ function MappingStep({
     !fixedMonthInvalid &&
     displayName.trim().length > 0;
 
-  function handleConfirm() {
+  function handleConfirm(applyToAllSimilar: boolean) {
     if (!complete) return;
-    onConfirm({
-      displayName: displayName.trim(),
-      mapping: {
-        area: mapping.area,
-        product: mapping.product,
-        marketShare: mapping.marketShare!,
-        month: mapping.month,
-        fixedMonth: mapping.month ? null : fixedMonthNumber,
-        company: mapping.company,
+    onConfirm(
+      {
+        displayName: displayName.trim(),
+        mapping: {
+          area: mapping.area,
+          product: mapping.product,
+          marketShare: mapping.marketShare!,
+          month: mapping.month,
+          fixedMonth: mapping.month ? null : fixedMonthNumber,
+          company: mapping.company,
+        },
+        ownCompany: mapping.company ? effectiveOwnCompany : null,
+        sheet,
       },
-      ownCompany: mapping.company ? effectiveOwnCompany : null,
-      sheet,
-    });
+      applyToAllSimilar,
+    );
   }
 
   const fieldLabels: Record<Exclude<keyof ImsColumnMapping, "fixedMonth">, string> = {
@@ -369,7 +377,7 @@ function MappingStep({
           )}
         </div>
 
-        <div className="mt-5 flex justify-end gap-2">
+        <div className="mt-5 flex flex-wrap items-center justify-end gap-2">
           <button
             type="button"
             onClick={onCancel}
@@ -377,9 +385,19 @@ function MappingStep({
           >
             {t.common.cancel}
           </button>
+          {!!similarCount && (
+            <button
+              type="button"
+              onClick={() => handleConfirm(true)}
+              disabled={!complete}
+              className="rounded-lg border border-amber px-4 py-2 text-sm font-semibold text-amber hover:bg-amber/10 disabled:opacity-50"
+            >
+              {t.ims.pdfApplyToAllSimilar(similarCount)}
+            </button>
+          )}
           <button
             type="button"
-            onClick={handleConfirm}
+            onClick={() => handleConfirm(false)}
             disabled={!complete}
             className="rounded-lg bg-gradient-to-br from-amber to-[var(--amber-2)] px-4 py-2 text-sm font-semibold text-on-accent disabled:opacity-50"
           >
@@ -430,6 +448,7 @@ export function AddImsFileModal({
   const [manualSheets, setManualSheets] = useState<Record<string, RawSheet>>({});
   const [queue, setQueue] = useState<QueueItem[] | null>(null);
   const [queueIndex, setQueueIndex] = useState(0);
+  const [processed, setProcessed] = useState<Set<number>>(new Set());
   const [lastFixedMonth, setLastFixedMonth] = useState<string>("");
 
   useEffect(() => {
@@ -519,16 +538,45 @@ export function AddImsFileModal({
     if (items.length === 0) return;
     setQueue(items);
     setQueueIndex(0);
+    setProcessed(new Set());
+  }
+
+  function headersEqual(a: string[], b: string[]) {
+    return a.length === b.length && a.every((h, i) => h === b[i]);
   }
 
   // Awaited (not fire-and-forget) so two uploads from the same batch never
   // run concurrently — each one creates its own IMS file server-side, and
   // the shared "uploading" indicator only makes sense one at a time.
-  async function handleQueueConfirm(save: ImsFileSave) {
+  // applyToAllSimilar imports this same mapping into every other queued,
+  // not-yet-imported table with an identical header row too (a deck with
+  // one page per product, all built from the same template, routinely has
+  // several) — sparing a full mapping screen per one of those.
+  async function handleQueueConfirm(save: ImsFileSave, applyToAllSimilar: boolean) {
+    if (!queue) return;
     if (save.mapping.fixedMonth != null) setLastFixedMonth(String(save.mapping.fixedMonth));
+
+    const currentHeaders = queue[queueIndex].sheet.headers;
+    const similarIndices = applyToAllSimilar
+      ? queue
+          .map((_, i) => i)
+          .filter((i) => i !== queueIndex && !processed.has(i) && headersEqual(queue[i].sheet.headers, currentHeaders))
+      : [];
+
     await onConfirm(save);
-    if (queue && queueIndex + 1 < queue.length) {
-      setQueueIndex((i) => i + 1);
+    for (const i of similarIndices) {
+      await onConfirm({ ...save, displayName: queue[i].label, sheet: queue[i].sheet });
+    }
+
+    const nowProcessed = new Set(processed);
+    nowProcessed.add(queueIndex);
+    for (const i of similarIndices) nowProcessed.add(i);
+    setProcessed(nowProcessed);
+
+    let next = queueIndex + 1;
+    while (next < queue.length && nowProcessed.has(next)) next++;
+    if (next < queue.length) {
+      setQueueIndex(next);
     } else {
       onCancel();
     }
@@ -554,6 +602,9 @@ export function AddImsFileModal({
 
   if (queue) {
     const current = queue[queueIndex];
+    const similarCount = queue.filter(
+      (item, i) => i !== queueIndex && !processed.has(i) && headersEqual(item.sheet.headers, current.sheet.headers),
+    ).length;
     return (
       <MappingStep
         key={current.id}
@@ -562,6 +613,7 @@ export function AddImsFileModal({
         initialDisplayName={current.label}
         initialFixedMonth={lastFixedMonth}
         stepLabel={queue.length > 1 ? t.ims.pdfMappingStepOf(queueIndex + 1, queue.length) : undefined}
+        similarCount={similarCount}
         onCancel={onCancel}
         onBack={queueIndex === 0 ? () => setQueue(null) : undefined}
         onConfirm={handleQueueConfirm}
