@@ -179,6 +179,12 @@ export type Translations = {
     pdfTablesFound: (n: number) => string;
     pdfNoTablesAtAll: string;
     pdfBackToPages: string;
+    pdfSelectAll: string;
+    pdfSelectedCount: (n: number) => string;
+    pdfContinueWithSelected: (n: number) => string;
+    pdfMappingStepOf: (i: number, n: number) => string;
+    pdfManualAdded: string;
+    pdfRemove: string;
     save: string;
     uploadSuccess: (n: number) => string;
     deleteButton: string;
@@ -478,6 +484,12 @@ const en: Translations = {
     pdfTablesFound: (n) => `${n} table${n === 1 ? "" : "s"} found`,
     pdfNoTablesAtAll: "No tables could be confidently extracted from this PDF. Every page can still be entered manually below.",
     pdfBackToPages: "← Back to pages",
+    pdfSelectAll: "Select all tables",
+    pdfSelectedCount: (n) => `${n} table${n === 1 ? "" : "s"} selected`,
+    pdfContinueWithSelected: (n) => `Continue with ${n} table${n === 1 ? "" : "s"}`,
+    pdfMappingStepOf: (i, n) => `Table ${i} of ${n}`,
+    pdfManualAdded: "✓ Added to selection",
+    pdfRemove: "Remove",
     save: "Save",
     uploadSuccess: (n) => `Uploaded ${n} rows.`,
     deleteButton: "Delete",
@@ -792,6 +804,12 @@ const ar: Translations = {
     pdfTablesFound: (n) => `${n} جدول اتلاقى`,
     pdfNoTablesAtAll: "مقدرناش نستخرج أي جدول بثقة من ملف الـ PDF ده. تقدر تدخّل بيانات أي صفحة يدويًا تحت.",
     pdfBackToPages: "→ رجوع للصفحات",
+    pdfSelectAll: "اختار كل الجداول",
+    pdfSelectedCount: (n) => `${n} جدول متختار`,
+    pdfContinueWithSelected: (n) => `متابعة بـ ${n} جدول`,
+    pdfMappingStepOf: (i, n) => `جدول ${i} من ${n}`,
+    pdfManualAdded: "✓ اتضاف للاختيار",
+    pdfRemove: "إزالة",
     save: "حفظ",
     uploadSuccess: (n) => `تم رفع ${n} صف.`,
     deleteButton: "حذف",

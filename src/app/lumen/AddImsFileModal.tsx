@@ -86,13 +86,19 @@ function TablePreview({ table }: { table: ExtractedTable }) {
 function PdfPageCard({
   page,
   t,
-  onUseTable,
-  onUseManual,
+  isTableSelected,
+  onToggleTable,
+  manualAdded,
+  onAddManual,
+  onRemoveManual,
 }: {
   page: ExtractedPage;
   t: Translations;
-  onUseTable: (table: ExtractedTable) => void;
-  onUseManual: (sheet: RawSheet) => void;
+  isTableSelected: (tableIndex: number) => boolean;
+  onToggleTable: (tableIndex: number) => void;
+  manualAdded: boolean;
+  onAddManual: (sheet: RawSheet) => void;
+  onRemoveManual: () => void;
 }) {
   const [manualOpen, setManualOpen] = useState(false);
   const [manualText, setManualText] = useState("");
@@ -112,13 +118,15 @@ function PdfPageCard({
           {page.tables.map((table, ti) => (
             <div key={ti} className="mb-2">
               <TablePreview table={table} />
-              <button
-                type="button"
-                onClick={() => onUseTable(table)}
-                className="mt-1.5 rounded-lg border border-amber px-3 py-1 text-[11px] font-semibold text-amber hover:bg-amber/10"
-              >
+              <label className="mt-1.5 flex w-fit cursor-pointer items-center gap-1.5 text-[11px] font-semibold text-amber">
+                <input
+                  type="checkbox"
+                  checked={isTableSelected(ti)}
+                  onChange={() => onToggleTable(ti)}
+                  className="h-3.5 w-3.5 accent-[var(--amber)]"
+                />
                 {t.ims.pdfUseTable}
-              </button>
+              </label>
             </div>
           ))}
         </>
@@ -127,7 +135,21 @@ function PdfPageCard({
           <p className="mb-2 text-[11px] text-muted">
             {page.status === "image" ? t.ims.pdfPageImageWarning : t.ims.pdfPageNoTableWarning}
           </p>
-          {manualOpen ? (
+          {manualAdded ? (
+            <div className="flex items-center gap-2">
+              <p className="text-[11px] text-green">{t.ims.pdfManualAdded}</p>
+              <button
+                type="button"
+                onClick={() => {
+                  onRemoveManual();
+                  setManualOpen(false);
+                }}
+                className="text-[11px] text-muted hover:text-white"
+              >
+                {t.ims.pdfRemove}
+              </button>
+            </div>
+          ) : manualOpen ? (
             <div>
               <textarea
                 value={manualText}
@@ -142,7 +164,7 @@ function PdfPageCard({
                 type="button"
                 onClick={() => {
                   const parsed = parseManualEntry(manualText);
-                  if (parsed) onUseManual(parsed);
+                  if (parsed) onAddManual(parsed);
                 }}
                 disabled={!manualText.trim()}
                 className="mt-1.5 rounded-lg border border-amber px-3 py-1 text-[11px] font-semibold text-amber hover:bg-amber/10 disabled:opacity-40"
@@ -177,12 +199,16 @@ function PdfPageCard({
 function MappingStep({
   fileName,
   sheet,
+  initialDisplayName,
+  stepLabel,
   onCancel,
   onBack,
   onConfirm,
 }: {
   fileName: string;
   sheet: RawSheet;
+  initialDisplayName?: string;
+  stepLabel?: string;
   onCancel: () => void;
   onBack?: () => void;
   onConfirm: (save: ImsFileSave) => void;
@@ -191,7 +217,7 @@ function MappingStep({
 
   const guess = useMemo(() => guessImsMapping(sheet.headers), [sheet.headers]);
 
-  const [displayName, setDisplayName] = useState(fileName.replace(/\.[^./]+$/, ""));
+  const [displayName, setDisplayName] = useState(initialDisplayName ?? fileName.replace(/\.[^./]+$/, ""));
   const [mapping, setMapping] = useState<Record<Exclude<keyof ImsColumnMapping, "fixedMonth">, string | null>>({
     area: guess.area ?? null,
     product: guess.product ?? null,
@@ -266,6 +292,7 @@ function MappingStep({
             {t.ims.pdfBackToPages}
           </button>
         )}
+        {stepLabel && <div className="mb-1 text-[11px] font-semibold text-amber">{stepLabel}</div>}
         <h2 className="mb-1 truncate text-base font-semibold text-white">{t.ims.modalTitle(fileName)}</h2>
 
         <div className="space-y-3">
@@ -359,14 +386,19 @@ function MappingStep({
   );
 }
 
+type QueueItem = { id: string; sheet: RawSheet; label: string };
+
 // IMS-only upload entry point. Excel/CSV/ODS files were already read into
 // a RawSheet by the caller before this opens (sheet is non-null) and go
 // straight to the mapping step below. A PDF (sheet is null) is extracted
 // here instead, page by page — see pdfTableExtract.ts for why every page
 // is treated independently rather than assuming one layout for the whole
-// file — and the user picks which single extracted table (or manually
-// entered page) to import; that choice then flows into the exact same
-// mapping step a spreadsheet uses.
+// file. A real deck routinely has several usable tables across its pages
+// (product comparisons, monthly trends, per-brand breakdowns), so the user
+// checks off any number of them — or "select all" — and each checked table
+// is mapped and imported one after another (its own mapping step, since
+// different tables rarely share the same columns) rather than forcing a
+// full re-upload per table.
 export function AddImsFileModal({
   fileName,
   file,
@@ -378,7 +410,7 @@ export function AddImsFileModal({
   file: File;
   sheet: RawSheet | null;
   onCancel: () => void;
-  onConfirm: (save: ImsFileSave) => void;
+  onConfirm: (save: ImsFileSave) => void | Promise<void>;
 }) {
   const { t } = useLanguage();
   const isPdf = sheet === null;
@@ -386,7 +418,13 @@ export function AddImsFileModal({
   const [pdfPages, setPdfPages] = useState<ExtractedPage[] | null>(null);
   const [pdfError, setPdfError] = useState<string | null>(null);
   const [pdfLoading, setPdfLoading] = useState(isPdf);
-  const [selectedSheet, setSelectedSheet] = useState<RawSheet | null>(sheet);
+
+  // Keyed by "<pageNumber>:<tableIndex>" for an extracted table, or
+  // "<pageNumber>:manual" for a manually-typed page.
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [manualSheets, setManualSheets] = useState<Record<string, RawSheet>>({});
+  const [queue, setQueue] = useState<QueueItem[] | null>(null);
+  const [queueIndex, setQueueIndex] = useState(0);
 
   useEffect(() => {
     if (!isPdf) return;
@@ -411,19 +449,120 @@ export function AddImsFileModal({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isPdf]);
 
-  if (selectedSheet) {
+  const allTableIds = useMemo(
+    () => (pdfPages ?? []).flatMap((p) => (p.status === "ok" ? p.tables.map((_, ti) => `${p.pageNumber}:${ti}`) : [])),
+    [pdfPages],
+  );
+  const allSelected = allTableIds.length > 0 && allTableIds.every((id) => selectedIds.has(id));
+
+  function toggleSelectAll() {
+    setSelectedIds((prev) => {
+      if (allSelected) {
+        const next = new Set(prev);
+        for (const id of allTableIds) next.delete(id);
+        return next;
+      }
+      return new Set([...prev, ...allTableIds]);
+    });
+  }
+
+  function toggleTable(pageNumber: number, tableIndex: number) {
+    const id = `${pageNumber}:${tableIndex}`;
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }
+
+  function addManual(pageNumber: number, s: RawSheet) {
+    const id = `${pageNumber}:manual`;
+    setManualSheets((prev) => ({ ...prev, [id]: s }));
+    setSelectedIds((prev) => new Set(prev).add(id));
+  }
+
+  function removeManual(pageNumber: number) {
+    const id = `${pageNumber}:manual`;
+    setManualSheets((prev) => {
+      const next = { ...prev };
+      delete next[id];
+      return next;
+    });
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      next.delete(id);
+      return next;
+    });
+  }
+
+  function handleContinue() {
+    if (!pdfPages) return;
+    const items: QueueItem[] = [];
+    for (const page of pdfPages) {
+      if (page.status === "ok") {
+        page.tables.forEach((table, ti) => {
+          const id = `${page.pageNumber}:${ti}`;
+          if (selectedIds.has(id)) items.push({ id, sheet: tableToRawSheet(table), label: page.title });
+        });
+      }
+      const manualId = `${page.pageNumber}:manual`;
+      const manualSheet = manualSheets[manualId];
+      if (selectedIds.has(manualId) && manualSheet) items.push({ id: manualId, sheet: manualSheet, label: page.title });
+    }
+    if (items.length === 0) return;
+    setQueue(items);
+    setQueueIndex(0);
+  }
+
+  // Awaited (not fire-and-forget) so two uploads from the same batch never
+  // run concurrently — each one creates its own IMS file server-side, and
+  // the shared "uploading" indicator only makes sense one at a time.
+  async function handleQueueConfirm(save: ImsFileSave) {
+    await onConfirm(save);
+    if (queue && queueIndex + 1 < queue.length) {
+      setQueueIndex((i) => i + 1);
+    } else {
+      onCancel();
+    }
+  }
+
+  if (!isPdf) {
+    // Plain spreadsheet upload — a single known sheet, no page-picking or
+    // batching needed. Matches the original single-shot timing: fire the
+    // import and close right away, success/failure reported afterwards via
+    // the shared upload banner.
     return (
       <MappingStep
         fileName={fileName}
-        sheet={selectedSheet}
+        sheet={sheet}
         onCancel={onCancel}
-        onBack={isPdf ? () => setSelectedSheet(null) : undefined}
-        onConfirm={onConfirm}
+        onConfirm={(save) => {
+          onConfirm(save);
+          onCancel();
+        }}
+      />
+    );
+  }
+
+  if (queue) {
+    const current = queue[queueIndex];
+    return (
+      <MappingStep
+        key={current.id}
+        fileName={fileName}
+        sheet={current.sheet}
+        initialDisplayName={current.label}
+        stepLabel={queue.length > 1 ? t.ims.pdfMappingStepOf(queueIndex + 1, queue.length) : undefined}
+        onCancel={onCancel}
+        onBack={queueIndex === 0 ? () => setQueue(null) : undefined}
+        onConfirm={handleQueueConfirm}
       />
     );
   }
 
   const noTablesAtAll = pdfPages !== null && pdfPages.every((p) => p.tables.length === 0);
+  const selectedCount = selectedIds.size;
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
@@ -434,17 +573,32 @@ export function AddImsFileModal({
         {pdfError && <p className="text-sm text-red">{t.ims.pdfExtractFailed(pdfError)}</p>}
         {noTablesAtAll && <p className="mb-3 text-xs text-amber">{t.ims.pdfNoTablesAtAll}</p>}
 
+        {allTableIds.length > 1 && (
+          <label className="mb-3 flex w-fit cursor-pointer items-center gap-1.5 text-xs font-semibold text-white">
+            <input
+              type="checkbox"
+              checked={allSelected}
+              onChange={toggleSelectAll}
+              className="h-3.5 w-3.5 accent-[var(--amber)]"
+            />
+            {t.ims.pdfSelectAll}
+          </label>
+        )}
+
         {pdfPages?.map((page) => (
           <PdfPageCard
             key={page.pageNumber}
             page={page}
             t={t}
-            onUseTable={(table) => setSelectedSheet(tableToRawSheet(table))}
-            onUseManual={(s) => setSelectedSheet(s)}
+            isTableSelected={(ti) => selectedIds.has(`${page.pageNumber}:${ti}`)}
+            onToggleTable={(ti) => toggleTable(page.pageNumber, ti)}
+            manualAdded={selectedIds.has(`${page.pageNumber}:manual`)}
+            onAddManual={(s) => addManual(page.pageNumber, s)}
+            onRemoveManual={() => removeManual(page.pageNumber)}
           />
         ))}
 
-        <div className="mt-4 flex justify-end">
+        <div className="mt-4 flex items-center justify-between gap-2">
           <button
             type="button"
             onClick={onCancel}
@@ -452,6 +606,15 @@ export function AddImsFileModal({
           >
             {t.common.cancel}
           </button>
+          {selectedCount > 0 && (
+            <button
+              type="button"
+              onClick={handleContinue}
+              className="rounded-lg bg-gradient-to-br from-amber to-[var(--amber-2)] px-4 py-2 text-sm font-semibold text-on-accent"
+            >
+              {t.ims.pdfContinueWithSelected(selectedCount)}
+            </button>
+          )}
         </div>
       </div>
     </div>
