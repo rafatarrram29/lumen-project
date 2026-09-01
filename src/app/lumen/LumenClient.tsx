@@ -404,10 +404,13 @@ export default function LumenClient({
   ): Promise<{ inserted: number; warning?: string } | false> {
     const { rows, skipped } = applyColumnMapping(sheet, mapping);
     const monthsInFile = Array.from(new Set(rows.map((r) => r.month))).sort((a, b) => a - b);
+    const areasInFile = Array.from(new Set(rows.map((r) => r.area)));
 
-    const overlapRes = await fetch(
-      `/api/lumen/check-overlap?year=${year}&datasetId=${datasetId}&months=${monthsInFile.join(",")}`,
-    );
+    const overlapRes = await fetch("/api/lumen/check-overlap", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ year, datasetId, months: monthsInFile, areas: areasInFile }),
+    });
     const overlapJson = await overlapRes.json();
     if (!overlapRes.ok) throw new Error(overlapJson.error || "Could not check for existing months");
 
@@ -424,6 +427,28 @@ export default function LumenClient({
           `this file. This cannot be undone. Continue?`,
       );
       if (!proceed) return false;
+
+      // Replacing a month deletes EVERY area's rows for it, not just the
+      // ones this file has. An area that currently has data for these
+      // months but isn't in this file at all would lose that data
+      // permanently with nothing to replace it — a second, more explicit
+      // confirmation makes that impossible to blow through by accident
+      // (this is the exact shape of mistake that produced a real
+      // production data-loss incident: a smaller/test file silently
+      // wiping out other areas' real numbers for the same month).
+      const areasAtRisk: { area: string; rowCount: number; totalValue: number }[] = overlapJson.areasAtRisk ?? [];
+      if (areasAtRisk.length > 0) {
+        const list = areasAtRisk
+          .map((a) => `${a.area} (${formatNumber(a.totalValue)} across ${a.rowCount} row(s))`)
+          .join(", ");
+        const proceedAnyway = window.confirm(
+          `⚠️ WARNING — ${fileLabel} does NOT include these area(s), which currently have data for month(s) ` +
+            `${overlappingMonths.join(", ")}: ${list}. ` +
+            `Continuing will PERMANENTLY DELETE their data for these months, with nothing from this file to replace it. ` +
+            `Only continue if you really mean to remove those areas' data for these months.`,
+        );
+        if (!proceedAnyway) return false;
+      }
 
       const replaceRes = await fetch("/api/lumen/replace-months", {
         method: "POST",
