@@ -152,8 +152,10 @@ export function AreaChangeBars({
 
 export function FamilyChangeBars({
   families,
+  title,
 }: {
   families: Record<string, { pctChange: number | null }>;
+  title?: string;
 }) {
   const { t } = useLanguage();
   const rows: BarRow[] = Object.entries(families)
@@ -165,7 +167,7 @@ export function FamilyChangeBars({
   return (
     <div className="rounded-2xl border border-bdr bg-surf p-4 sm:p-5">
       <div className="mb-3 flex items-center justify-between gap-2">
-        <h2 className="text-sm font-semibold text-white">{t.dashboard.itemComparison}</h2>
+        <h2 className="text-sm font-semibold text-white">{title ?? t.dashboard.itemComparison}</h2>
         <Legend />
       </div>
       <DivergingBarChart rows={rows} maxRows={10} />

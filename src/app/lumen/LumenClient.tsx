@@ -70,6 +70,7 @@ export default function LumenClient({
   const [uploadMessage, setUploadMessage] = useState<string | null>(null);
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
   const [expandedItems, setExpandedItems] = useState<Set<string>>(new Set());
+  const [expandedReps, setExpandedReps] = useState<Set<string>>(new Set());
   const [pendingFile, setPendingFile] = useState<File | null>(null);
   const [pendingSheet, setPendingSheet] = useState<RawSheet | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -260,6 +261,15 @@ export default function LumenClient({
     });
   }
 
+  function toggleRep(rep: string) {
+    setExpandedReps((prev) => {
+      const next = new Set(prev);
+      if (next.has(rep)) next.delete(rep);
+      else next.add(rep);
+      return next;
+    });
+  }
+
   function findingsForItem(item: string): { areas: string[]; clusters: string[] } {
     const areasForItem: string[] = [];
     const clustersForItem: string[] = [];
@@ -446,6 +456,64 @@ export default function LumenClient({
           <div className="mb-5">
             <FamilyChangeBars families={report.familyChanges} />
           </div>
+
+          {report.hasReps && (
+            <div className="mb-5">
+              <FamilyChangeBars families={report.repChanges} title={t.dashboard.repComparison} />
+            </div>
+          )}
+
+          {report.hasReps && (
+            <div className="mb-5 rounded-2xl border border-bdr bg-surf p-4 sm:p-5">
+              <h3 className="mb-2 text-xs font-semibold text-white">{t.dashboard.byRep}</h3>
+              <div className="space-y-2">
+                {Object.entries(report.repChanges)
+                  .sort((a, b) => (a[1].pctChange ?? Infinity) - (b[1].pctChange ?? Infinity))
+                  .map(([rep, rc]) => {
+                    const repOpen = expandedReps.has(rep);
+                    const repSeries = report.repMonthlySeries[rep] ?? [];
+                    return (
+                      <div key={rep} className="text-xs">
+                        <button
+                          onClick={() => toggleRep(rep)}
+                          className="flex w-full items-center gap-2 rounded-lg text-start transition-colors hover:bg-surf2/60"
+                        >
+                          <span className="min-w-0 flex-1 truncate text-muted" dir="auto">{rep}</span>
+                          <span
+                            className={`shrink-0 font-mono ${
+                              rc.pctChange !== null && rc.pctChange < 0 ? "text-red" : "text-green"
+                            }`}
+                          >
+                            {rc.pctChange !== null && rc.pctChange > 0 ? "+" : ""}
+                            {rc.pctChange ?? "—"}
+                            {rc.pctChange !== null ? "%" : ""}
+                          </span>
+                          <span className="shrink-0 text-[10px] text-muted">{repOpen ? t.common.hide : t.common.details}</span>
+                        </button>
+                        <div className="ps-4 font-mono text-[11px] break-words text-muted">
+                          {t.common.month(report.comparedToMonth)}: {formatNumber(rc.prevValue)} →{" "}
+                          {t.common.month(report.latestMonth)}: {formatNumber(rc.currValue)}
+                        </div>
+                        {repOpen && repSeries.length >= 2 && (
+                          <div className="ms-4 mt-2 space-y-1 rounded-lg bg-surf2/60 p-3">
+                            <div className="mb-1 text-[11px] font-semibold text-white">
+                              {t.dashboard.trendLastMonths(repSeries.length)}
+                            </div>
+                            <TrendChart
+                              areaLabel={rep}
+                              areaSeries={repSeries}
+                              clusterSeries={report.repAverageSeries}
+                              compareShortLabel={t.chart.repAvg}
+                              compareLabel={t.chart.allRepsAverage}
+                            />
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+              </div>
+            </div>
+          )}
 
           <h2 className="mb-3 text-sm font-semibold text-white">{t.dashboard.allAreas}</h2>
           <div className="space-y-3">

@@ -119,13 +119,17 @@ export type Translations = {
     noDatasets: string;
     couldNotLoad: string;
     deleteDatasetConfirm: (name: string) => string;
+    byRep: string;
+    repComparison: string;
   };
   chart: {
-    indexedCaption: (areaLabel: string) => string;
+    indexedCaption: (areaLabel: string, compareLabel: string) => string;
     thisArea: string;
     clusterAvg: string;
     clusterAverage: string;
     idx: string;
+    repAvg: string;
+    allRepsAverage: string;
   };
   findings: {
     inCluster: (cluster: string) => string;
@@ -262,14 +266,18 @@ const en: Translations = {
     couldNotLoad: "Could not load the report.",
     deleteDatasetConfirm: (name) =>
       `Delete "${name}"? This permanently removes all of its uploaded data. This cannot be undone.`,
+    byRep: "By rep",
+    repComparison: "Rep comparison",
   },
   chart: {
-    indexedCaption: (areaLabel) =>
-      `Indexed to 100 at the first month shown, so ${areaLabel} and the cluster average are comparable regardless of scale.`,
+    indexedCaption: (areaLabel, compareLabel) =>
+      `Indexed to 100 at the first month shown, so ${areaLabel} and the ${compareLabel.toLowerCase()} are comparable regardless of scale.`,
     thisArea: "This area:",
     clusterAvg: "Cluster avg:",
     clusterAverage: "Cluster average",
     idx: "(idx)",
+    repAvg: "Rep avg:",
+    allRepsAverage: "Average across reps",
   },
   findings: {
     inCluster: (cluster) => ` in ${cluster}`,
@@ -408,14 +416,18 @@ const ar: Translations = {
     couldNotLoad: "معرفناش نجيب التقرير.",
     deleteDatasetConfirm: (name) =>
       `حذف "${name}"؟ ده هيمسح كل البيانات اللي اترفعت فيها نهائيًا. الخطوة دي مينفعش نرجع فيها.`,
+    byRep: "حسب المندوب",
+    repComparison: "مقارنة المناديب",
   },
   chart: {
-    indexedCaption: (areaLabel) =>
-      `الأرقام محسوبة كمؤشر يبدأ من 100 في أول شهر، عشان ${areaLabel} ومتوسط الكلستر يبقوا قابلين للمقارنة مهما اختلف حجم الأرقام.`,
+    indexedCaption: (areaLabel, compareLabel) =>
+      `الأرقام محسوبة كمؤشر يبدأ من 100 في أول شهر، عشان ${areaLabel} و${compareLabel} يبقوا قابلين للمقارنة مهما اختلف حجم الأرقام.`,
     thisArea: "المنطقة دي:",
     clusterAvg: "متوسط الكلستر:",
     clusterAverage: "متوسط الكلستر",
     idx: "(مؤشر)",
+    repAvg: "متوسط المناديب:",
+    allRepsAverage: "متوسط كل المناديب",
   },
   findings: {
     inCluster: (cluster) => ` في ${cluster}`,

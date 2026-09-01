@@ -28,7 +28,7 @@ export async function GET(request: Request) {
   const { data, error } = await fetchAllRows((from, to) =>
     supabase
       .from("lumen_sales_records")
-      .select("area, family, sales_value, sales_qty, month, cluster")
+      .select("area, family, sales_value, sales_qty, month, cluster, rep")
       .eq("year", year)
       .eq("dataset_id", datasetId)
       .range(from, to),
@@ -45,6 +45,7 @@ export async function GET(request: Request) {
     salesQty: r.sales_qty !== null ? Number(r.sales_qty) : null,
     month: Number(r.month),
     cluster: r.cluster as string | null,
+    rep: r.rep as string | null,
   }));
 
   const report = buildReport(records, year);
