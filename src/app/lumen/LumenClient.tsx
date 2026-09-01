@@ -1023,6 +1023,8 @@ export default function LumenClient({
   return (
     <div className="flex min-h-screen flex-col bg-bg sm:flex-row">
       <Sidebar userEmail={userEmail}>
+        {activeTab === "sales" && (
+        <>
         <input
           ref={fileInputRef}
           type="file"
@@ -1088,6 +1090,8 @@ export default function LumenClient({
         >
           {loadingReport ? t.sidebar.loading : t.sidebar.analyze}
         </button>
+        </>
+        )}
 
         {datasets.length > 0 && (
           <div className="mt-4 border-t border-bdr pt-4">
@@ -1136,7 +1140,7 @@ export default function LumenClient({
           </div>
         )}
 
-        {selectedDatasetId && (
+        {activeTab === "sales" && selectedDatasetId && (
           <LinkedFilesPanel
             files={linkedFiles}
             disabled={uploading}
@@ -1147,7 +1151,7 @@ export default function LumenClient({
           />
         )}
 
-        {selectedDatasetId && (
+        {activeTab === "sales" && selectedDatasetId && (
           <button
             onClick={() => setShowCorrectionLog(true)}
             className="mt-4 w-full rounded-lg border border-bdr px-3 py-2 text-xs text-muted transition-colors hover:border-amber hover:text-white"
