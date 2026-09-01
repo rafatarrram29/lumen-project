@@ -2,9 +2,9 @@ import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import type { JoinKey } from "@/lib/lumen/linkedFiles";
 
-const VALID_KEYS: JoinKey[] = ["area", "rep", "cluster", "month"];
+const VALID_KEYS: JoinKey[] = ["area", "rep", "line", "month"];
 
-// Corrects which already-stored dimensions (area/rep/cluster/month) this
+// Corrects which already-stored dimensions (area/rep/line/month) this
 // file is matched by, without touching its rows — safe and instant,
 // because those columns were already extracted from the file at upload
 // time. Fixing which SOURCE column feeds one of those dimensions instead

@@ -134,7 +134,7 @@ export type Translations = {
     joinKeysLabel: string;
     joinKeyArea: string;
     joinKeyRep: string;
-    joinKeyCluster: string;
+    joinKeyLine: string;
     joinKeyMonth: string;
     joinKeysHint: string;
     atLeastOneJoinKey: string;
@@ -176,13 +176,13 @@ export type Translations = {
     fieldQty: string;
     fieldMonth: string;
     fieldRep: string;
-    fieldCluster: string;
+    fieldLine: string;
   };
   dashboard: {
     areasAnalyzed: string;
     inDecline: string;
     pattern: string;
-    clusterWide: string;
+    lineWide: string;
     localized: string;
     stable: string;
     decisionsRaised: string;
@@ -198,11 +198,11 @@ export type Translations = {
     moreInList: (n: number) => string;
     allAreas: string;
     noChangeThisMonth: string;
-    partOfClusterDrop: string;
+    partOfLineDrop: string;
     valueLabel: string;
     quantityLabel: string;
-    areaMovedVs: (pct: number, clusterLabel: string, clusterPct: number) => string;
-    clusterWord: string;
+    areaMovedVs: (pct: number, lineLabel: string, linePct: number) => string;
+    lineWord: string;
     decliningStreak: string;
     yes: string;
     no: string;
@@ -215,8 +215,8 @@ export type Translations = {
     top: string;
     lowest: string;
     rootCauseFor: string;
-    theClusterWideDrop: string;
-    theClusterWideDropIn: (c: string) => string;
+    theLineWideDrop: string;
+    theLineWideDropIn: (c: string) => string;
     noDatasets: string;
     couldNotLoad: string;
     deleteDatasetConfirm: (name: string) => string;
@@ -227,15 +227,15 @@ export type Translations = {
   chart: {
     indexedCaption: (areaLabel: string, compareLabel: string) => string;
     thisArea: string;
-    clusterAvg: string;
-    clusterAverage: string;
+    lineAvg: string;
+    lineAverage: string;
     idx: string;
     repAvg: string;
     allRepsAverage: string;
   };
   findings: {
-    inCluster: (cluster: string) => string;
-    systemicSummary: (dropping: number, total: number, clusterPhrase: string, prev: number, latest: number) => string;
+    inLine: (line: string) => string;
+    systemicSummary: (dropping: number, total: number, linePhrase: string, prev: number, latest: number) => string;
     systemicDecision: (family: string) => string;
     localSummary: (area: string, pct: number) => string;
     localDecision: (family: string, area: string) => string;
@@ -380,10 +380,10 @@ const en: Translations = {
     joinKeysLabel: "Link this file by",
     joinKeyArea: "Area",
     joinKeyRep: "Rep",
-    joinKeyCluster: "Cluster",
+    joinKeyLine: "Line",
     joinKeyMonth: "Month",
     joinKeysHint: "Pick which columns connect this file to the same areas and months as your sales data.",
-    atLeastOneJoinKey: "Month must be linked, along with at least one of Area, Rep, or Cluster.",
+    atLeastOneJoinKey: "Month must be linked, along with at least one of Area, Rep, or Line.",
     replaceButton: "Replace",
     deleteButton: "Delete",
     deleteConfirm: (name) => `Delete "${name}"? This permanently removes all of its data. This cannot be undone.`,
@@ -423,18 +423,18 @@ const en: Translations = {
     fieldQty: "Quantity",
     fieldMonth: "Month",
     fieldRep: "Rep",
-    fieldCluster: "Cluster",
+    fieldLine: "Line",
   },
   dashboard: {
     areasAnalyzed: "Areas analyzed",
     inDecline: "In decline",
     pattern: "Pattern",
-    clusterWide: "Cluster-wide",
+    lineWide: "Line-wide",
     localized: "Localized",
     stable: "Stable",
     decisionsRaised: "Decisions raised",
     comparingMonth: (a, b) => `Comparing month ${a} → ${b}`,
-    systemicDetected: "cluster-wide drop detected",
+    systemicDetected: "line-wide drop detected",
     noSystemicPattern: "no systemic pattern",
     decision: "Decision:",
     biggestMovers: "Biggest movers",
@@ -445,12 +445,12 @@ const en: Translations = {
     moreInList: (n) => `+${n} more in the list below.`,
     allAreas: "All areas",
     noChangeThisMonth: "No significant change this month.",
-    partOfClusterDrop: "Part of the cluster-wide drop — see the systemic finding above.",
+    partOfLineDrop: "Part of the line-wide drop — see the systemic finding above.",
     valueLabel: "Value:",
     quantityLabel: "Quantity:",
-    areaMovedVs: (pct, clusterLabel, clusterPct) =>
-      `This area moved ${pct}% vs the ${clusterLabel} average of ${clusterPct}% over the same month.`,
-    clusterWord: "cluster",
+    areaMovedVs: (pct, lineLabel, linePct) =>
+      `This area moved ${pct}% vs the ${lineLabel} average of ${linePct}% over the same month.`,
+    lineWord: "line",
     decliningStreak: "3-month declining streak",
     yes: "Yes",
     no: "No",
@@ -464,8 +464,8 @@ const en: Translations = {
     top: "Top",
     lowest: "Lowest",
     rootCauseFor: "Root cause for:",
-    theClusterWideDrop: "the cluster-wide drop",
-    theClusterWideDropIn: (c) => `the cluster-wide drop in ${c}`,
+    theLineWideDrop: "the line-wide drop",
+    theLineWideDropIn: (c) => `the line-wide drop in ${c}`,
     noDatasets: "No datasets yet — upload a file to get started.",
     couldNotLoad: "Could not load the report.",
     deleteDatasetConfirm: (name) =>
@@ -478,21 +478,21 @@ const en: Translations = {
     indexedCaption: (areaLabel, compareLabel) =>
       `Indexed to 100 at the first month shown, so ${areaLabel} and the ${compareLabel.toLowerCase()} are comparable regardless of scale.`,
     thisArea: "This area:",
-    clusterAvg: "Cluster avg:",
-    clusterAverage: "Cluster average",
+    lineAvg: "Line avg:",
+    lineAverage: "Line average",
     idx: "(idx)",
     repAvg: "Rep avg:",
     allRepsAverage: "Average across reps",
   },
   findings: {
-    inCluster: (cluster) => ` in ${cluster}`,
-    systemicSummary: (dropping, total, clusterPhrase, prev, latest) =>
-      `${dropping} of ${total} areas${clusterPhrase} dropped together from month ${prev} to ${latest} — this is a cluster-wide move, not an individual area failing.`,
+    inLine: (line) => ` in ${line}`,
+    systemicSummary: (dropping, total, linePhrase, prev, latest) =>
+      `${dropping} of ${total} areas${linePhrase} dropped together from month ${prev} to ${latest} — this is a line-wide move, not an individual area failing.`,
     systemicDecision: (family) =>
       `Investigate ${family} specifically (stock availability, pricing change, competitor activity) before reviewing any single area's performance.`,
-    localSummary: (area, pct) => `${area} dropped ${pct}% and did not move with the rest of the cluster.`,
+    localSummary: (area, pct) => `${area} dropped ${pct}% and did not move with the rest of the line.`,
     localDecision: (family, area) => `Review the ${family} visit plan and customer coverage specifically in ${area}.`,
-    transferSummary: (family, pct, area) => `${family} grew ${pct}% in ${area} while the cluster overall declined.`,
+    transferSummary: (family, pct, area) => `${family} grew ${pct}% in ${area} while the line overall declined.`,
     transferDecision: (family, area) =>
       `Review what worked for ${family} in ${area} and check whether the same approach applies to similar customers in other areas.`,
   },
@@ -632,10 +632,10 @@ const ar: Translations = {
     joinKeysLabel: "اربط الملف ده عن طريق",
     joinKeyArea: "المنطقة",
     joinKeyRep: "المندوب",
-    joinKeyCluster: "الكلستر",
+    joinKeyLine: "الخط",
     joinKeyMonth: "الشهر",
     joinKeysHint: "اختار الأعمدة اللي هتوصل الملف ده بنفس المناطق والشهور بتاعة بيانات المبيعات.",
-    atLeastOneJoinKey: "الشهر لازم يتربط، بالإضافة لواحد على الأقل من المنطقة أو المندوب أو الكلستر.",
+    atLeastOneJoinKey: "الشهر لازم يتربط، بالإضافة لواحد على الأقل من المنطقة أو المندوب أو الخط.",
     replaceButton: "استبدال",
     deleteButton: "حذف",
     deleteConfirm: (name) => `حذف "${name}"؟ ده هيمسح كل بياناته نهائيًا. الخطوة دي مينفعش نرجع فيها.`,
@@ -675,13 +675,13 @@ const ar: Translations = {
     fieldQty: "الكمية",
     fieldMonth: "الشهر",
     fieldRep: "المندوب",
-    fieldCluster: "الكلستر",
+    fieldLine: "الخط",
   },
   dashboard: {
     areasAnalyzed: "المناطق المحللة",
     inDecline: "في انخفاض",
     pattern: "النمط",
-    clusterWide: "على مستوى الكلستر",
+    lineWide: "على مستوى الخط",
     localized: "محلي",
     stable: "مستقر",
     decisionsRaised: "القرارات المطروحة",
@@ -697,12 +697,12 @@ const ar: Translations = {
     moreInList: (n) => `+${n} كمان في القائمة تحت.`,
     allAreas: "كل المناطق",
     noChangeThisMonth: "مفيش تغيير ملحوظ الشهر ده.",
-    partOfClusterDrop: "جزء من الانخفاض الجماعي — شوف النتيجة الرئيسية فوق.",
+    partOfLineDrop: "جزء من الانخفاض الجماعي — شوف النتيجة الرئيسية فوق.",
     valueLabel: "القيمة:",
     quantityLabel: "الكمية:",
-    areaMovedVs: (pct, clusterLabel, clusterPct) =>
-      `المنطقة دي تحركت ${pct}% مقابل متوسط ${clusterLabel} اللي كان ${clusterPct}% في نفس الشهر.`,
-    clusterWord: "الكلستر",
+    areaMovedVs: (pct, lineLabel, linePct) =>
+      `المنطقة دي تحركت ${pct}% مقابل متوسط ${lineLabel} اللي كان ${linePct}% في نفس الشهر.`,
+    lineWord: "الخط",
     decliningStreak: "انخفاض متواصل لـ 3 شهور",
     yes: "نعم",
     no: "لا",
@@ -716,8 +716,8 @@ const ar: Translations = {
     top: "الأعلى",
     lowest: "الأقل",
     rootCauseFor: "سبب الانخفاض في:",
-    theClusterWideDrop: "الانخفاض الجماعي",
-    theClusterWideDropIn: (c) => `الانخفاض الجماعي في ${c}`,
+    theLineWideDrop: "الانخفاض الجماعي",
+    theLineWideDropIn: (c) => `الانخفاض الجماعي في ${c}`,
     noDatasets: "لسه مفيش مجموعات بيانات — ارفع ملف عشان تبدأ.",
     couldNotLoad: "معرفناش نجيب التقرير.",
     deleteDatasetConfirm: (name) =>
@@ -730,21 +730,21 @@ const ar: Translations = {
     indexedCaption: (areaLabel, compareLabel) =>
       `الأرقام محسوبة كمؤشر يبدأ من 100 في أول شهر، عشان ${areaLabel} و${compareLabel} يبقوا قابلين للمقارنة مهما اختلف حجم الأرقام.`,
     thisArea: "المنطقة دي:",
-    clusterAvg: "متوسط الكلستر:",
-    clusterAverage: "متوسط الكلستر",
+    lineAvg: "متوسط الخط:",
+    lineAverage: "متوسط الخط",
     idx: "(مؤشر)",
     repAvg: "متوسط المناديب:",
     allRepsAverage: "متوسط كل المناديب",
   },
   findings: {
-    inCluster: (cluster) => ` في ${cluster}`,
-    systemicSummary: (dropping, total, clusterPhrase, prev, latest) =>
-      `${dropping} من ${total} مناطق${clusterPhrase} نزلوا مع بعض من شهر ${prev} لشهر ${latest} — ده تحرك جماعي، مش فشل منطقة واحدة بس.`,
+    inLine: (line) => ` في ${line}`,
+    systemicSummary: (dropping, total, linePhrase, prev, latest) =>
+      `${dropping} من ${total} مناطق${linePhrase} نزلوا مع بعض من شهر ${prev} لشهر ${latest} — ده تحرك جماعي، مش فشل منطقة واحدة بس.`,
     systemicDecision: (family) =>
       `افحص ${family} تحديدًا (توافر المخزون، تغيير السعر، نشاط المنافسين) قبل ما تراجع أداء أي منطقة لوحدها.`,
-    localSummary: (area, pct) => `${area} نزلت ${pct}% ومتحركتش مع باقي الكلستر.`,
+    localSummary: (area, pct) => `${area} نزلت ${pct}% ومتحركتش مع باقي الخط.`,
     localDecision: (family, area) => `راجع خطة زيارات ${family} وتغطية العملاء تحديدًا في ${area}.`,
-    transferSummary: (family, pct, area) => `${family} زاد ${pct}% في ${area} في حين إن الكلستر ككل نزل.`,
+    transferSummary: (family, pct, area) => `${family} زاد ${pct}% في ${area} في حين إن الخط ككل نزل.`,
     transferDecision: (family, area) =>
       `راجع إيه اللي نجح مع ${family} في ${area} وشوف لو نفس الأسلوب ينفع مع عملاء مشابهين في مناطق تانية.`,
   },

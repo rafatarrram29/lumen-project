@@ -112,7 +112,7 @@ function buildSummaryBlock(ctx: ExportContext, rtl: boolean): HTMLDivElement {
   b.appendChild(div({ fontSize: "20px", fontWeight: "700", color: COLORS.white, marginBottom: "14px" }, [t.export.groupSummary]));
   const areasCount = Object.keys(report.areas).length;
   const inDecline = Object.values(report.areas).filter((d) => d.pctChange !== null && d.pctChange < 0).length;
-  const pattern = report.isSystemicDrop ? t.dashboard.clusterWide : areasCount > 0 ? t.dashboard.localized : t.dashboard.stable;
+  const pattern = report.isSystemicDrop ? t.dashboard.lineWide : areasCount > 0 ? t.dashboard.localized : t.dashboard.stable;
   const grid = div({ display: "flex", flexWrap: "wrap", gap: "12px" }, [
     statTile(t.dashboard.areasAnalyzed, String(areasCount), COLORS.white),
     statTile(t.dashboard.inDecline, String(inDecline), COLORS.red),
@@ -126,7 +126,7 @@ function buildSummaryBlock(ctx: ExportContext, rtl: boolean): HTMLDivElement {
 function buildDecisionBlock(finding: SuccessReport["findings"][number], ctx: ExportContext, rtl: boolean): HTMLDivElement {
   const { t, report } = ctx;
   const b = makeBlock(rtl);
-  const heading = finding.type === "systemic_drop" ? `${t.export.itemSystemic}: ${finding.cluster}` : t.export.itemDecision;
+  const heading = finding.type === "systemic_drop" ? `${t.export.itemSystemic}: ${finding.line}` : t.export.itemDecision;
   b.appendChild(div({ fontSize: "16px", fontWeight: "700", color: COLORS.white, marginBottom: "8px" }, [heading]));
   b.appendChild(div({ fontSize: "13px", color: COLORS.white, marginBottom: "10px", lineHeight: "1.5" }, [findingSummary(finding, report, t)]));
   b.appendChild(
@@ -139,7 +139,7 @@ function buildDecisionBlock(finding: SuccessReport["findings"][number], ctx: Exp
 }
 
 // A month-by-month numbers table — one row per series (e.g. the area vs.
-// its cluster average, or a single item's own trend). Always built
+// its line average, or a single item's own trend). Always built
 // straight from report data, never from what happens to be rendered on
 // screen, so it's identical whether the matching dashboard card was
 // expanded or collapsed when Export was clicked.
@@ -262,10 +262,10 @@ function buildAreaBlock(area: string, ctx: ExportContext, rtl: boolean): HTMLDiv
     const series: { label: string; values: (number | null)[] }[] = [
       { label: area, values: d.monthlySeries.map((s) => s.value) },
     ];
-    const clusterSummary = report.hasClusters ? report.clusters[d.cluster] : undefined;
-    if (clusterSummary) {
-      const byMonth = new Map(clusterSummary.monthlySeries.map((s) => [s.month, s.avgValue]));
-      series.push({ label: t.dashboard.clusterWord, values: months.map((m) => byMonth.get(m) ?? null) });
+    const lineSummary = report.hasLines ? report.lines[d.line] : undefined;
+    if (lineSummary) {
+      const byMonth = new Map(lineSummary.monthlySeries.map((s) => [s.month, s.avgValue]));
+      series.push({ label: t.dashboard.lineWord, values: months.map((m) => byMonth.get(m) ?? null) });
     }
     blocks.push(buildMonthlyTrendBlock(t.dashboard.trendLastMonths(months.length), months, series, t, rtl));
   }
@@ -302,8 +302,8 @@ function buildItemBlock(family: string, ctx: ExportContext, rtl: boolean): HTMLD
       `${t.common.month(report.comparedToMonth)}: ${formatNum(fc.prevValue)} -> ${t.common.month(report.latestMonth)}: ${formatNum(fc.currValue)}`,
     ]),
   );
-  const { areas: rootCauseAreas, clusters: rootCauseClusters } = findingsForItem(report, family);
-  const rootCause = rootCauseText(t, rootCauseAreas, rootCauseClusters);
+  const { areas: rootCauseAreas, lines: rootCauseLines } = findingsForItem(report, family);
+  const rootCause = rootCauseText(t, rootCauseAreas, rootCauseLines);
   if (rootCause) {
     b.appendChild(div({ fontSize: "12px", color: COLORS.amber, marginTop: "10px" }, [rootCause]));
   }

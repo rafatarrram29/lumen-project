@@ -43,7 +43,7 @@ export default async function LumenPage() {
       fetchAllRows((from, to) =>
         supabase
           .from("lumen_sales_records")
-          .select("area, family, sales_value, sales_qty, month, cluster, rep")
+          .select("area, family, sales_value, sales_qty, month, line, rep")
           .eq("year", year)
           .eq("dataset_id", initialDatasetId)
           .range(from, to),
@@ -64,7 +64,7 @@ export default async function LumenPage() {
       salesValue: Number(r.sales_value),
       salesQty: r.sales_qty !== null ? Number(r.sales_qty) : null,
       month: Number(r.month),
-      cluster: r.cluster as string | null,
+      line: r.line as string | null,
       rep: r.rep as string | null,
     }));
 

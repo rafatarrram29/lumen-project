@@ -73,7 +73,7 @@ export async function exportToPptx(ctx: ExportContext): Promise<void> {
       [t.dashboard.inDecline, String(inDecline)],
       [
         t.dashboard.pattern,
-        report.isSystemicDrop ? t.dashboard.clusterWide : Object.keys(report.areas).length > 0 ? t.dashboard.localized : t.dashboard.stable,
+        report.isSystemicDrop ? t.dashboard.lineWide : Object.keys(report.areas).length > 0 ? t.dashboard.localized : t.dashboard.stable,
       ],
       [t.dashboard.decisionsRaised, String(report.findings.length)],
     ];
@@ -93,7 +93,7 @@ export async function exportToPptx(ctx: ExportContext): Promise<void> {
     if (!isSelected(ctx, `decision:${i}`)) return;
     const slide = pptx.addSlide();
     addBackground(slide);
-    const heading = f.type === "systemic_drop" ? `${t.export.itemSystemic}: ${f.cluster}` : `${t.export.itemDecision}`;
+    const heading = f.type === "systemic_drop" ? `${t.export.itemSystemic}: ${f.line}` : `${t.export.itemDecision}`;
     slide.addText(heading, { x: 0.5, y: 0.3, w: 9, h: 0.5, fontSize: 20, bold: true, color: WHITE, align });
     slide.addText(findingSummary(f, report, t), {
       x: 0.5,
@@ -170,8 +170,8 @@ export async function exportToPptx(ctx: ExportContext): Promise<void> {
     // Full trend, straight from report data — independent of whether this
     // area's card happened to be expanded on screen.
     if (d.monthlySeries.length >= 2) {
-      const clusterSummary = report.hasClusters ? report.clusters[d.cluster] : undefined;
-      addTrendSlide(pptx, t.dashboard.trendLastMonths(d.monthlySeries.length), area, d.monthlySeries, clusterSummary?.monthlySeries, t, align);
+      const lineSummary = report.hasLines ? report.lines[d.line] : undefined;
+      addTrendSlide(pptx, t.dashboard.trendLastMonths(d.monthlySeries.length), area, d.monthlySeries, lineSummary?.monthlySeries, t, align);
     }
 
     // Full by-item breakdown for this area — every family, not just the
@@ -211,8 +211,8 @@ export async function exportToPptx(ctx: ExportContext): Promise<void> {
       { x: 0.5, y: 1.6, w: 9, h: 0.4, fontSize: 14, color: WHITE, align },
     );
 
-    const { areas: rootCauseAreas, clusters: rootCauseClusters } = findingsForItem(report, family);
-    const rootCause = rootCauseText(t, rootCauseAreas, rootCauseClusters);
+    const { areas: rootCauseAreas, lines: rootCauseLines } = findingsForItem(report, family);
+    const rootCause = rootCauseText(t, rootCauseAreas, rootCauseLines);
     if (rootCause) {
       slide.addText(rootCause, { x: 0.5, y: 2.1, w: 9, h: 0.6, fontSize: 12, color: AMBER, align, valign: "top" });
     }
@@ -357,7 +357,7 @@ function addBarChartSlide(
 }
 
 // A native line-chart slide for a monthly trend — the area (or item) vs.
-// its cluster average, when there is one. Built straight from report
+// its line average, when there is one. Built straight from report
 // data, so it's identical whether the matching dashboard card was
 // expanded or collapsed when Export was clicked.
 function addTrendSlide(
@@ -365,7 +365,7 @@ function addTrendSlide(
   title: string,
   seriesLabel: string,
   series: { month: number; value: number }[],
-  clusterSeries: { month: number; avgValue: number }[] | undefined,
+  lineSeries: { month: number; avgValue: number }[] | undefined,
   t: Translations,
   align: "left" | "right",
 ) {
@@ -375,9 +375,9 @@ function addTrendSlide(
 
   const labels = series.map((s) => t.common.month(s.month));
   const data: PptxGenJS.OptsChartData[] = [{ name: seriesLabel, labels, values: series.map((s) => s.value) }];
-  if (clusterSeries) {
-    const byMonth = new Map(clusterSeries.map((s) => [s.month, s.avgValue]));
-    data.push({ name: t.dashboard.clusterWord, labels, values: series.map((s) => byMonth.get(s.month) ?? 0) });
+  if (lineSeries) {
+    const byMonth = new Map(lineSeries.map((s) => [s.month, s.avgValue]));
+    data.push({ name: t.dashboard.lineWord, labels, values: series.map((s) => byMonth.get(s.month) ?? 0) });
   }
 
   slide.addChart(pptx.ChartType.line, data, {
@@ -388,7 +388,7 @@ function addTrendSlide(
     chartColors: [AMBER, MUTED],
     valAxisLabelColor: MUTED,
     catAxisLabelColor: MUTED,
-    showLegend: clusterSeries !== undefined,
+    showLegend: lineSeries !== undefined,
     legendColor: MUTED,
     lineDataSymbol: "circle",
     plotArea: { fill: { color: BG } },

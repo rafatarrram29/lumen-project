@@ -5,9 +5,9 @@ import { createClient } from "@/lib/supabase/server";
 // normally exactly one raw lumen_sales_records row behind that figure, but
 // if more than one contributed to the same total (e.g. split across reps),
 // the new total is redistributed across all of them in proportion to their
-// current share, so nothing downstream that reads per-row rep/cluster data
+// current share, so nothing downstream that reads per-row rep/line data
 // silently loses it. Every level that depends on these rows (area totals,
-// cluster averages, targets, rep leaderboard, findings) is derived fresh
+// line averages, targets, rep leaderboard, findings) is derived fresh
 // from lumen_sales_records on every /api/lumen/analyze call, so nothing
 // else needs to be told about this edit — the next report fetch already
 // reflects it.

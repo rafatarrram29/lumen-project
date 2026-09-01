@@ -1,4 +1,4 @@
-import { DEFAULT_CLUSTER, type Finding, type Report } from "@/lib/lumen/engine";
+import { DEFAULT_LINE, type Finding, type Report } from "@/lib/lumen/engine";
 import type { Translations } from "./translations";
 
 type SuccessReport = Extract<Report, { findings: Finding[] }>;
@@ -8,8 +8,8 @@ type SuccessReport = Extract<Report, { findings: Finding[] }>;
 // the same underlying structured fields via these helpers instead.
 export function findingSummary(f: Finding, report: SuccessReport, t: Translations): string {
   if (f.type === "systemic_drop") {
-    const clusterPhrase = f.cluster === DEFAULT_CLUSTER ? "" : t.findings.inCluster(f.cluster);
-    return t.findings.systemicSummary(f.droppingCount, f.totalAreas, clusterPhrase, report.comparedToMonth, report.latestMonth);
+    const linePhrase = f.line === DEFAULT_LINE ? "" : t.findings.inLine(f.line);
+    return t.findings.systemicSummary(f.droppingCount, f.totalAreas, linePhrase, report.comparedToMonth, report.latestMonth);
   }
   if (f.type === "local_drop") {
     return t.findings.localSummary(f.area, f.pctChange ?? 0);

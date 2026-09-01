@@ -27,7 +27,7 @@ export async function GET(request: Request) {
   const { data, error } = await fetchAllRows((from, to) =>
     supabase
       .from("lumen_dataset_records")
-      .select("id, file_id, area, rep, cluster, month, data, is_edited, edited_at, edited_by")
+      .select("id, file_id, area, rep, line, month, data, is_edited, edited_at, edited_by")
       .eq("year", year)
       .eq("dataset_id", datasetId)
       .range(from, to),
@@ -43,7 +43,7 @@ export async function GET(request: Request) {
       fileId: r.file_id as string,
       area: r.area as string | null,
       rep: r.rep as string | null,
-      cluster: r.cluster as string | null,
+      line: r.line as string | null,
       month: Number(r.month),
       data: r.data as Record<string, unknown>,
       isEdited: Boolean(r.is_edited),

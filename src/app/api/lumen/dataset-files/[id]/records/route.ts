@@ -4,7 +4,7 @@ import { findDuplicateKeys, POSTGRES_UNIQUE_VIOLATION } from "@/lib/lumen/duplic
 
 const MAX_ROWS_PER_REQUEST = 5000;
 
-type IncomingRow = { area: string | null; rep: string | null; cluster: string | null; month: number; data: Record<string, unknown> };
+type IncomingRow = { area: string | null; rep: string | null; line: string | null; month: number; data: Record<string, unknown> };
 
 // Appends a batch of rows to an already-created linked file (mirrors the
 // dataset-create -> upload-rows split used for the primary sales file).
@@ -49,7 +49,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
       file_id: fileId,
       area: typeof r.area === "string" ? r.area : null,
       rep: typeof r.rep === "string" ? r.rep : null,
-      cluster: typeof r.cluster === "string" ? r.cluster : null,
+      line: typeof r.line === "string" ? r.line : null,
       month: r.month,
       year,
       data: r.data,
@@ -62,12 +62,12 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
 
   // Key includes the row's full data payload, not just its join
   // dimensions — a linked file can legitimately have several distinct
-  // rows sharing the same area/rep/cluster/month (different metrics, a
+  // rows sharing the same area/rep/line/month (different metrics, a
   // finer source granularity, etc.), and only an exact full-row repeat is
   // an actual duplicate.
   const duplicates = findDuplicateKeys(
     records,
-    (r) => `${r.file_id}|${r.year}|${r.month}|${r.area ?? ""}|${r.rep ?? ""}|${r.cluster ?? ""}|${JSON.stringify(r.data)}`,
+    (r) => `${r.file_id}|${r.year}|${r.month}|${r.area ?? ""}|${r.rep ?? ""}|${r.line ?? ""}|${JSON.stringify(r.data)}`,
   );
   if (duplicates.length > 0) {
     return NextResponse.json(

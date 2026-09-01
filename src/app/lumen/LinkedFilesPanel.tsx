@@ -5,7 +5,7 @@ import type { JoinKey, LinkedFile } from "@/lib/lumen/linkedFiles";
 import { useLanguage } from "@/lib/i18n/LanguageProvider";
 import type { Translations } from "@/lib/i18n/translations";
 
-const ALL_JOIN_KEYS: JoinKey[] = ["area", "rep", "cluster", "month"];
+const ALL_JOIN_KEYS: JoinKey[] = ["area", "rep", "line", "month"];
 
 function typeLabel(type: LinkedFile["fileType"], t: Translations): string {
   return { achievement: t.linkedFiles.typeAchievement, kpis: t.linkedFiles.typeKpis, other: t.linkedFiles.typeOther }[type];
@@ -15,7 +15,7 @@ function joinKeyLabel(key: JoinKey, t: Translations): string {
   return {
     area: t.linkedFiles.joinKeyArea,
     rep: t.linkedFiles.joinKeyRep,
-    cluster: t.linkedFiles.joinKeyCluster,
+    line: t.linkedFiles.joinKeyLine,
     month: t.linkedFiles.joinKeyMonth,
   }[key];
 }

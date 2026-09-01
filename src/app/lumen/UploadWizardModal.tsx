@@ -15,7 +15,7 @@ const MAPPING_FIELDS: MappingField[] = [
   { key: "qty", required: false },
   { key: "month", required: true },
   { key: "rep", required: false },
-  { key: "cluster", required: false },
+  { key: "line", required: false },
 ];
 
 function fieldLabel(key: MappingFieldKey, t: Translations): string {
@@ -26,7 +26,7 @@ function fieldLabel(key: MappingFieldKey, t: Translations): string {
     qty: t.wizard.fieldQty,
     month: t.wizard.fieldMonth,
     rep: t.wizard.fieldRep,
-    cluster: t.wizard.fieldCluster,
+    line: t.wizard.fieldLine,
   }[key];
 }
 
@@ -76,7 +76,7 @@ export function UploadWizardModal({
     qty: guess.qty ?? null,
     month: guess.month ?? null,
     rep: guess.rep ?? null,
-    cluster: guess.cluster ?? null,
+    line: guess.line ?? null,
   });
 
   const existingDataset = datasets.find((d) => d.id === existingDatasetId) ?? null;
@@ -99,7 +99,7 @@ export function UploadWizardModal({
           qty: mapping.qty,
           month: mapping.month!,
           rep: mapping.rep,
-          cluster: mapping.cluster,
+          line: mapping.line,
         },
       });
     } else {

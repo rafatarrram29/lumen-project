@@ -8,7 +8,7 @@ import { useLanguage } from "@/lib/i18n/LanguageProvider";
 // sales value for one item inside one area, for a given month). Saving
 // just calls back up to the parent, which persists the edit and re-fetches
 // the report — every level that depends on this value (area totals,
-// cluster averages, targets, rep leaderboard, findings) is recomputed
+// line averages, targets, rep leaderboard, findings) is recomputed
 // fresh from the raw rows on that re-fetch, so nothing here needs to know
 // about any of that.
 export function EditableValue({

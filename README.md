@@ -2,7 +2,7 @@
 
 Upload a monthly sales export and get territory-level decisions, not just
 numbers: which areas really moved, whether a drop is one area's problem or
-a cluster-wide pattern, which item is driving it, and a concrete action for
+a line-wide pattern, which item is driving it, and a concrete action for
 each finding.
 
 Every upload is its own **dataset** — uploading a new file never overwrites
@@ -12,10 +12,10 @@ to add them all to the same dataset in one go, using the same column
 mapping. The app makes no assumption about your file's column names:
 the first time you upload a new format, you're asked to map its columns
 (Area/Region, Item/Product, Value, Quantity, Month, and the optional Rep and
-Cluster) to what they mean; that mapping is saved with the dataset, so
+Line) to what they mean; that mapping is saved with the dataset, so
 adding more months to the same dataset later never asks again. When a
-dataset has a Cluster column, the systemic-drop check (rule 2 below) runs
-separately inside each cluster instead of across the whole dataset.
+dataset has a Line column, the systemic-drop check (rule 2 below) runs
+separately inside each line instead of across the whole dataset.
 
 Stack: Next.js (App Router) on Vercel, Supabase (Postgres + Auth).
 
@@ -30,7 +30,7 @@ design reference only — it is not part of the running app.
    `lumen_sales_records` table with Row Level Security so only signed-in
    users can read or write it.
 3. Then run `supabase/lumen_datasets_migration.sql` the same way. This adds
-   the `lumen_datasets` table and the dataset/rep/cluster columns on
+   the `lumen_datasets` table and the dataset/rep/line columns on
    `lumen_sales_records` — safe to run even if you already have data, since
    it backfills any existing rows into a "Legacy data" dataset automatically.
 4. Then run `supabase/lumen_user_isolation_migration.sql` the same way. This
@@ -56,23 +56,30 @@ design reference only — it is not part of the running app.
    in-app inline editing (the **Correction log** described below).
 9. Then run `supabase/lumen_undo_migration.sql`. This adds the `is_undo`
    column used to flag an Undo entry in the Correction log.
-10. **Before the next step**, if this project already has real data in it,
+10. Then run `supabase/lumen_rename_cluster_to_line_migration.sql`. This
+    renames the `cluster` column (created back in step 3) to `line` on
+    both `lumen_sales_records` and `lumen_dataset_records` — a pure
+    naming correction (the grouping level above Area is called "Line" in
+    the app, not "Cluster"), metadata-only and instant, no data is
+    touched. Run this before step 12 below, which references the column
+    by its new name.
+11. **Before the next step**, if this project already has real data in it,
     run `supabase/lumen_data_integrity_audit.sql` first and resolve
     anything it finds (see "Duplicate or wildly incorrect numbers in an
     area" under Troubleshooting) — the migration below adds a uniqueness
     rule that Postgres will refuse to create while duplicate rows still
     exist. A brand-new project with no data yet can skip straight to
     running the migration.
-11. Then run `supabase/lumen_data_integrity_migration.sql`. This adds a
+12. Then run `supabase/lumen_data_integrity_migration.sql`. This adds a
     database-level rule that makes it impossible to insert an exact
     full-row duplicate (same dataset/area/item/month/rep *and* the same
     value) ever again, in any dataset, while still allowing any number of
     legitimately distinct rows that happen to share an area/item/month —
     the root cause of the true duplicate-row class of bug is closed at
     the database itself, not just checked for afterward.
-12. Open **Settings -> API** and copy the **Project URL** and the **anon
+13. Open **Settings -> API** and copy the **Project URL** and the **anon
    public** key.
-13. Open **Authentication -> Sign In / Providers** and make sure **Email**
+14. Open **Authentication -> Sign In / Providers** and make sure **Email**
    is enabled (it is by default). For local development, under
    **Authentication -> URL Configuration**, you can leave the defaults —
    we'll add your real domain there once deployed.
@@ -118,7 +125,7 @@ in, then upload a monthly sales export — `.xlsx`, `.xls`, `.xlsm`, `.csv`,
 1. **Trend** — compare against the last 3 months, not just one, before
    calling anything a real move.
 2. **Systemic check** — if most areas moved the same direction together,
-   the cause is cluster-wide, not one area's fault (scoped to each cluster
+   the cause is line-wide, not one area's fault (scoped to each line
    when the dataset has one, otherwise across all areas).
 3. **Root cause** — break the change down by item to find what's actually
    driving it.
@@ -166,7 +173,7 @@ unaffected.
 A dataset's primary Sales file can have extra **linked files** attached —
 Achievement, KPIs, or anything else ("+ Add linked file" in the sidebar,
 once a dataset is selected). Uploading one guesses its file type and which
-columns (Area/Rep/Cluster/Month) connect it back to the same areas and
+columns (Area/Rep/Line/Month) connect it back to the same areas and
 months as the sales data, based on its column names — always shown for
 review and edit before saving, never applied silently. A file can be
 replaced (re-upload with a corrected mapping, wholesale replacing its old
@@ -187,7 +194,7 @@ Every item's value inside an area (its number for the compared and latest
 month) is directly editable — click it, type the corrected number, and
 press Enter. There's no need to re-upload anything: saving updates the
 underlying row(s) right away, and the whole dashboard recalculates from
-that new number automatically — the area's total, its cluster's average
+that new number automatically — the area's total, its line's average
 and systemic-drop check, targets vs actual, the rep leaderboard, and every
 finding/decision all reflect the edit the moment it's saved, with no manual
 refresh. The same click-to-edit works on any linked file's values
@@ -219,7 +226,7 @@ dataset:
 - **Which dimensions link a file back to the sales data** (⚙ next to a
   linked file) — if the system picked the wrong join (e.g. joined by Rep
   only when it should also join by Area), correcting it takes effect
-  immediately with no re-upload, since the area/rep/cluster/month values
+  immediately with no re-upload, since the area/rep/line/month values
   were already extracted from that file when it was uploaded.
 
 Fixing which *source column* feeds a linked file (as opposed to which

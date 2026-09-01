@@ -1,5 +1,5 @@
 -- Finds a DIFFERENT class of bug than lumen_data_integrity_audit.sql: not
--- duplicate rows, but the same real-world area/item/rep/cluster silently
+-- duplicate rows, but the same real-world area/item/rep/line silently
 -- split into two (or more) separate buckets in the report because the raw
 -- text differs by whitespace or letter case — e.g. "Domiat 1" vs "Domiat 1 "
 -- (a trailing space) or "Domiat 1" vs "DOMIAT 1". The report groups
@@ -16,12 +16,12 @@
 -- ALL of the four checks) so it shows every result at once; earlier this
 -- was four separate SELECT statements, and Supabase's SQL Editor only
 -- displays the last one's result when you run several together, which
--- silently hid the area/item/rep checks behind whatever the cluster check
+-- silently hid the area/item/rep checks behind whatever the line check
 -- found. If this returns no rows, all four are genuinely clean.
 --
 -- For every row it does return, look at the `raw_value` column for that
 -- dataset — if you see more than one visually-similar spelling of what
--- should be the same area/item/rep/cluster, that's the bug. If everything
+-- should be the same area/item/rep/line, that's the bug. If everything
 -- you see is genuinely different names that just happen to share letters,
 -- there's nothing to do.
 
@@ -47,13 +47,13 @@ rep_variants as (
 rep_dupes as (
   select dataset_id, norm from rep_variants group by dataset_id, norm having count(distinct rep) > 1
 ),
-cluster_variants as (
-  select dataset_id, cluster, lower(trim(cluster)) as norm
+line_variants as (
+  select dataset_id, line, lower(trim(line)) as norm
   from public.lumen_sales_records
-  where cluster is not null
+  where line is not null
 ),
-cluster_dupes as (
-  select dataset_id, norm from cluster_variants group by dataset_id, norm having count(distinct cluster) > 1
+line_dupes as (
+  select dataset_id, norm from line_variants group by dataset_id, norm having count(distinct line) > 1
 )
 select 'area' as column_checked, s.dataset_id, s.area as raw_value,
        count(*) as row_count, sum(s.sales_value) as total_value,
@@ -80,10 +80,10 @@ group by s.dataset_id, s.rep
 
 union all
 
-select 'cluster', s.dataset_id, s.cluster,
+select 'line', s.dataset_id, s.line,
        count(*), sum(s.sales_value), min(s.month), max(s.month)
 from public.lumen_sales_records s
-join cluster_dupes d on d.dataset_id = s.dataset_id and lower(trim(s.cluster)) = d.norm
-group by s.dataset_id, s.cluster
+join line_dupes d on d.dataset_id = s.dataset_id and lower(trim(s.line)) = d.norm
+group by s.dataset_id, s.line
 
 order by column_checked, dataset_id, raw_value;
