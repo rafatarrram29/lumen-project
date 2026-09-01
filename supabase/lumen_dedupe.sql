@@ -1,17 +1,22 @@
--- Diagnose and fix duplicate rows in lumen_sales_records, across every
--- dataset. Run this once in the Supabase SQL Editor (Project -> SQL
--- Editor -> New query) — after reviewing
--- lumen_data_integrity_audit.sql first, which shows the same duplicates
--- broken out per dataset with a SAFE_TO_DEDUPE / NEEDS_MANUAL_REVIEW flag.
+-- Diagnose and fix EXACT duplicate rows in lumen_sales_records, across
+-- every dataset. Run this once in the Supabase SQL Editor (Project -> SQL
+-- Editor -> New query) — after reviewing lumen_data_integrity_audit.sql
+-- first, which shows the same groups broken out per dataset with a
+-- SAFE_TO_DEDUPE / NEEDS_MANUAL_REVIEW flag.
 --
--- Root cause: a row's identity is its dataset + area + item + month +
--- year (+ rep, if the dataset has one) — nothing enforced that this
--- combination couldn't repeat, so re-uploading the same file twice, a
--- retried upload after a partial failure, or any other double-write
--- inserted a full second copy of every row, inflating that period's
--- totals with no visible error. lumen_data_integrity_migration.sql adds
--- a database constraint that stops this from happening again going
--- forward; this script only cleans up rows written before that existed.
+-- This script only ever deletes a row when every copy in its group has
+-- the IDENTICAL sales_value and sales_qty (STEP 3's DELETE explicitly
+-- matches on both, on top of dataset+area+item+month+year+rep) — the
+-- SAFE_TO_DEDUPE case: the same logical row genuinely got inserted more
+-- than once (a retried upload, a double-submit). It never touches a group
+-- where the copies have different values — that's normal for a source
+-- file with finer granularity than one row per area/item/month (e.g. one
+-- row per invoice or per branch), which the app already sums correctly;
+-- see the note in lumen_data_integrity_audit.sql before assuming those
+-- need any cleanup at all. lumen_data_integrity_migration.sql adds a
+-- database constraint (on the same full-row match, value included) that
+-- stops the true duplicate case from happening again going forward; this
+-- script only cleans up rows written before that existed.
 --
 -- IMPORTANT — this version fixes a real bug in an earlier copy of this
 -- script: it did not scope by dataset_id, so two unrelated datasets that

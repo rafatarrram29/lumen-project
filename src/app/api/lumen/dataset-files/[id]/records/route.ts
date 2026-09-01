@@ -60,16 +60,21 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     return NextResponse.json({ error: "No valid rows in payload" }, { status: 400 });
   }
 
+  // Key includes the row's full data payload, not just its join
+  // dimensions — a linked file can legitimately have several distinct
+  // rows sharing the same area/rep/cluster/month (different metrics, a
+  // finer source granularity, etc.), and only an exact full-row repeat is
+  // an actual duplicate.
   const duplicates = findDuplicateKeys(
     records,
-    (r) => `${r.file_id}|${r.year}|${r.month}|${r.area ?? ""}|${r.rep ?? ""}|${r.cluster ?? ""}`,
+    (r) => `${r.file_id}|${r.year}|${r.month}|${r.area ?? ""}|${r.rep ?? ""}|${r.cluster ?? ""}|${JSON.stringify(r.data)}`,
   );
   if (duplicates.length > 0) {
     return NextResponse.json(
       {
         error:
-          `This batch has ${duplicates.length} area/rep/cluster/month combination(s) repeated more than once ` +
-          `— check the source file for repeated rows, or if this is a re-upload, use "Replace" on the file instead of adding to it.`,
+          `This batch has ${duplicates.length} row(s) repeated more than once, identical in every column ` +
+          `— check the source file for an accidentally repeated row, or if this is a re-upload, use "Replace" on the file instead of adding to it.`,
       },
       { status: 409 },
     );
@@ -79,7 +84,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
   if (error) {
     if (error.code === POSTGRES_UNIQUE_VIOLATION) {
       return NextResponse.json(
-        { error: "Some of these rows duplicate data already in this file for the same area/rep/cluster/month." },
+        { error: "Some of these rows are identical, in every column, to rows already in this file." },
         { status: 409 },
       );
     }

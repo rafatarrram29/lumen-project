@@ -78,24 +78,29 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "No valid rows in payload" }, { status: 400 });
   }
 
-  // Reject a batch that duplicates area/item/month(/rep) within itself
-  // BEFORE attempting to insert it — this is the actual mechanism that
-  // silently inflated real data in the past, since nothing previously
-  // stopped two rows for the same area+item+month from both being
-  // inserted.
+  // Reject a batch that has an EXACT full duplicate row within itself
+  // (same area/item/month/rep AND the same sales_value/sales_qty) BEFORE
+  // attempting to insert it. The key deliberately includes the measured
+  // value, not just area/item/month/rep: many real source files have
+  // finer granularity than one row per area/item/month (one row per
+  // invoice or per branch, say), so several legitimately distinct rows
+  // can share the same area/item/month with different values — that is
+  // normal data the report already sums correctly, not a duplicate, and
+  // must never be rejected.
   const duplicates = findDuplicateKeys(
     records,
-    (r) => `${r.dataset_id}|${r.year}|${r.month}|${r.area}|${r.item}|${r.rep ?? ""}`,
+    (r) => `${r.dataset_id}|${r.year}|${r.month}|${r.area}|${r.item}|${r.rep ?? ""}|${r.sales_value}|${r.sales_qty ?? ""}`,
   );
   if (duplicates.length > 0) {
-    const [area, item, month, rep] = duplicates[0].key.split("|").slice(3);
+    const parts = duplicates[0].key.split("|");
+    const [, , month, area, item, rep] = parts;
     const example = rep ? `${area} / ${item} / month ${month} / rep ${rep}` : `${area} / ${item} / month ${month}`;
     return NextResponse.json(
       {
         error:
-          `This batch has ${duplicates.length} area/item/month combination(s) repeated more than once ` +
-          `(e.g. ${example}) — check the source file for repeated rows, or if this is a re-upload of a ` +
-          `month you already have, use the overlap/replace prompt instead of adding to the dataset.`,
+          `This batch has ${duplicates.length} row(s) repeated more than once, identical in every column ` +
+          `(e.g. ${example}) — check the source file for an accidentally repeated row, or if this is a ` +
+          `re-upload of a month you already have, use the overlap/replace prompt instead of adding to the dataset.`,
       },
       { status: 409 },
     );
@@ -108,7 +113,7 @@ export async function POST(request: Request) {
       return NextResponse.json(
         {
           error:
-            "Some of these rows duplicate data already in this dataset for the same area/item/month(/rep). " +
+            "Some of these rows are identical, in every column, to rows already in this dataset. " +
             "If you're correcting a month you already uploaded, use the overlap/replace prompt instead of adding to it.",
         },
         { status: 409 },

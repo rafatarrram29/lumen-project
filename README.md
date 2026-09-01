@@ -64,10 +64,12 @@ design reference only — it is not part of the running app.
     exist. A brand-new project with no data yet can skip straight to
     running the migration.
 11. Then run `supabase/lumen_data_integrity_migration.sql`. This adds a
-    database-level rule that makes it impossible to insert two rows for
-    the same area/item/month(/rep) ever again, in any dataset — the root
-    cause of the duplicate-row class of bug is closed at the database
-    itself, not just checked for afterward.
+    database-level rule that makes it impossible to insert an exact
+    full-row duplicate (same dataset/area/item/month/rep *and* the same
+    value) ever again, in any dataset, while still allowing any number of
+    legitimately distinct rows that happen to share an area/item/month —
+    the root cause of the true duplicate-row class of bug is closed at
+    the database itself, not just checked for afterward.
 12. Open **Settings -> API** and copy the **Project URL** and the **anon
    public** key.
 13. Open **Authentication -> Sign In / Providers** and make sure **Email**
@@ -230,30 +232,40 @@ file — use "Replace" on it, which shows the same editable mapping.
   for confirmation before replacing that month's rows, instead of silently
   duplicating them.
 - **Duplicate or wildly incorrect numbers in an area** (a value that jumps
-  or drops in a way the source file doesn't support) usually means one or
-  more rows for that area/item/month got inserted more than once —
-  historically possible from an upload that partially failed and was
-  retried, or a double-submit, before the database enforced uniqueness.
-  To find and fix it:
+  or drops in a way the source file doesn't support) can mean the exact
+  same row got inserted more than once — historically possible from an
+  upload that partially failed and was retried, or a double-submit,
+  before the database enforced uniqueness. To find and fix it:
   1. Run `supabase/lumen_data_integrity_audit.sql` in the Supabase SQL
-     Editor — read-only, it lists every dataset with duplicate rows, how
-     many extra rows and how much inflated value each one added, and
-     flags each duplicate group as `SAFE_TO_DEDUPE` (every copy has the
-     identical value — an exact re-insert) or `NEEDS_MANUAL_REVIEW` (the
-     copies actually disagree with each other — don't auto-delete, check
-     the original source file and remove the wrong one by hand).
-  2. Once every remaining group is `SAFE_TO_DEDUPE`, run
-     `supabase/lumen_dedupe.sql` — it removes the extra copies, scoped
-     correctly per dataset (an earlier version of this script matched
-     across the whole table without checking `dataset_id`, which risked
-     deleting real rows from an unrelated dataset that coincidentally
-     shared the same area/item/month/value; this one doesn't).
+     Editor — read-only. **Read its own comments before acting on the
+     results**: a group of rows sharing an area/item/month is only a real
+     duplicate (`SAFE_TO_DEDUPE`) when every copy has the *identical*
+     value too. If a group's copies have different values
+     (`NEEDS_MANUAL_REVIEW`), that's completely normal for a source file
+     with finer granularity than one row per area/item/month (one row per
+     invoice, per branch, per day, etc.) — the report already sums those
+     correctly, and it is *not* a bug to fix. Only chase an individual
+     `NEEDS_MANUAL_REVIEW` group by hand (comparing against the original
+     source file) if a specific number on the dashboard looks wrong to
+     you; never bulk-delete anything in that bucket.
+  2. `supabase/lumen_dedupe.sql` only ever deletes rows in the
+     `SAFE_TO_DEDUPE` case (identical value, confirmed exact duplicate),
+     scoped correctly per dataset (an earlier version of this script
+     matched across the whole table without checking `dataset_id`, which
+     risked deleting a real row from an unrelated dataset that
+     coincidentally shared the same area/item/month/value; this one
+     doesn't).
   3. `supabase/lumen_data_integrity_migration.sql` (see setup step 11)
-     adds the database constraint that prevents this from happening again
-     going forward — new uploads that would create a duplicate are now
-     rejected outright with a clear error instead of being silently
-     accepted, and an upload that fails partway through is automatically
-     rolled back rather than leaving a month half-written.
+     adds a database constraint that prevents *exact* full-row duplicates
+     from being written again going forward. Its key includes the
+     measured value itself, not just area/item/month/rep — an earlier
+     version of this migration didn't, and would have rejected any
+     dataset with legitimate multiple rows per area/item/month (like the
+     invoice-level case above) as if it were duplicate data. New uploads
+     that would create a genuine exact duplicate are rejected outright
+     with a clear error instead of being silently accepted, and an upload
+     that fails partway through is automatically rolled back rather than
+     leaving a month half-written.
 - If you created the `lumen_sales_records` table before the DELETE policy
   was added to `lumen_schema.sql`, run `supabase/lumen_add_delete_policy.sql`
   once — without it, re-uploading a month fails silently.
