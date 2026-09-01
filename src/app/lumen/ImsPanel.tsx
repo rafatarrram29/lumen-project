@@ -55,31 +55,49 @@ function FindingCard({ finding, t }: { finding: ImsFinding; t: Translations }) {
   );
 }
 
-function AreaProductRow({ row, t }: { row: ImsAreaProduct; t: Translations }) {
+function AreaProductRow({
+  row,
+  t,
+  showArea,
+  showChange,
+  showCompetitor,
+}: {
+  row: ImsAreaProduct;
+  t: Translations;
+  showArea: boolean;
+  showChange: boolean;
+  showCompetitor: boolean;
+}) {
   const changePositive = row.pctPointChange !== null && row.pctPointChange > 0;
   const changeNegative = row.pctPointChange !== null && row.pctPointChange < 0;
   return (
     <tr className="border-b border-bdr/60 last:border-0">
-      <td className="max-w-[10rem] truncate px-3 py-2 text-white" dir="auto" title={row.area ?? undefined}>
-        {row.area ?? "—"}
-      </td>
+      {showArea && (
+        <td className="max-w-[10rem] truncate px-3 py-2 text-white" dir="auto" title={row.area ?? undefined}>
+          {row.area ?? "—"}
+        </td>
+      )}
       <td className="max-w-[10rem] truncate px-3 py-2 text-white" dir="auto" title={row.product ?? undefined}>
         {row.product ?? "—"}
       </td>
       <td className="px-3 py-2 font-mono text-white">{formatShare(row.latestShare)}</td>
-      <td className={`px-3 py-2 font-mono ${changePositive ? "text-green" : changeNegative ? "text-red" : "text-muted"}`}>
-        {formatPoints(row.pctPointChange)}
-      </td>
-      <td className="px-3 py-2 text-muted">
-        {row.topCompetitor ? (
-          <span dir="auto">
-            {row.topCompetitor.company} ({formatShare(row.topCompetitor.share)}
-            {row.topCompetitor.pctPointChange !== null ? `, ${formatPoints(row.topCompetitor.pctPointChange)}` : ""})
-          </span>
-        ) : (
-          t.ims.noCompetitorData
-        )}
-      </td>
+      {showChange && (
+        <td className={`px-3 py-2 font-mono ${changePositive ? "text-green" : changeNegative ? "text-red" : "text-muted"}`}>
+          {formatPoints(row.pctPointChange)}
+        </td>
+      )}
+      {showCompetitor && (
+        <td className="px-3 py-2 text-muted">
+          {row.topCompetitor ? (
+            <span dir="auto">
+              {row.topCompetitor.company} ({formatShare(row.topCompetitor.share)}
+              {row.topCompetitor.pctPointChange !== null ? `, ${formatPoints(row.topCompetitor.pctPointChange)}` : ""})
+            </span>
+          ) : (
+            t.ims.noCompetitorData
+          )}
+        </td>
+      )}
     </tr>
   );
 }
@@ -104,6 +122,19 @@ export function ImsPanel({
 
   const hasData = report !== null && report.areaProducts.length > 0;
   const vsMonths = report && report.latestMonth !== null && report.prevMonth !== null ? report.latestMonth - report.prevMonth : null;
+  // Each of these columns is only worth a slot in the table when the
+  // underlying data can actually say something there — otherwise it's a
+  // column of nothing but "—" repeated down every row. Area: no file
+  // imported has any row with an area value at all (common for a
+  // product/company-only market-share deck with no geography). Change:
+  // needs at least two distinct months across the dataset to compare
+  // against — a single-snapshot import (the common case for a PDF table
+  // with no per-row month) has exactly one, so prevMonth stays null.
+  // Competitor: needs at least one row with a company different from the
+  // user's own — set by imsEngine's own hasCompetitors flag.
+  const showArea = !!report && report.areaProducts.some((r) => r.area !== null);
+  const showChange = !!report && report.prevMonth !== null;
+  const showCompetitor = !!report && report.hasCompetitors;
 
   return (
     <div>
@@ -179,18 +210,27 @@ export function ImsPanel({
               <table className="w-full text-left text-xs">
                 <thead>
                   <tr className="border-b border-bdr text-muted">
-                    <th className="px-3 py-2 font-normal">{t.ims.fieldArea}</th>
+                    {showArea && <th className="px-3 py-2 font-normal">{t.ims.fieldArea}</th>}
                     <th className="px-3 py-2 font-normal">{t.ims.fieldProduct}</th>
                     <th className="px-3 py-2 font-normal">{t.ims.latestShare}</th>
-                    <th className="px-3 py-2 font-normal">
-                      {t.ims.change} {vsMonths !== null ? t.ims.vsMonthsAgo(vsMonths) : ""}
-                    </th>
-                    <th className="px-3 py-2 font-normal">{t.ims.topCompetitor}</th>
+                    {showChange && (
+                      <th className="px-3 py-2 font-normal">
+                        {t.ims.change} {vsMonths !== null ? t.ims.vsMonthsAgo(vsMonths) : ""}
+                      </th>
+                    )}
+                    {showCompetitor && <th className="px-3 py-2 font-normal">{t.ims.topCompetitor}</th>}
                   </tr>
                 </thead>
                 <tbody>
                   {report.areaProducts.map((row, i) => (
-                    <AreaProductRow key={i} row={row} t={t} />
+                    <AreaProductRow
+                      key={i}
+                      row={row}
+                      t={t}
+                      showArea={showArea}
+                      showChange={showChange}
+                      showCompetitor={showCompetitor}
+                    />
                   ))}
                 </tbody>
               </table>

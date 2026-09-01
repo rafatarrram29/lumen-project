@@ -163,6 +163,9 @@ export type Translations = {
     fixedMonthLabel: string;
     fixedMonthPlaceholder: string;
     fixedMonthHint: string;
+    fixedProductLabel: string;
+    fixedProductPlaceholder: string;
+    fixedProductHint: string;
     ownCompanyLabel: string;
     ownCompanyHint: string;
     pdfExtracting: string;
@@ -470,6 +473,9 @@ const en: Translations = {
     fixedMonthLabel: "This file is for month",
     fixedMonthPlaceholder: "e.g. 6",
     fixedMonthHint: "No Month column mapped — this file will be treated as a single-point snapshot for the month number you enter here.",
+    fixedProductLabel: "This table is for product",
+    fixedProductPlaceholder: "e.g. Lezberg Amlo",
+    fixedProductHint: "No Product column mapped — every row (e.g. each competing company) will be recorded under this one product name.",
     ownCompanyLabel: "Which value in that column is us?",
     ownCompanyHint: "Everything else in that column is treated as a competitor.",
     pdfExtracting: "Reading the PDF…",
@@ -792,6 +798,9 @@ const ar: Translations = {
     fixedMonthLabel: "الملف ده بتاع شهر",
     fixedMonthPlaceholder: "مثلاً 6",
     fixedMonthHint: "مفيش عمود شهر محدد — الملف ده هيتعامل معاه كلقطة (snapshot) لشهر واحد بالرقم اللي هتكتبه هنا.",
+    fixedProductLabel: "الجدول ده بتاع منتج",
+    fixedProductPlaceholder: "مثلاً Lezberg Amlo",
+    fixedProductHint: "مفيش عمود منتج محدد — كل صف (زي كل شركة منافسة) هيتسجل تحت اسم المنتج ده.",
     ownCompanyLabel: "أنهي قيمة في العمود ده هي إحنا؟",
     ownCompanyHint: "أي قيمة تانية في العمود ده هتتحسب منافس.",
     pdfExtracting: "بيتم قراءة ملف PDF…",
