@@ -45,6 +45,12 @@ export type ImsColumnMapping = {
   fixedMonth: number | null;
   fixedProduct: string | null;
   company: string | null;
+  // Optional: a real IMS comparison table often carries its own growth
+  // rate per row (e.g. "GR", "GR R26/R25") — a genuinely different figure
+  // (rate of change in the underlying volume) from the share value itself.
+  // Left unmapped, growth-based dashboard figures fall back to "not
+  // available" rather than being approximated from something else.
+  growthRate: string | null;
 };
 
 export type ParsedImsRow = {
@@ -53,6 +59,7 @@ export type ParsedImsRow = {
   company: string | null;
   marketShare: number;
   month: number;
+  growthRate: number | null;
 };
 
 type GuessRule = { field: keyof ImsColumnMapping; keywords: string[] };
@@ -205,6 +212,12 @@ export function applyImsMapping(
     }
 
     const companyRaw = mapping.company ? r[mapping.company] : null;
+    // Optional and best-effort: an unparseable growth-rate cell doesn't
+    // invalidate the row (marketShare already carries the row's core
+    // meaning) — it just leaves that one figure unavailable for this row.
+    const growthRateRaw = mapping.growthRate ? r[mapping.growthRate] : null;
+    const growthRateParsed = growthRateRaw != null ? parseShare(growthRateRaw) : null;
+    const growthRate = growthRateParsed != null && !Number.isNaN(growthRateParsed) ? growthRateParsed : null;
 
     rows.push({
       area: areaStr,
@@ -212,6 +225,7 @@ export function applyImsMapping(
       company: companyRaw != null ? String(companyRaw).trim() : null,
       marketShare,
       month,
+      growthRate,
     });
   }
 

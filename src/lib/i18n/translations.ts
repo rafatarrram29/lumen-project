@@ -159,6 +159,8 @@ export type Translations = {
     fieldMonth: string;
     fieldCompany: string;
     fieldCompanyHint: string;
+    fieldGrowthRate: string;
+    fieldGrowthRateHint: string;
     atLeastOneOfAreaProduct: string;
     fixedMonthLabel: string;
     fixedMonthPlaceholder: string;
@@ -208,6 +210,21 @@ export type Translations = {
     competitorMoveNote: (company: string, pct: number) => string;
     marketOutpacingUs: (area: string, salesPct: number, sharePct: number) => string;
     weOutpacingMarket: (area: string, salesPct: number, sharePct: number) => string;
+    notAvailable: string;
+    ytdMarketShare: string;
+    rankInCategory: (rank: number, total: number) => string;
+    ourGrowth: string;
+    ourGrowthSubtitle: string;
+    marketGrowthLabel: string;
+    marketGrowthSubtitle: string;
+    shareGainLossLabel: string;
+    shareGainLossSubtitle: string;
+    marketRankingTitle: string;
+    monthlyTrendTitle: string;
+    analysisTitle: (product: string) => string;
+    positionShareLine: (share: string, rank: string) => string;
+    positionGrowthLine: (ourGrowth: string, marketGrowth: string) => string;
+    competitorsTitle: string;
   };
   repHistory: {
     title: string;
@@ -469,6 +486,8 @@ const en: Translations = {
     fieldMonth: "Month",
     fieldCompany: "Company (optional)",
     fieldCompanyHint: "Only needed if this file lists more than one company's share per area/product/month.",
+    fieldGrowthRate: "Growth rate (optional)",
+    fieldGrowthRateHint: "If this file has its own growth-rate column (e.g. \"GR\"), map it here to get real growth figures instead of \"not available\".",
     atLeastOneOfAreaProduct: "Map at least one of Area or Product — whichever this file actually has.",
     fixedMonthLabel: "This file is for month",
     fixedMonthPlaceholder: "e.g. 6",
@@ -527,6 +546,21 @@ const en: Translations = {
       `${area}: our sales moved ${salesPct}% but our share moved ${sharePct} points — the market itself is growing faster than we are.`,
     weOutpacingMarket: (area, salesPct, sharePct) =>
       `${area}: our sales moved ${salesPct}% but our share moved ${sharePct} points — we're outperforming a shrinking or slower market.`,
+    notAvailable: "Not available",
+    ytdMarketShare: "YTD Market Share",
+    rankInCategory: (rank, total) => `Rank #${rank} of ${total} in category`,
+    ourGrowth: "Our Growth",
+    ourGrowthSubtitle: "Latest period",
+    marketGrowthLabel: "Market Growth",
+    marketGrowthSubtitle: "Category average, latest period",
+    shareGainLossLabel: "Share Gain/Loss",
+    shareGainLossSubtitle: "Market share point change",
+    marketRankingTitle: "Market Ranking",
+    monthlyTrendTitle: "Monthly Trend — Us vs Top Competitors",
+    analysisTitle: (product) => `Analysis — ${product}`,
+    positionShareLine: (share, rank) => `Latest share: ${share} — ${rank}.`,
+    positionGrowthLine: (ourGrowth, marketGrowth) => `Our growth: ${ourGrowth} vs the market's ${marketGrowth}.`,
+    competitorsTitle: "Competitors",
   },
   repHistory: {
     title: "Rep history",
@@ -794,6 +828,8 @@ const ar: Translations = {
     fieldMonth: "الشهر",
     fieldCompany: "الشركة (اختياري)",
     fieldCompanyHint: "محتاجه بس لو الملف فيه حصة أكتر من شركة لكل منطقة/منتج/شهر.",
+    fieldGrowthRate: "معدل النمو (اختياري)",
+    fieldGrowthRateHint: "لو الملف ده فيه عمود نمو خاص بيه (زي \"GR\")، حدده هنا عشان تطلع أرقام نمو حقيقية بدل \"غير متاح\".",
     atLeastOneOfAreaProduct: "حدد عمود واحد على الأقل من المنطقة أو المنتج — أنهي واحد فيهم موجود فعلاً في الملف.",
     fixedMonthLabel: "الملف ده بتاع شهر",
     fixedMonthPlaceholder: "مثلاً 6",
@@ -852,6 +888,21 @@ const ar: Translations = {
       `${area}: مبيعاتنا تحركت ${salesPct}% بس حصتنا تحركت ${sharePct} نقطة — السوق كله بيكبر أسرع مننا.`,
     weOutpacingMarket: (area, salesPct, sharePct) =>
       `${area}: مبيعاتنا تحركت ${salesPct}% بس حصتنا تحركت ${sharePct} نقطة — إحنا بنتفوق على سوق بيصغر أو بيتباطأ.`,
+    notAvailable: "غير متاح",
+    ytdMarketShare: "الحصة السوقية (YTD)",
+    rankInCategory: (rank, total) => `الترتيب #${rank} من ${total} في الفئة`,
+    ourGrowth: "نمونا",
+    ourGrowthSubtitle: "آخر فترة",
+    marketGrowthLabel: "نمو السوق",
+    marketGrowthSubtitle: "متوسط الفئة، آخر فترة",
+    shareGainLossLabel: "كسب/خسارة الحصة",
+    shareGainLossSubtitle: "التغير في نقاط الحصة السوقية",
+    marketRankingTitle: "ترتيب السوق",
+    monthlyTrendTitle: "الاتجاه الشهري — إحنا مقابل أكبر المنافسين",
+    analysisTitle: (product) => `تحليل — ${product}`,
+    positionShareLine: (share, rank) => `آخر حصة: ${share} — ${rank}.`,
+    positionGrowthLine: (ourGrowth, marketGrowth) => `نمونا: ${ourGrowth} مقابل نمو السوق: ${marketGrowth}.`,
+    competitorsTitle: "المنافسون",
   },
   repHistory: {
     title: "سجل المناديب",

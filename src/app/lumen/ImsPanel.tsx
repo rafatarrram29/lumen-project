@@ -1,10 +1,11 @@
 "use client";
 
-import { useRef } from "react";
+import { useRef, useState } from "react";
 import type { ImsAreaProduct, ImsFinding, ImsReport } from "@/lib/lumen/imsEngine";
 import type { ImsColumnMapping } from "@/lib/lumen/imsMapping";
 import { useLanguage } from "@/lib/i18n/LanguageProvider";
 import type { Translations } from "@/lib/i18n/translations";
+import { ImsTrendChart } from "./ImsTrendChart";
 
 export type ImsFile = {
   id: string;
@@ -22,6 +23,19 @@ function formatPoints(n: number | null): string {
   if (n === null) return "—";
   const sign = n > 0 ? "+" : "";
   return `${sign}${n.toFixed(1)}`;
+}
+
+function formatSignedPct(n: number | null): string {
+  if (n === null) return "—";
+  const sign = n > 0 ? "+" : "";
+  return `${sign}${n.toFixed(1)}%`;
+}
+
+// The dimension a group is really "about" — product in the common case, or
+// area for a file organized purely by geography with no product breakdown
+// (isValidImsMapping guarantees at least one of the two is set).
+function groupLabel(ap: ImsAreaProduct): string {
+  return ap.product ?? ap.area ?? "—";
 }
 
 function FindingCard({ finding, t }: { finding: ImsFinding; t: Translations }) {
@@ -55,50 +69,56 @@ function FindingCard({ finding, t }: { finding: ImsFinding; t: Translations }) {
   );
 }
 
-function AreaProductRow({
-  row,
-  t,
-  showArea,
-  showChange,
-  showCompetitor,
-}: {
-  row: ImsAreaProduct;
-  t: Translations;
-  showArea: boolean;
-  showChange: boolean;
-  showCompetitor: boolean;
-}) {
-  const changePositive = row.pctPointChange !== null && row.pctPointChange > 0;
-  const changeNegative = row.pctPointChange !== null && row.pctPointChange < 0;
+function MetricCard({ label, value, subtitle, accent }: { label: string; value: string; subtitle: string; accent: string }) {
   return (
-    <tr className="border-b border-bdr/60 last:border-0">
-      {showArea && (
-        <td className="max-w-[10rem] truncate px-3 py-2 text-white" dir="auto" title={row.area ?? undefined}>
-          {row.area ?? "—"}
-        </td>
-      )}
-      <td className="max-w-[10rem] truncate px-3 py-2 text-white" dir="auto" title={row.product ?? undefined}>
-        {row.product ?? "—"}
-      </td>
-      <td className="px-3 py-2 font-mono text-white">{formatShare(row.latestShare)}</td>
-      {showChange && (
-        <td className={`px-3 py-2 font-mono ${changePositive ? "text-green" : changeNegative ? "text-red" : "text-muted"}`}>
-          {formatPoints(row.pctPointChange)}
-        </td>
-      )}
-      {showCompetitor && (
-        <td className="px-3 py-2 text-muted">
-          {row.topCompetitor ? (
-            <span dir="auto">
-              {row.topCompetitor.company} ({formatShare(row.topCompetitor.share)}
-              {row.topCompetitor.pctPointChange !== null ? `, ${formatPoints(row.topCompetitor.pctPointChange)}` : ""})
-            </span>
-          ) : (
-            t.ims.noCompetitorData
-          )}
-        </td>
-      )}
-    </tr>
+    <div className="rounded-xl border border-bdr bg-surf p-3.5" style={{ borderInlineStartWidth: 3, borderInlineStartColor: accent }}>
+      <div className="mb-1 text-[11px] uppercase tracking-wide text-muted">{label}</div>
+      <div className="text-xl font-semibold text-white">{value}</div>
+      <div className="mt-0.5 text-[11px] text-muted">{subtitle}</div>
+    </div>
+  );
+}
+
+function RankingRow({
+  ap,
+  rank,
+  active,
+  onSelect,
+  t,
+}: {
+  ap: ImsAreaProduct;
+  rank: number;
+  active: boolean;
+  onSelect: () => void;
+  t: Translations;
+}) {
+  const share = ap.latestShare ?? 0;
+  const maxShare = 100;
+  return (
+    <button
+      type="button"
+      onClick={onSelect}
+      className={`flex w-full items-center gap-3 rounded-lg px-2.5 py-2 text-start transition-colors ${
+        active ? "bg-amber/10" : "hover:bg-surf2"
+      }`}
+    >
+      <span
+        className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-md text-[11px] font-semibold ${
+          active ? "bg-amber text-on-accent" : "bg-surf2 text-muted"
+        }`}
+      >
+        {rank}
+      </span>
+      <span className={`min-w-0 flex-1 truncate text-sm ${active ? "text-amber" : "text-white"}`} dir="auto" title={groupLabel(ap)}>
+        {active ? "★ " : ""}
+        {groupLabel(ap)}
+      </span>
+      <span className="h-1.5 w-24 shrink-0 overflow-hidden rounded-full bg-surf2">
+        <span className="block h-full rounded-full bg-amber" style={{ width: `${Math.min(100, (share / maxShare) * 100)}%` }} />
+      </span>
+      <span className="w-16 shrink-0 text-end font-mono text-xs text-white">{formatShare(ap.latestShare)}</span>
+      <span className="sr-only">{t.ims.latestShare}</span>
+    </button>
   );
 }
 
@@ -121,20 +141,25 @@ export function ImsPanel({
   const addInputRef = useRef<HTMLInputElement>(null);
 
   const hasData = report !== null && report.areaProducts.length > 0;
-  const vsMonths = report && report.latestMonth !== null && report.prevMonth !== null ? report.latestMonth - report.prevMonth : null;
-  // Each of these columns is only worth a slot in the table when the
-  // underlying data can actually say something there — otherwise it's a
-  // column of nothing but "—" repeated down every row. Area: no file
-  // imported has any row with an area value at all (common for a
-  // product/company-only market-share deck with no geography). Change:
-  // needs at least two distinct months across the dataset to compare
-  // against — a single-snapshot import (the common case for a PDF table
-  // with no per-row month) has exactly one, so prevMonth stays null.
-  // Competitor: needs at least one row with a company different from the
-  // user's own — set by imsEngine's own hasCompetitors flag.
-  const showArea = !!report && report.areaProducts.some((r) => r.area !== null);
-  const showChange = !!report && report.prevMonth !== null;
-  const showCompetitor = !!report && report.hasCompetitors;
+  const groups = report && hasData ? [...report.areaProducts].sort((a, b) => (b.latestShare ?? -1) - (a.latestShare ?? -1)) : [];
+
+  // Derived during render rather than synced via an effect: falls back to
+  // the top-ranked group whenever the user's last explicit pick isn't (or
+  // isn't yet) one of the current groups — a fresh report, a deleted file,
+  // or simply no selection made yet — without a setState-in-effect render
+  // cascade to get there.
+  const [pickedLabel, setPickedLabel] = useState<string | null>(null);
+  const fallbackLabel = groups.length > 0 ? groupLabel(groups[0]) : null;
+  const selectedLabel = pickedLabel && groups.some((ap) => groupLabel(ap) === pickedLabel) ? pickedLabel : fallbackLabel;
+
+  const selected = groups.find((ap) => groupLabel(ap) === selectedLabel) ?? null;
+  const selectedFinding =
+    selected && report
+      ? report.findings.find(
+          (f): f is Extract<ImsFinding, { type: "share_move" }> =>
+            f.type === "share_move" && f.product === selected.product && f.area === selected.area,
+        )
+      : undefined;
 
   return (
     <div>
@@ -193,47 +218,117 @@ export function ImsPanel({
         </div>
       )}
 
-      {!loading && hasData && report && (
+      {!loading && hasData && report && selected && (
         <>
-          <div className="mb-5">
-            <div className="mb-2 text-sm font-semibold text-white">{t.ims.findingsTitle}</div>
-            {report.findings.length === 0 ? (
-              <p className="text-sm text-muted">{t.ims.noFindings}</p>
-            ) : (
-              report.findings.map((f, i) => <FindingCard key={i} finding={f} t={t} />)
-            )}
+          <div className="mb-4 flex flex-wrap gap-1.5">
+            {groups.map((ap) => {
+              const label = groupLabel(ap);
+              const active = label === selectedLabel;
+              return (
+                <button
+                  key={label}
+                  type="button"
+                  onClick={() => setPickedLabel(label)}
+                  dir="auto"
+                  className={`max-w-[10rem] truncate rounded-full border px-3 py-1.5 text-xs font-medium transition-colors ${
+                    active
+                      ? "border-amber bg-amber/15 text-amber"
+                      : "border-bdr text-muted hover:border-amber/50 hover:text-white"
+                  }`}
+                  title={label}
+                >
+                  {label}
+                </button>
+              );
+            })}
           </div>
 
-          <div>
-            <div className="mb-2 text-sm font-semibold text-white">{t.ims.byAreaProduct}</div>
-            <div className="overflow-x-auto rounded-2xl border border-bdr">
-              <table className="w-full text-left text-xs">
-                <thead>
-                  <tr className="border-b border-bdr text-muted">
-                    {showArea && <th className="px-3 py-2 font-normal">{t.ims.fieldArea}</th>}
-                    <th className="px-3 py-2 font-normal">{t.ims.fieldProduct}</th>
-                    <th className="px-3 py-2 font-normal">{t.ims.latestShare}</th>
-                    {showChange && (
-                      <th className="px-3 py-2 font-normal">
-                        {t.ims.change} {vsMonths !== null ? t.ims.vsMonthsAgo(vsMonths) : ""}
-                      </th>
-                    )}
-                    {showCompetitor && <th className="px-3 py-2 font-normal">{t.ims.topCompetitor}</th>}
-                  </tr>
-                </thead>
-                <tbody>
-                  {report.areaProducts.map((row, i) => (
-                    <AreaProductRow
-                      key={i}
-                      row={row}
-                      t={t}
-                      showArea={showArea}
-                      showChange={showChange}
-                      showCompetitor={showCompetitor}
-                    />
+          <div className="mb-5 grid grid-cols-2 gap-3">
+            <MetricCard
+              label={t.ims.ytdMarketShare}
+              value={formatShare(selected.latestShare)}
+              subtitle={selected.rank !== null ? t.ims.rankInCategory(selected.rank, selected.totalInGroup) : t.ims.notAvailable}
+              accent="var(--red)"
+            />
+            <MetricCard
+              label={t.ims.ourGrowth}
+              value={formatSignedPct(selected.ourGrowthRate)}
+              subtitle={t.ims.ourGrowthSubtitle}
+              accent="var(--amber)"
+            />
+            <MetricCard
+              label={t.ims.marketGrowthLabel}
+              value={formatSignedPct(selected.marketGrowthRate)}
+              subtitle={t.ims.marketGrowthSubtitle}
+              accent="var(--cyan)"
+            />
+            <MetricCard
+              label={t.ims.shareGainLossLabel}
+              value={formatPoints(selected.pctPointChange)}
+              subtitle={t.ims.shareGainLossSubtitle}
+              accent="var(--red)"
+            />
+          </div>
+
+          <div className="mb-5 rounded-2xl border border-bdr bg-surf p-4">
+            <div className="mb-2 text-sm font-semibold text-white" dir="auto">
+              {t.ims.analysisTitle(groupLabel(selected))}
+            </div>
+            <p className="mb-2 break-words text-sm text-muted" dir="auto">
+              {t.ims.positionShareLine(
+                formatShare(selected.latestShare),
+                selected.rank !== null ? t.ims.rankInCategory(selected.rank, selected.totalInGroup) : t.ims.notAvailable,
+              )}
+            </p>
+            {(selected.ourGrowthRate !== null || selected.marketGrowthRate !== null) && (
+              <p className="mb-2 break-words text-sm text-muted" dir="auto">
+                {t.ims.positionGrowthLine(formatSignedPct(selected.ourGrowthRate), formatSignedPct(selected.marketGrowthRate))}
+              </p>
+            )}
+            {selectedFinding && <FindingCard finding={selectedFinding} t={t} />}
+          </div>
+
+          {selected.series.length > 0 && selected.series[selected.series.length - 1].competitorShares.length > 0 && (
+            <div className="mb-5">
+              <div className="mb-2 text-sm font-semibold text-white">{t.ims.monthlyTrendTitle}</div>
+              <ImsTrendChart series={selected.series} ownLabel={groupLabel(selected)} />
+            </div>
+          )}
+
+          {selected.series.length > 0 && selected.series[selected.series.length - 1].competitorShares.length > 0 && (
+            <div className="mb-5">
+              <div className="mb-2 text-sm font-semibold text-white">{t.ims.competitorsTitle}</div>
+              <div className="overflow-hidden rounded-2xl border border-bdr">
+                {[...selected.series[selected.series.length - 1].competitorShares]
+                  .sort((a, b) => b.share - a.share)
+                  .map((c, i) => (
+                    <div
+                      key={c.company}
+                      className={`flex items-center justify-between px-3 py-2 text-sm ${i > 0 ? "border-t border-bdr/60" : ""}`}
+                    >
+                      <span className="min-w-0 truncate text-white" dir="auto" title={c.company}>
+                        {c.company}
+                      </span>
+                      <span className="ms-3 shrink-0 font-mono text-xs text-muted">{formatShare(c.share)}</span>
+                    </div>
                   ))}
-                </tbody>
-              </table>
+              </div>
+            </div>
+          )}
+
+          <div>
+            <div className="mb-2 text-sm font-semibold text-white">{t.ims.marketRankingTitle}</div>
+            <div className="rounded-2xl border border-bdr p-1.5">
+              {groups.map((ap, i) => (
+                <RankingRow
+                  key={groupLabel(ap)}
+                  ap={ap}
+                  rank={i + 1}
+                  active={groupLabel(ap) === selectedLabel}
+                  onSelect={() => setPickedLabel(groupLabel(ap))}
+                  t={t}
+                />
+              ))}
             </div>
           </div>
         </>

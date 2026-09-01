@@ -4,7 +4,14 @@ import { findDuplicateKeys, POSTGRES_UNIQUE_VIOLATION } from "@/lib/lumen/duplic
 
 const MAX_ROWS_PER_REQUEST = 5000;
 
-type IncomingRow = { area: string | null; product: string | null; company: string | null; marketShare: number; month: number };
+type IncomingRow = {
+  area: string | null;
+  product: string | null;
+  company: string | null;
+  marketShare: number;
+  month: number;
+  growthRate: number | null;
+};
 
 // Appends a batch of parsed IMS rows to an already-created IMS file
 // (mirrors the dataset-create -> upload-rows split used for the primary
@@ -59,6 +66,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
       company: typeof r.company === "string" ? r.company : null,
       market_share: r.marketShare,
       month: r.month,
+      growth_rate: typeof r.growthRate === "number" && Number.isFinite(r.growthRate) ? r.growthRate : null,
       year,
       uploaded_at: uploadedAt,
     }));

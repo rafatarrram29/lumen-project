@@ -33,7 +33,7 @@ export async function GET(request: Request) {
     fetchAllRows((from, to) =>
       supabase
         .from("lumen_ims_records")
-        .select("area, product, company, market_share, month")
+        .select("area, product, company, market_share, month, growth_rate")
         .eq("year", year)
         .eq("dataset_id", datasetId)
         .range(from, to),
@@ -63,9 +63,16 @@ export async function GET(request: Request) {
     company: r.company as string | null,
     marketShare: Number(r.market_share),
     month: Number(r.month),
+    growthRate: r.growth_rate != null ? Number(r.growth_rate) : null,
   }));
 
-  const ownCompany = (filesData ?? []).find((f) => f.own_company)?.own_company ?? null;
+  // Every file's own_company, not just the first one set — a dataset with
+  // several IMS files almost always has a different own-brand name per
+  // product/molecule, and treating only one of them as "us" would silently
+  // misclassify every other file's own rows as competitors.
+  const ownCompanies = Array.from(
+    new Set((filesData ?? []).map((f) => f.own_company).filter((c): c is string => c != null)),
+  );
 
   let salesAreaPctChange: Record<string, number | null> | undefined;
   if ((salesData ?? []).length > 0) {
@@ -86,7 +93,7 @@ export async function GET(request: Request) {
     }
   }
 
-  const report = buildImsReport(records, ownCompany, salesAreaPctChange);
+  const report = buildImsReport(records, ownCompanies, salesAreaPctChange);
 
   return NextResponse.json({ ...report, hasIms: records.length > 0, hasSales: (salesData ?? []).length > 0 });
 }

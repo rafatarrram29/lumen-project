@@ -5,7 +5,7 @@ import { isValidImsMapping, type ImsColumnMapping } from "@/lib/lumen/imsMapping
 function isValidMapping(m: unknown): m is ImsColumnMapping {
   if (!m || typeof m !== "object") return false;
   const mapping = m as Record<string, unknown>;
-  for (const key of ["area", "product", "month", "company", "fixedProduct"]) {
+  for (const key of ["area", "product", "month", "company", "fixedProduct", "growthRate"]) {
     if (mapping[key] !== null && typeof mapping[key] !== "string") return false;
   }
   if (typeof mapping.marketShare !== "string" || mapping.marketShare.trim() === "") return false;
