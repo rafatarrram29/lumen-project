@@ -388,7 +388,7 @@ export default function LumenClient({
     sheet: RawSheet,
     fileName: string,
     fileLabel: string,
-  ): Promise<number | false> {
+  ): Promise<{ inserted: number; warning?: string } | false> {
     const rows = applyColumnMapping(sheet, mapping);
     const monthsInFile = Array.from(new Set(rows.map((r) => r.month))).sort((a, b) => a - b);
 
@@ -422,19 +422,54 @@ export default function LumenClient({
     }
 
     let inserted = 0;
-    for (let i = 0; i < batches.length; i++) {
-      setUploadProgress(`${fileLabel}: batch ${i + 1} of ${batches.length}…`);
-      const res = await fetch("/api/lumen/upload", {
+    try {
+      for (let i = 0; i < batches.length; i++) {
+        setUploadProgress(`${fileLabel}: batch ${i + 1} of ${batches.length}…`);
+        const res = await fetch("/api/lumen/upload", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ year, datasetId, sourceFile: fileName, rows: batches[i] }),
+        });
+        const json = await res.json();
+        if (!res.ok) throw new Error(json.error || "Upload failed");
+        inserted += json.inserted;
+      }
+    } catch (err) {
+      // A batch failed partway through — rather than leave this file's
+      // months half-written (some areas present, others missing, with no
+      // visible sign anything went wrong), roll back everything this
+      // attempt touched so the month is either fully there or not there
+      // at all, never a silent partial mix.
+      await fetch("/api/lumen/replace-months", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ year, datasetId, sourceFile: fileName, rows: batches[i] }),
-      });
-      const json = await res.json();
-      if (!res.ok) throw new Error(json.error || "Upload failed");
-      inserted += json.inserted;
+        body: JSON.stringify({ year, datasetId, months: monthsInFile }),
+      }).catch(() => {});
+      throw new Error(
+        `${err instanceof Error ? err.message : "Upload failed"} — the partial data from this attempt was rolled back. Please try again.`,
+      );
     }
 
-    return inserted;
+    // Final sanity check: does the dataset actually now hold as many rows
+    // for these months as we just inserted? This should always match —
+    // the per-batch duplicate rejection and the database's own uniqueness
+    // constraint both prevent a mismatch — but this is the one place we
+    // can catch anything neither of those anticipated before the user
+    // walks away trusting a silently wrong number.
+    let warning: string | undefined;
+    try {
+      const countRes = await fetch(
+        `/api/lumen/sales-records/count?year=${year}&datasetId=${datasetId}&months=${monthsInFile.join(",")}`,
+      );
+      const countJson = await countRes.json();
+      if (countRes.ok && typeof countJson.count === "number" && countJson.count !== inserted) {
+        warning = `${fileLabel}: expected ${inserted} rows for this upload, but the dataset now has ${countJson.count} for these months — please check the Correction log and this area's numbers before relying on them.`;
+      }
+    } catch {
+      // best-effort only; not being able to verify isn't itself an error
+    }
+
+    return { inserted, warning };
   }
 
   async function handleWizardConfirm(choice: WizardChoice) {
@@ -471,15 +506,17 @@ export default function LumenClient({
       let successCount = 0;
       let totalInserted = 0;
       const failures: string[] = [];
+      const warnings: string[] = [];
 
       for (let i = 0; i < files.length; i++) {
         const { file, sheet } = files[i];
         const fileLabel = files.length > 1 ? `${file.name} (${i + 1}/${files.length})` : file.name;
         try {
-          const inserted = await uploadRowsToDataset(datasetId, mapping, sheet, file.name, fileLabel);
-          if (inserted !== false) {
+          const result = await uploadRowsToDataset(datasetId, mapping, sheet, file.name, fileLabel);
+          if (result !== false) {
             successCount++;
-            totalInserted += inserted;
+            totalInserted += result.inserted;
+            if (result.warning) warnings.push(result.warning);
           }
         } catch (err) {
           failures.push(`${file.name}: ${err instanceof Error ? err.message : "Upload failed"}`);
@@ -495,6 +532,9 @@ export default function LumenClient({
         setSelectedDatasetId(datasetId);
         setExpanded(new Set());
         await fetchReport(datasetId, year);
+      }
+      if (warnings.length > 0) {
+        setUploadError((prev) => [prev, ...warnings].filter(Boolean).join(" | "));
       }
       if (failures.length > 0) {
         setUploadError(failures.join(" | "));

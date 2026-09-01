@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
+import { findDuplicateKeys, POSTGRES_UNIQUE_VIOLATION } from "@/lib/lumen/duplicateCheck";
 
 const MAX_ROWS_PER_REQUEST = 5000;
 
@@ -77,9 +78,42 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "No valid rows in payload" }, { status: 400 });
   }
 
+  // Reject a batch that duplicates area/item/month(/rep) within itself
+  // BEFORE attempting to insert it — this is the actual mechanism that
+  // silently inflated real data in the past, since nothing previously
+  // stopped two rows for the same area+item+month from both being
+  // inserted.
+  const duplicates = findDuplicateKeys(
+    records,
+    (r) => `${r.dataset_id}|${r.year}|${r.month}|${r.area}|${r.item}|${r.rep ?? ""}`,
+  );
+  if (duplicates.length > 0) {
+    const [area, item, month, rep] = duplicates[0].key.split("|").slice(3);
+    const example = rep ? `${area} / ${item} / month ${month} / rep ${rep}` : `${area} / ${item} / month ${month}`;
+    return NextResponse.json(
+      {
+        error:
+          `This batch has ${duplicates.length} area/item/month combination(s) repeated more than once ` +
+          `(e.g. ${example}) — check the source file for repeated rows, or if this is a re-upload of a ` +
+          `month you already have, use the overlap/replace prompt instead of adding to the dataset.`,
+      },
+      { status: 409 },
+    );
+  }
+
   const { error } = await supabase.from("lumen_sales_records").insert(records);
 
   if (error) {
+    if (error.code === POSTGRES_UNIQUE_VIOLATION) {
+      return NextResponse.json(
+        {
+          error:
+            "Some of these rows duplicate data already in this dataset for the same area/item/month(/rep). " +
+            "If you're correcting a month you already uploaded, use the overlap/replace prompt instead of adding to it.",
+        },
+        { status: 409 },
+      );
+    }
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 
