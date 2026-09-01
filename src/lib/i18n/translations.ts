@@ -135,6 +135,7 @@ export type Translations = {
     deleteDatasetConfirm: (name: string) => string;
     byRep: string;
     repComparison: string;
+    repLeaderboard: string;
   };
   chart: {
     indexedCaption: (areaLabel: string, compareLabel: string) => string;
@@ -297,6 +298,7 @@ const en: Translations = {
       `Delete "${name}"? This permanently removes all of its uploaded data. This cannot be undone.`,
     byRep: "By rep",
     repComparison: "Rep comparison",
+    repLeaderboard: "Rep leaderboard",
   },
   chart: {
     indexedCaption: (areaLabel, compareLabel) =>
@@ -461,6 +463,7 @@ const ar: Translations = {
       `حذف "${name}"؟ ده هيمسح كل البيانات اللي اترفعت فيها نهائيًا. الخطوة دي مينفعش نرجع فيها.`,
     byRep: "حسب المندوب",
     repComparison: "مقارنة المناديب",
+    repLeaderboard: "ترتيب المناديب",
   },
   chart: {
     indexedCaption: (areaLabel, compareLabel) =>

@@ -11,7 +11,7 @@ import {
   type TargetColumnMapping,
 } from "@/lib/lumen/columnMapping";
 import type { Finding, Report } from "@/lib/lumen/engine";
-import { StatTile, AreaChangeBars, FamilyChangeBars } from "./charts";
+import { StatTile, AreaChangeBars, FamilyChangeBars, RepLeaderboard } from "./charts";
 import { TrendChart } from "./TrendChart";
 import { ItemTrendChart } from "./ItemTrendChart";
 import { colorForFamily } from "@/lib/lumen/familyColors";
@@ -630,6 +630,16 @@ export default function LumenClient({
           <div className="mb-5">
             <FamilyChangeBars families={report.familyChanges} />
           </div>
+
+          {report.hasReps && (
+            <div className="mb-5">
+              <RepLeaderboard
+                repChanges={report.repChanges}
+                repTargets={report.repTargets}
+                hasTargets={report.hasTargets}
+              />
+            </div>
+          )}
 
           {report.hasReps && (
             <div className="mb-5">
