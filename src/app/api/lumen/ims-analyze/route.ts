@@ -58,8 +58,8 @@ export async function GET(request: Request) {
   }
 
   const records: ImsRecord[] = (imsData ?? []).map((r) => ({
-    area: r.area as string,
-    product: r.product as string,
+    area: r.area as string | null,
+    product: r.product as string | null,
     company: r.company as string | null,
     marketShare: Number(r.market_share),
     month: Number(r.month),

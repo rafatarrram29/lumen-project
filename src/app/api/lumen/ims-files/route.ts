@@ -1,15 +1,17 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
-import type { ImsColumnMapping } from "@/lib/lumen/imsMapping";
+import { isValidImsMapping, type ImsColumnMapping } from "@/lib/lumen/imsMapping";
 
 function isValidMapping(m: unknown): m is ImsColumnMapping {
   if (!m || typeof m !== "object") return false;
   const mapping = m as Record<string, unknown>;
-  for (const key of ["area", "product", "marketShare", "month"]) {
+  for (const key of ["area", "product", "company"]) {
+    if (mapping[key] !== null && typeof mapping[key] !== "string") return false;
+  }
+  for (const key of ["marketShare", "month"]) {
     if (typeof mapping[key] !== "string" || (mapping[key] as string).trim() === "") return false;
   }
-  if (mapping.company !== null && typeof mapping.company !== "string") return false;
-  return true;
+  return isValidImsMapping(mapping as ImsColumnMapping);
 }
 
 export async function GET(request: Request) {

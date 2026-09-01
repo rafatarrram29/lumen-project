@@ -159,8 +159,23 @@ export type Translations = {
     fieldMonth: string;
     fieldCompany: string;
     fieldCompanyHint: string;
+    atLeastOneOfAreaProduct: string;
     ownCompanyLabel: string;
     ownCompanyHint: string;
+    pdfExtracting: string;
+    pdfExtractFailed: (err: string) => string;
+    pdfPageImageWarning: string;
+    pdfPageNoTableWarning: string;
+    pdfSkip: string;
+    pdfEnterManually: string;
+    pdfManualHint: string;
+    pdfManualPlaceholder: string;
+    pdfUseManual: string;
+    pdfUseTable: string;
+    pdfPageLabel: (n: number) => string;
+    pdfTablesFound: (n: number) => string;
+    pdfNoTablesAtAll: string;
+    pdfBackToPages: string;
     save: string;
     uploadSuccess: (n: number) => string;
     deleteButton: string;
@@ -174,8 +189,8 @@ export type Translations = {
     noCompetitorData: string;
     findingsTitle: string;
     noFindings: string;
-    shareDropSummary: (product: string, area: string, pct: number, months: number) => string;
-    shareGainSummary: (product: string, area: string, pct: number, months: number) => string;
+    shareDropSummary: (product: string | null, area: string | null, pct: number, months: number) => string;
+    shareGainSummary: (product: string | null, area: string | null, pct: number, months: number) => string;
     competitorMoveNote: (company: string, pct: number) => string;
     marketOutpacingUs: (area: string, salesPct: number, sharePct: number) => string;
     weOutpacingMarket: (area: string, salesPct: number, sharePct: number) => string;
@@ -440,8 +455,23 @@ const en: Translations = {
     fieldMonth: "Month",
     fieldCompany: "Company (optional)",
     fieldCompanyHint: "Only needed if this file lists more than one company's share per area/product/month.",
+    atLeastOneOfAreaProduct: "Map at least one of Area or Product — whichever this file actually has.",
     ownCompanyLabel: "Which value in that column is us?",
     ownCompanyHint: "Everything else in that column is treated as a competitor.",
+    pdfExtracting: "Reading the PDF…",
+    pdfExtractFailed: (err) => `Could not read that PDF: ${err}`,
+    pdfPageImageWarning: "This page's content looks like an image, not extractable text — we can't read a table from it automatically.",
+    pdfPageNoTableWarning: "Couldn't find a clear table on this page.",
+    pdfSkip: "Skip this page",
+    pdfEnterManually: "Enter its data manually",
+    pdfManualHint: "First line = column names. Separate values with commas or tabs.",
+    pdfManualPlaceholder: "Area,Product,Market Share,Month\nDomiat 1,Drug A,24.5,1",
+    pdfUseManual: "Use this data",
+    pdfUseTable: "Use this table",
+    pdfPageLabel: (n) => `Page ${n}`,
+    pdfTablesFound: (n) => `${n} table${n === 1 ? "" : "s"} found`,
+    pdfNoTablesAtAll: "No tables could be confidently extracted from this PDF. Every page can still be entered manually below.",
+    pdfBackToPages: "← Back to pages",
     save: "Save",
     uploadSuccess: (n) => `Uploaded ${n} rows.`,
     deleteButton: "Delete",
@@ -455,10 +485,14 @@ const en: Translations = {
     noCompetitorData: "No competitor data",
     findingsTitle: "Findings",
     noFindings: "No significant market-share moves detected.",
-    shareDropSummary: (product, area, pct, months) =>
-      `${product} share in ${area} dropped ${Math.abs(pct)} point${Math.abs(pct) === 1 ? "" : "s"} over the last ${months} month${months === 1 ? "" : "s"}.`,
-    shareGainSummary: (product, area, pct, months) =>
-      `${product} share in ${area} grew ${pct} point${pct === 1 ? "" : "s"} over the last ${months} month${months === 1 ? "" : "s"}.`,
+    shareDropSummary: (product, area, pct, months) => {
+      const entity = product && area ? `${product} share in ${area}` : `${product ?? area} share`;
+      return `${entity} dropped ${Math.abs(pct)} point${Math.abs(pct) === 1 ? "" : "s"} over the last ${months} month${months === 1 ? "" : "s"}.`;
+    },
+    shareGainSummary: (product, area, pct, months) => {
+      const entity = product && area ? `${product} share in ${area}` : `${product ?? area} share`;
+      return `${entity} grew ${pct} point${pct === 1 ? "" : "s"} over the last ${months} month${months === 1 ? "" : "s"}.`;
+    },
     competitorMoveNote: (company, pct) =>
       ` Meanwhile, ${company} ${pct > 0 ? "gained" : "lost"} ${Math.abs(pct)} point${Math.abs(pct) === 1 ? "" : "s"} in the same window.`,
     marketOutpacingUs: (area, salesPct, sharePct) =>
@@ -732,8 +766,23 @@ const ar: Translations = {
     fieldMonth: "الشهر",
     fieldCompany: "الشركة (اختياري)",
     fieldCompanyHint: "محتاجه بس لو الملف فيه حصة أكتر من شركة لكل منطقة/منتج/شهر.",
+    atLeastOneOfAreaProduct: "حدد عمود واحد على الأقل من المنطقة أو المنتج — أنهي واحد فيهم موجود فعلاً في الملف.",
     ownCompanyLabel: "أنهي قيمة في العمود ده هي إحنا؟",
     ownCompanyHint: "أي قيمة تانية في العمود ده هتتحسب منافس.",
+    pdfExtracting: "بيتم قراءة ملف PDF…",
+    pdfExtractFailed: (err) => `تعذّرت قراءة ملف الـ PDF: ${err}`,
+    pdfPageImageWarning: "محتوى الصفحة دي شكله صورة مش نص قابل للاستخراج — مقدرناش نستخرج جدول منها تلقائيًا.",
+    pdfPageNoTableWarning: "مقدرناش نلاقي جدول واضح في الصفحة دي.",
+    pdfSkip: "تجاهل الصفحة دي",
+    pdfEnterManually: "دخّل بياناتها يدويًا",
+    pdfManualHint: "السطر الأول = أسماء الأعمدة. افصل القيم بفاصلة أو Tab.",
+    pdfManualPlaceholder: "المنطقة,المنتج,الحصة السوقية,الشهر\nDomiat 1,Drug A,24.5,1",
+    pdfUseManual: "استخدم البيانات دي",
+    pdfUseTable: "استخدم الجدول ده",
+    pdfPageLabel: (n) => `صفحة ${n}`,
+    pdfTablesFound: (n) => `${n} جدول اتلاقى`,
+    pdfNoTablesAtAll: "مقدرناش نستخرج أي جدول بثقة من ملف الـ PDF ده. تقدر تدخّل بيانات أي صفحة يدويًا تحت.",
+    pdfBackToPages: "→ رجوع للصفحات",
     save: "حفظ",
     uploadSuccess: (n) => `تم رفع ${n} صف.`,
     deleteButton: "حذف",
@@ -747,10 +796,14 @@ const ar: Translations = {
     noCompetitorData: "مفيش بيانات منافسين",
     findingsTitle: "الملاحظات",
     noFindings: "مفيش تغييرات كبيرة في الحصة السوقية.",
-    shareDropSummary: (product, area, pct, months) =>
-      `حصة ${product} في ${area} قلت ${Math.abs(pct)} نقطة خلال آخر ${months} شهر.`,
-    shareGainSummary: (product, area, pct, months) =>
-      `حصة ${product} في ${area} زادت ${pct} نقطة خلال آخر ${months} شهر.`,
+    shareDropSummary: (product, area, pct, months) => {
+      const entity = product && area ? `حصة ${product} في ${area}` : `حصة ${product ?? area}`;
+      return `${entity} قلت ${Math.abs(pct)} نقطة خلال آخر ${months} شهر.`;
+    },
+    shareGainSummary: (product, area, pct, months) => {
+      const entity = product && area ? `حصة ${product} في ${area}` : `حصة ${product ?? area}`;
+      return `${entity} زادت ${pct} نقطة خلال آخر ${months} شهر.`;
+    },
     competitorMoveNote: (company, pct) =>
       ` في نفس الوقت، ${company} ${pct > 0 ? "كسب" : "خسر"} ${Math.abs(pct)} نقطة.`,
     marketOutpacingUs: (area, salesPct, sharePct) =>
