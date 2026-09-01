@@ -1,5 +1,5 @@
 import PptxGenJS from "pptxgenjs";
-import { sanitizeFileName, type SuccessReport } from "./exportItems";
+import { sanitizeFileName, findingsForArea, findingsForItem, areaRankingForItem, rootCauseText, type SuccessReport } from "./exportItems";
 import type { Translations } from "@/lib/i18n/translations";
 import type { Lang } from "@/lib/i18n/translations";
 import { findingSummary, findingDecision } from "@/lib/i18n/findingText";
@@ -152,6 +152,85 @@ export async function exportToPptx(ctx: ExportContext): Promise<void> {
       ],
       { x: 0.5, y: 1.8, w: 9, colW: [3, 3, 3], border: { color: "2A3559", pt: 0.5 }, align },
     );
+
+    const areaFindings = findingsForArea(report, area);
+    if (areaFindings.length > 0) {
+      slide.addText(findingSummary(areaFindings[0], report, t), {
+        x: 0.5,
+        y: 1.8 + (rows.length + 1) * 0.4 + 0.2,
+        w: 9,
+        h: 0.9,
+        fontSize: 12,
+        color: MUTED,
+        align,
+        valign: "top",
+      });
+    }
+
+    // Full trend, straight from report data — independent of whether this
+    // area's card happened to be expanded on screen.
+    if (d.monthlySeries.length >= 2) {
+      const clusterSummary = report.hasClusters ? report.clusters[d.cluster] : undefined;
+      addTrendSlide(pptx, t.dashboard.trendLastMonths(d.monthlySeries.length), area, d.monthlySeries, clusterSummary?.monthlySeries, t, align);
+    }
+
+    // Full by-item breakdown for this area — every family, not just the
+    // ones the user happened to expand.
+    const familyEntries = Object.entries(report.areaFamilyChanges[area] ?? {}).sort((a, b) => b[1].absDrop - a[1].absDrop);
+    if (familyEntries.length > 0) {
+      addChangeTableSlide(
+        pptx,
+        `${area} — ${t.dashboard.byItem}`,
+        familyEntries.map(([fam, fc]) => [fam, fc.currValue, fc.pctChange] as [string, number, number | null]),
+        t,
+        align,
+      );
+    }
+  }
+
+  // --- Item slides ---
+  for (const family of Object.keys(report.familyChanges)) {
+    if (!isSelected(ctx, `item:${family}`)) continue;
+    const fc = report.familyChanges[family];
+    const slide = pptx.addSlide();
+    addBackground(slide);
+    slide.addText(family, { x: 0.5, y: 0.3, w: 9, h: 0.5, fontSize: 22, bold: true, color: WHITE, align });
+    const pctColor = fc.pctChange !== null && fc.pctChange < 0 ? RED : GREEN;
+    slide.addText(fc.pctChange !== null ? `${fc.pctChange > 0 ? "+" : ""}${fc.pctChange}%` : "n/a", {
+      x: 0.5,
+      y: 0.9,
+      w: 9,
+      h: 0.6,
+      fontSize: 28,
+      bold: true,
+      color: pctColor,
+      align,
+    });
+    slide.addText(
+      `${t.common.month(report.comparedToMonth)}: ${formatNum(fc.prevValue)}  ->  ${t.common.month(report.latestMonth)}: ${formatNum(fc.currValue)}`,
+      { x: 0.5, y: 1.6, w: 9, h: 0.4, fontSize: 14, color: WHITE, align },
+    );
+
+    const { areas: rootCauseAreas, clusters: rootCauseClusters } = findingsForItem(report, family);
+    const rootCause = rootCauseText(t, rootCauseAreas, rootCauseClusters);
+    if (rootCause) {
+      slide.addText(rootCause, { x: 0.5, y: 2.1, w: 9, h: 0.6, fontSize: 12, color: AMBER, align, valign: "top" });
+    }
+
+    const itemSeries = report.itemMonthlySeries[family] ?? [];
+    if (itemSeries.length >= 2) {
+      addTrendSlide(pptx, `${family} — ${t.dashboard.trendLastMonths(itemSeries.length)}`, family, itemSeries, undefined, t, align);
+    }
+
+    const ranking = areaRankingForItem(report, family);
+    if (ranking.length > 0) {
+      addRankedListSlide(
+        pptx,
+        `${family} — ${t.dashboard.byAreaMonth(report.latestMonth)}`,
+        ranking.map(([area, value]) => [area, formatNum(value)] as [string, string]),
+        align,
+      );
+    }
   }
 
   // --- Chart slides (native pptx charts) ---
@@ -275,4 +354,77 @@ function addBarChartSlide(
     plotArea: { fill: { color: BG } },
     chartArea: { fill: { color: BG } },
   });
+}
+
+// A native line-chart slide for a monthly trend — the area (or item) vs.
+// its cluster average, when there is one. Built straight from report
+// data, so it's identical whether the matching dashboard card was
+// expanded or collapsed when Export was clicked.
+function addTrendSlide(
+  pptx: PptxGenJS,
+  title: string,
+  seriesLabel: string,
+  series: { month: number; value: number }[],
+  clusterSeries: { month: number; avgValue: number }[] | undefined,
+  t: Translations,
+  align: "left" | "right",
+) {
+  const slide = pptx.addSlide();
+  slide.background = { color: BG };
+  slide.addText(title, { x: 0.5, y: 0.3, w: 9, h: 0.5, fontSize: 22, bold: true, color: WHITE, align });
+
+  const labels = series.map((s) => t.common.month(s.month));
+  const data: PptxGenJS.OptsChartData[] = [{ name: seriesLabel, labels, values: series.map((s) => s.value) }];
+  if (clusterSeries) {
+    const byMonth = new Map(clusterSeries.map((s) => [s.month, s.avgValue]));
+    data.push({ name: t.dashboard.clusterWord, labels, values: series.map((s) => byMonth.get(s.month) ?? 0) });
+  }
+
+  slide.addChart(pptx.ChartType.line, data, {
+    x: 0.5,
+    y: 1.0,
+    w: 9,
+    h: 4.3,
+    chartColors: [AMBER, MUTED],
+    valAxisLabelColor: MUTED,
+    catAxisLabelColor: MUTED,
+    showLegend: clusterSeries !== undefined,
+    legendColor: MUTED,
+    lineDataSymbol: "circle",
+    plotArea: { fill: { color: BG } },
+    chartArea: { fill: { color: BG } },
+  });
+}
+
+// A prev -> curr -> %change table slide — used for an area's full
+// by-item breakdown (every family, not just the ones the user happened
+// to expand).
+function addChangeTableSlide(
+  pptx: PptxGenJS,
+  title: string,
+  rows: [string, number, number | null][],
+  t: Translations,
+  align: "left" | "right",
+) {
+  if (rows.length === 0) return;
+  const slide = pptx.addSlide();
+  slide.background = { color: BG };
+  slide.addText(title, { x: 0.5, y: 0.3, w: 9, h: 0.5, fontSize: 22, bold: true, color: WHITE, align });
+
+  const tableRows: PptxGenJS.TableRow[] = [
+    [
+      { text: "", options: { fill: { color: SURFACE } } },
+      { text: t.export.valueLabel, options: { fill: { color: SURFACE }, color: MUTED, fontSize: 12 } },
+      { text: t.export.changeLabel, options: { fill: { color: SURFACE }, color: MUTED, fontSize: 12 } },
+    ],
+    ...rows.map(([label, value, pctChange]) => [
+      { text: label, options: { color: WHITE, fontSize: 13 } },
+      { text: formatNum(value), options: { color: WHITE, fontSize: 13, bold: true } },
+      {
+        text: pctChange === null ? "n/a" : `${pctChange > 0 ? "+" : ""}${pctChange}%`,
+        options: { color: pctChange !== null && pctChange < 0 ? RED : GREEN, fontSize: 13 },
+      },
+    ]),
+  ];
+  slide.addTable(tableRows, { x: 0.5, y: 1.1, w: 9, colW: [5, 2, 2], border: { color: "2A3559", pt: 0.5 }, align });
 }

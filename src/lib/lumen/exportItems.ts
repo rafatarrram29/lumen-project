@@ -3,7 +3,7 @@ import type { Translations } from "@/lib/i18n/translations";
 
 export type SuccessReport = Extract<Report, { findings: Finding[] }>;
 
-export type ExportItemGroup = "summary" | "areas" | "decisions" | "charts" | "sections";
+export type ExportItemGroup = "summary" | "areas" | "items" | "decisions" | "charts" | "sections";
 
 export type ExportItem = {
   id: string;
@@ -26,6 +26,12 @@ export function buildExportItems(report: SuccessReport, t: Translations): Export
     id: `area:${area}`,
     group: "areas",
     label: area,
+  }));
+
+  const itemItems: ExportItem[] = Object.keys(report.familyChanges).map((family) => ({
+    id: `item:${family}`,
+    group: "items",
+    label: family,
   }));
 
   const decisionItems: ExportItem[] = report.findings.map((f, i) => {
@@ -57,6 +63,7 @@ export function buildExportItems(report: SuccessReport, t: Translations): Export
   const groups: ExportItemGroups = [
     { group: "summary", title: t.export.groupSummary, items: [{ id: "summary", group: "summary", label: t.export.itemSummary }] },
     { group: "areas", title: t.export.groupAreas, items: areaItems },
+    { group: "items", title: t.export.groupItems, items: itemItems },
     { group: "decisions", title: t.export.groupDecisions, items: decisionItems },
     { group: "charts", title: t.export.groupCharts, items: chartItems },
   ];
@@ -69,6 +76,47 @@ export function buildExportItems(report: SuccessReport, t: Translations): Export
 
 export function allItemIds(groups: ExportItemGroups): string[] {
   return groups.flatMap((g) => g.items.map((i) => i.id));
+}
+
+// Every non-systemic finding tied to a given area — same grouping the
+// dashboard itself uses to show an area's root cause/decision line, so an
+// exported area block never leaves this out just because it wasn't
+// expanded on screen when Export was clicked.
+export function findingsForArea(report: SuccessReport, area: string): Finding[] {
+  return report.findings.filter((f) => f.type !== "systemic_drop" && f.area === area);
+}
+
+// Which areas/clusters a given item (family) is the flagged root cause
+// for — mirrors the dashboard's per-item drill-down.
+export function findingsForItem(report: SuccessReport, item: string): { areas: string[]; clusters: string[] } {
+  const areas: string[] = [];
+  const clusters: string[] = [];
+  for (const f of report.findings) {
+    if (f.type === "local_drop" && f.rootCauseFamily === item) areas.push(f.area);
+    if (f.type === "systemic_drop" && f.rootCauseFamily === item) clusters.push(f.cluster);
+  }
+  return { areas, clusters };
+}
+
+// The same "root cause for ..." phrasing the dashboard's item drill-down
+// uses, built from a findingsForItem() result.
+export function rootCauseText(t: Translations, areas: string[], clusters: string[]): string | null {
+  if (areas.length === 0 && clusters.length === 0) return null;
+  const parts = [
+    ...areas,
+    ...clusters.map((c) => (c === "All areas" ? t.dashboard.theClusterWideDrop : t.dashboard.theClusterWideDropIn(c))),
+  ];
+  return `${t.dashboard.rootCauseFor} ${parts.join(", ")}`;
+}
+
+// Every area's latest-month value for a given item, ranked highest first —
+// the same ranking the dashboard shows under an expanded item row.
+export function areaRankingForItem(report: SuccessReport, item: string): [string, number][] {
+  return Object.entries(report.areaFamilyChanges)
+    .map(([area, changes]) => [area, changes[item]] as const)
+    .filter((entry): entry is [string, NonNullable<(typeof entry)[1]>] => entry[1] !== undefined)
+    .sort((a, b) => b[1].currValue - a[1].currValue)
+    .map(([area, changes]) => [area, changes.currValue]);
 }
 
 // Strips only characters that are actually invalid in a filename —

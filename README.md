@@ -232,14 +232,20 @@ file — use "Replace" on it, which shows the same editable mapping.
 
 The **Export** button (top of the dashboard) opens a checklist of every
 exportable piece of the current report — overview stats, each area, each
-decision, each chart, and Rep Leaderboard / Target vs Actual when present
-— all checked by default, with Select all / Deselect all. Pick PDF or
-PowerPoint and only the checked items are included; nothing in the output
-hints that anything was left out. If the dataset has open (unresolved)
-flagged issues, the export adds a short "some findings are still under
-review" notice. Everything renders in whichever language is active
-(English or Arabic, right-to-left) at export time. Generation happens
-entirely in the browser — no data is sent anywhere to build the file.
+item, each decision, each chart, and Rep Leaderboard / Target vs Actual
+when present — all checked by default, with Select all / Deselect all.
+Pick PDF or PowerPoint and only the checked items are included; nothing in
+the output hints that anything was left out. Everything renders in
+whichever language is active (English or Arabic, right-to-left) at export
+time. Generation happens entirely in the browser — no data is sent
+anywhere to build the file.
+
+Every area and item you check exports its full detail — the same
+month-by-month trend, full by-item (or by-area) breakdown, and root-cause
+notes shown when you expand that card on the dashboard — regardless of
+whether that card happened to be expanded or collapsed on screen when you
+clicked Export. The checklist reads straight from the report's data, never
+from what's currently rendered.
 
 ## Notes on current scope
 
