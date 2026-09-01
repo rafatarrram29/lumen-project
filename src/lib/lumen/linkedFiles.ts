@@ -34,6 +34,9 @@ export type LinkedRecord = {
   cluster: string | null;
   month: number;
   data: Record<string, unknown>;
+  isEdited: boolean;
+  editedAt: string | null;
+  editedBy: string | null;
 };
 
 const TYPE_GUESS_RULES: { type: LinkedFileType; keywords: string[] }[] = [

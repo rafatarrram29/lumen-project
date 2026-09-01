@@ -127,6 +127,14 @@ export type Translations = {
     editLinkTitle: string;
     save: string;
   };
+  inlineEdit: {
+    editHint: string;
+    editedTitle: (editor: string, date: string) => string;
+    saveFailed: string;
+    logSectionTitle: string;
+    logEmpty: string;
+    changedFrom: (oldValue: string, newValue: string) => string;
+  };
   linkedFiles: {
     panelTitle: string;
     addButton: string;
@@ -377,6 +385,14 @@ const en: Translations = {
     editLinkButton: "Edit link",
     editLinkTitle: "Edit how this file is linked",
     save: "Save",
+  },
+  inlineEdit: {
+    editHint: "Click to edit",
+    editedTitle: (editor, date) => `Edited by ${editor} on ${date}`,
+    saveFailed: "Could not save that edit.",
+    logSectionTitle: "Edit history",
+    logEmpty: "No values have been edited in this dataset yet.",
+    changedFrom: (oldValue, newValue) => `${oldValue} → ${newValue}`,
   },
   linkedFiles: {
     panelTitle: "Linked files",
@@ -634,6 +650,14 @@ const ar: Translations = {
     editLinkButton: "تعديل الربط",
     editLinkTitle: "تعديل طريقة ربط الملف ده",
     save: "حفظ",
+  },
+  inlineEdit: {
+    editHint: "دوس عشان تعدّل",
+    editedTitle: (editor, date) => `اتعدّل بواسطة ${editor} في ${date}`,
+    saveFailed: "التعديل ده معملوش حفظ.",
+    logSectionTitle: "سجل التعديلات",
+    logEmpty: "لسه مفيش أرقام اتعدّلت في مجموعة البيانات دي.",
+    changedFrom: (oldValue, newValue) => `${oldValue} ← ${newValue}`,
   },
   linkedFiles: {
     panelTitle: "الملفات المرتبطة",
