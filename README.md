@@ -56,9 +56,21 @@ design reference only — it is not part of the running app.
    in-app inline editing (the **Correction log** described below).
 9. Then run `supabase/lumen_undo_migration.sql`. This adds the `is_undo`
    column used to flag an Undo entry in the Correction log.
-10. Open **Settings -> API** and copy the **Project URL** and the **anon
+10. **Before the next step**, if this project already has real data in it,
+    run `supabase/lumen_data_integrity_audit.sql` first and resolve
+    anything it finds (see "Duplicate or wildly incorrect numbers in an
+    area" under Troubleshooting) — the migration below adds a uniqueness
+    rule that Postgres will refuse to create while duplicate rows still
+    exist. A brand-new project with no data yet can skip straight to
+    running the migration.
+11. Then run `supabase/lumen_data_integrity_migration.sql`. This adds a
+    database-level rule that makes it impossible to insert two rows for
+    the same area/item/month(/rep) ever again, in any dataset — the root
+    cause of the duplicate-row class of bug is closed at the database
+    itself, not just checked for afterward.
+12. Open **Settings -> API** and copy the **Project URL** and the **anon
    public** key.
-11. Open **Authentication -> Sign In / Providers** and make sure **Email**
+13. Open **Authentication -> Sign In / Providers** and make sure **Email**
    is enabled (it is by default). For local development, under
    **Authentication -> URL Configuration**, you can leave the defaults —
    we'll add your real domain there once deployed.
@@ -216,10 +228,32 @@ file — use "Replace" on it, which shows the same editable mapping.
 
 - **Re-uploading a month you already uploaded** into the same dataset asks
   for confirmation before replacing that month's rows, instead of silently
-  duplicating them. If you already have duplicate rows from before this
-  existed (numbers look implausibly large, e.g. an area showing +250%
-  growth), run `supabase/lumen_dedupe.sql` in the Supabase SQL Editor to
-  check for and remove them.
+  duplicating them.
+- **Duplicate or wildly incorrect numbers in an area** (a value that jumps
+  or drops in a way the source file doesn't support) usually means one or
+  more rows for that area/item/month got inserted more than once —
+  historically possible from an upload that partially failed and was
+  retried, or a double-submit, before the database enforced uniqueness.
+  To find and fix it:
+  1. Run `supabase/lumen_data_integrity_audit.sql` in the Supabase SQL
+     Editor — read-only, it lists every dataset with duplicate rows, how
+     many extra rows and how much inflated value each one added, and
+     flags each duplicate group as `SAFE_TO_DEDUPE` (every copy has the
+     identical value — an exact re-insert) or `NEEDS_MANUAL_REVIEW` (the
+     copies actually disagree with each other — don't auto-delete, check
+     the original source file and remove the wrong one by hand).
+  2. Once every remaining group is `SAFE_TO_DEDUPE`, run
+     `supabase/lumen_dedupe.sql` — it removes the extra copies, scoped
+     correctly per dataset (an earlier version of this script matched
+     across the whole table without checking `dataset_id`, which risked
+     deleting real rows from an unrelated dataset that coincidentally
+     shared the same area/item/month/value; this one doesn't).
+  3. `supabase/lumen_data_integrity_migration.sql` (see setup step 11)
+     adds the database constraint that prevents this from happening again
+     going forward — new uploads that would create a duplicate are now
+     rejected outright with a clear error instead of being silently
+     accepted, and an upload that fails partway through is automatically
+     rolled back rather than leaving a month half-written.
 - If you created the `lumen_sales_records` table before the DELETE policy
   was added to `lumen_schema.sql`, run `supabase/lumen_add_delete_policy.sql`
   once — without it, re-uploading a month fails silently.
@@ -262,3 +296,12 @@ from what's currently rendered.
   reads or writes that table. If you ran `lumen_corrections_migration.sql`
   on an older setup, the table is harmless to leave in place; it just isn't
   used anymore.
+- Every number on the dashboard (area totals, trends, targets, rep
+  leaderboard) is computed only from `lumen_sales_records` — linked files
+  (Achievement, KPIs, etc.) are never joined into that data or into these
+  numbers, on this or any other table; they're read and displayed
+  entirely separately, purely as side-by-side context (see "Linked
+  files" above). A wrong-looking Sales number is never caused by a linked
+  file, so troubleshooting it always means looking at
+  `lumen_sales_records` itself for that dataset — see "Duplicate or
+  wildly incorrect numbers in an area" above.

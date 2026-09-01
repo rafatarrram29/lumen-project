@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
+import { findDuplicateKeys, POSTGRES_UNIQUE_VIOLATION } from "@/lib/lumen/duplicateCheck";
 
 const MAX_ROWS_PER_REQUEST = 5000;
 
@@ -59,8 +60,29 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     return NextResponse.json({ error: "No valid rows in payload" }, { status: 400 });
   }
 
+  const duplicates = findDuplicateKeys(
+    records,
+    (r) => `${r.file_id}|${r.year}|${r.month}|${r.area ?? ""}|${r.rep ?? ""}|${r.cluster ?? ""}`,
+  );
+  if (duplicates.length > 0) {
+    return NextResponse.json(
+      {
+        error:
+          `This batch has ${duplicates.length} area/rep/cluster/month combination(s) repeated more than once ` +
+          `— check the source file for repeated rows, or if this is a re-upload, use "Replace" on the file instead of adding to it.`,
+      },
+      { status: 409 },
+    );
+  }
+
   const { error } = await supabase.from("lumen_dataset_records").insert(records);
   if (error) {
+    if (error.code === POSTGRES_UNIQUE_VIOLATION) {
+      return NextResponse.json(
+        { error: "Some of these rows duplicate data already in this file for the same area/rep/cluster/month." },
+        { status: 409 },
+      );
+    }
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 
