@@ -106,8 +106,7 @@ export default function LumenClient({
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
   const [expandedItems, setExpandedItems] = useState<Set<string>>(new Set());
   const [expandedReps, setExpandedReps] = useState<Set<string>>(new Set());
-  const [pendingFile, setPendingFile] = useState<File | null>(null);
-  const [pendingSheet, setPendingSheet] = useState<RawSheet | null>(null);
+  const [pendingFiles, setPendingFiles] = useState<{ file: File; sheet: RawSheet }[]>([]);
   const [pendingTargetsFile, setPendingTargetsFile] = useState<File | null>(null);
   const [pendingTargetsSheet, setPendingTargetsSheet] = useState<RawSheet | null>(null);
   const [targetThreshold, setTargetThreshold] = useState(70);
@@ -179,16 +178,21 @@ export default function LumenClient({
     }
   }
 
-  async function handleFileSelected(file: File) {
+  async function handleFilesSelected(files: File[]) {
     setUploadError(null);
     setUploadMessage(null);
-    try {
-      const sheet = await readWorkbookSheet(file);
-      setPendingFile(file);
-      setPendingSheet(sheet);
-    } catch (err) {
-      setUploadError(err instanceof Error ? err.message : "Could not read that file.");
+    const read: { file: File; sheet: RawSheet }[] = [];
+    const failed: string[] = [];
+    for (const file of files) {
+      try {
+        const sheet = await readWorkbookSheet(file);
+        read.push({ file, sheet });
+      } catch (err) {
+        failed.push(`${file.name}: ${err instanceof Error ? err.message : "Could not read that file."}`);
+      }
     }
+    if (read.length > 0) setPendingFiles(read);
+    if (failed.length > 0) setUploadError(failed.join(" | "));
   }
 
   async function handleTargetsFileSelected(file: File) {
@@ -280,7 +284,8 @@ export default function LumenClient({
     mapping: ColumnMapping,
     sheet: RawSheet,
     fileName: string,
-  ) {
+    fileLabel: string,
+  ): Promise<number | false> {
     const rows = applyColumnMapping(sheet, mapping);
     const monthsInFile = Array.from(new Set(rows.map((r) => r.month))).sort((a, b) => a - b);
 
@@ -293,7 +298,7 @@ export default function LumenClient({
     const overlappingMonths: number[] = overlapJson.overlappingMonths ?? [];
     if (overlappingMonths.length > 0) {
       const proceed = window.confirm(
-        `Month(s) ${overlappingMonths.join(", ")} already have data in this dataset for ${year}. ` +
+        `${fileLabel} — month(s) ${overlappingMonths.join(", ")} already have data in this dataset for ${year}. ` +
           `Continuing will delete the existing rows for those months and replace them with ` +
           `this file. This cannot be undone. Continue?`,
       );
@@ -315,7 +320,7 @@ export default function LumenClient({
 
     let inserted = 0;
     for (let i = 0; i < batches.length; i++) {
-      setUploadProgress(`Uploading batch ${i + 1} of ${batches.length}…`);
+      setUploadProgress(`${fileLabel}: batch ${i + 1} of ${batches.length}…`);
       const res = await fetch("/api/lumen/upload", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -326,16 +331,13 @@ export default function LumenClient({
       inserted += json.inserted;
     }
 
-    setUploadMessage(`Uploaded and processed ${fileName} (${formatNumber(inserted)} rows).`);
-    return true;
+    return inserted;
   }
 
   async function handleWizardConfirm(choice: WizardChoice) {
-    const file = pendingFile;
-    const sheet = pendingSheet;
-    setPendingFile(null);
-    setPendingSheet(null);
-    if (!file || !sheet) return;
+    const files = pendingFiles;
+    setPendingFiles([]);
+    if (files.length === 0) return;
 
     setUploading(true);
     setUploadError(null);
@@ -363,11 +365,36 @@ export default function LumenClient({
         mapping = existing.columnMapping;
       }
 
-      const uploaded = await uploadRowsToDataset(datasetId, mapping, sheet, file.name);
-      if (uploaded) {
+      let successCount = 0;
+      let totalInserted = 0;
+      const failures: string[] = [];
+
+      for (let i = 0; i < files.length; i++) {
+        const { file, sheet } = files[i];
+        const fileLabel = files.length > 1 ? `${file.name} (${i + 1}/${files.length})` : file.name;
+        try {
+          const inserted = await uploadRowsToDataset(datasetId, mapping, sheet, file.name, fileLabel);
+          if (inserted !== false) {
+            successCount++;
+            totalInserted += inserted;
+          }
+        } catch (err) {
+          failures.push(`${file.name}: ${err instanceof Error ? err.message : "Upload failed"}`);
+        }
+      }
+
+      if (successCount > 0) {
+        setUploadMessage(
+          files.length > 1
+            ? `Uploaded ${successCount} of ${files.length} files (${formatNumber(totalInserted)} rows).`
+            : `Uploaded and processed ${files[0].file.name} (${formatNumber(totalInserted)} rows).`,
+        );
         setSelectedDatasetId(datasetId);
         setExpanded(new Set());
         await fetchReport(datasetId, year);
+      }
+      if (failures.length > 0) {
+        setUploadError(failures.join(" | "));
       }
     } catch (err) {
       setUploadError(err instanceof Error ? err.message : "Upload failed");
@@ -453,11 +480,12 @@ export default function LumenClient({
         <input
           ref={fileInputRef}
           type="file"
+          multiple
           accept=".xlsx,.xls,.xlsm,.csv,.tsv,.txt,.ods"
           className="hidden"
           onChange={(e) => {
-            const file = e.target.files?.[0];
-            if (file) handleFileSelected(file);
+            const files = Array.from(e.target.files ?? []);
+            if (files.length > 0) handleFilesSelected(files);
             e.target.value = "";
           }}
         />
@@ -550,16 +578,14 @@ export default function LumenClient({
         )}
       </Sidebar>
 
-      {pendingFile && pendingSheet && (
+      {pendingFiles.length > 0 && (
         <UploadWizardModal
-          fileName={pendingFile.name}
-          sheet={pendingSheet}
+          fileName={pendingFiles[0].file.name}
+          extraFilesCount={pendingFiles.length - 1}
+          sheet={pendingFiles[0].sheet}
           datasets={datasets}
           defaultDatasetId={selectedDatasetId}
-          onCancel={() => {
-            setPendingFile(null);
-            setPendingSheet(null);
-          }}
+          onCancel={() => setPendingFiles([])}
           onConfirm={handleWizardConfirm}
         />
       )}

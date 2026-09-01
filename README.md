@@ -7,7 +7,9 @@ each finding.
 
 Every upload is its own **dataset** — uploading a new file never overwrites
 or mixes with another dataset, and a dropdown above the dashboard switches
-between them. The app makes no assumption about your file's column names:
+between them. You can select multiple files at once (e.g. a month per file)
+to add them all to the same dataset in one go, using the same column
+mapping. The app makes no assumption about your file's column names:
 the first time you upload a new format, you're asked to map its columns
 (Area/Region, Item/Product, Value, Quantity, Month, and the optional Rep and
 Cluster) to what they mean; that mapping is saved with the dataset, so

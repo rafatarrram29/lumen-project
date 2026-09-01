@@ -96,6 +96,7 @@ export type Translations = {
     mappingHelp: string;
     selectColumn: string;
     mismatch: (name: string, missing: string) => string;
+    multiFileNote: (n: number) => string;
     fieldArea: string;
     fieldItem: string;
     fieldValue: string;
@@ -269,6 +270,7 @@ const en: Translations = {
     selectColumn: "Select a column…",
     mismatch: (name, missing) =>
       `This file doesn't match "${name}"'s saved column mapping — missing: ${missing}. Pick a different dataset, or create a new one instead.`,
+    multiFileNote: (n) => `+${n} more file${n === 1 ? "" : "s"} selected — they'll use this same mapping and dataset.`,
     fieldArea: "Area / Region",
     fieldItem: "Item / Product",
     fieldValue: "Value",
@@ -447,6 +449,7 @@ const ar: Translations = {
     selectColumn: "اختر عمود…",
     mismatch: (name, missing) =>
       `الملف ده مش مطابق للأعمدة المحفوظة في "${name}" — ناقص: ${missing}. اختار مجموعة بيانات تانية، أو أنشئ مجموعة جديدة بدل كده.`,
+    multiFileNote: (n) => `+${n} ملف تاني متختار — هيستخدموا نفس الربط ونفس مجموعة البيانات دي.`,
     fieldArea: "المنطقة / الإقليم",
     fieldItem: "الصنف / المنتج",
     fieldValue: "القيمة",
