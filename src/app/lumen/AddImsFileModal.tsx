@@ -231,6 +231,7 @@ function MappingStep({
     marketShare: guess.marketShare ?? null,
     month: guess.month ?? null,
     company: guess.company ?? null,
+    growthRate: null,
   });
   // A snapshot file often has no per-row month column at all (a
   // comparison table, a single "as of" export) — this lets the user say
@@ -260,13 +261,24 @@ function MappingStep({
         fixedMonth: mapping.month ? null : (fixedMonthNumber ?? 1),
         fixedProduct: mapping.product ? null : (fixedProduct.trim() || null),
         company: mapping.company,
+        growthRate: mapping.growthRate,
       });
       const options = Array.from(new Set(rows.map((r) => r.company).filter((c): c is string => c !== null))).sort();
       return { companyOptions: options, companyGuess: guessOwnCompany(rows) };
     } catch {
       return { companyOptions: [] as string[], companyGuess: null as string | null };
     }
-  }, [mapping.company, mapping.area, mapping.product, mapping.marketShare, mapping.month, fixedMonthNumber, fixedProduct, sheet]);
+  }, [
+    mapping.company,
+    mapping.area,
+    mapping.product,
+    mapping.marketShare,
+    mapping.month,
+    mapping.growthRate,
+    fixedMonthNumber,
+    fixedProduct,
+    sheet,
+  ]);
 
   const [ownCompany, setOwnCompany] = useState<string | null>(null);
   const effectiveOwnCompany = ownCompany ?? companyGuess;
@@ -294,6 +306,7 @@ function MappingStep({
           fixedMonth: mapping.month ? null : fixedMonthNumber,
           fixedProduct: mapping.product ? null : (fixedProduct.trim() || null),
           company: mapping.company,
+          growthRate: mapping.growthRate,
         },
         ownCompany: mapping.company ? effectiveOwnCompany : null,
         sheet,
@@ -308,6 +321,7 @@ function MappingStep({
     marketShare: t.ims.fieldMarketShare,
     month: t.ims.fieldMonth,
     company: t.ims.fieldCompany,
+    growthRate: t.ims.fieldGrowthRate,
   };
 
   return (
@@ -332,7 +346,7 @@ function MappingStep({
           </label>
 
           <div className="space-y-2">
-            {(["area", "product", "marketShare", "month", "company"] as const).map((key) => (
+            {(["area", "product", "marketShare", "month", "company", "growthRate"] as const).map((key) => (
               <label key={key} className="flex items-center justify-between gap-2 text-xs text-muted">
                 <span className="w-32 shrink-0">
                   {fieldLabels[key]}

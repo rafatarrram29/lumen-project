@@ -86,9 +86,13 @@ design reference only — it is not part of the running app.
     an IMS file's Area and Product columns both optional (at least one is
     still required) — a real IMS export is often organized by
     product/market with no geography column at all.
-15. Open **Settings -> API** and copy the **Project URL** and the **anon
+15. Then run `supabase/lumen_ims_growth_rate_migration.sql`. Adds an
+    optional `growth_rate` column to `lumen_ims_records`, for a source
+    file's own growth-rate column (e.g. "GR") when it has one — used for
+    the Market Insights dashboard's growth figures. Purely additive.
+16. Open **Settings -> API** and copy the **Project URL** and the **anon
    public** key.
-16. Open **Authentication -> Sign In / Providers** and make sure **Email**
+17. Open **Authentication -> Sign In / Providers** and make sure **Email**
    is enabled (it is by default). For local development, under
    **Authentication -> URL Configuration**, you can leave the defaults —
    we'll add your real domain there once deployed.

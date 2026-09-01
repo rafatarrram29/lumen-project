@@ -824,7 +824,14 @@ export default function LumenClient({
           body: JSON.stringify({
             datasetId: selectedDatasetId,
             year,
-            rows: batches[i].map((r) => ({ area: r.area, product: r.product, company: r.company, marketShare: r.marketShare, month: r.month })),
+            rows: batches[i].map((r) => ({
+              area: r.area,
+              product: r.product,
+              company: r.company,
+              marketShare: r.marketShare,
+              month: r.month,
+              growthRate: r.growthRate,
+            })),
           }),
         });
         const json = await res.json();
