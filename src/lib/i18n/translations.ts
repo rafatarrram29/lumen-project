@@ -73,6 +73,19 @@ export type Translations = {
     thresholdLabel: string;
     uploadSuccess: (n: number) => string;
   };
+  repHistory: {
+    title: string;
+    addPeriod: string;
+    startMonth: string;
+    endMonth: string;
+    repNameLabel: string;
+    vacantPlaceholder: string;
+    vacant: string;
+    save: string;
+    invalidRange: string;
+    responsibleInMonth: (month: string, rep: string) => string;
+    deletePeriod: string;
+  };
   wizard: {
     uploadTitle: (fileName: string) => string;
     subtitle: string;
@@ -231,6 +244,19 @@ const en: Translations = {
     underTargetBy: (pct) => `Under target by ${pct}%`,
     thresholdLabel: "Alert threshold",
     uploadSuccess: (n) => `Uploaded ${n} target rows.`,
+  },
+  repHistory: {
+    title: "Rep history",
+    addPeriod: "+ Add period",
+    startMonth: "From month",
+    endMonth: "To month",
+    repNameLabel: "Rep",
+    vacantPlaceholder: "Vacant (leave empty)",
+    vacant: "Vacant",
+    save: "Save",
+    invalidRange: "End month must be on or after the start month.",
+    responsibleInMonth: (month, rep) => `Responsible in ${month}: ${rep}`,
+    deletePeriod: "Delete this period",
   },
   wizard: {
     uploadTitle: (fileName) => `Upload ${fileName}`,
@@ -396,6 +422,19 @@ const ar: Translations = {
     underTargetBy: (pct) => `تحت الهدف بنسبة ${pct}%`,
     thresholdLabel: "نسبة التنبيه",
     uploadSuccess: (n) => `تم رفع ${n} صف هدف.`,
+  },
+  repHistory: {
+    title: "سجل المناديب",
+    addPeriod: "+ إضافة فترة",
+    startMonth: "من شهر",
+    endMonth: "لشهر",
+    repNameLabel: "المندوب",
+    vacantPlaceholder: "شاغرة (اتركه فارغًا)",
+    vacant: "شاغرة",
+    save: "حفظ",
+    invalidRange: "شهر النهاية لازم يكون بعد أو نفس شهر البداية.",
+    responsibleInMonth: (month, rep) => `المسؤول في ${month}: ${rep}`,
+    deletePeriod: "حذف الفترة دي",
   },
   wizard: {
     uploadTitle: (fileName) => `رفع ${fileName}`,

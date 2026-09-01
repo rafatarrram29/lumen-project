@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   readWorkbookSheet,
   applyColumnMapping,
@@ -18,6 +18,8 @@ import { colorForFamily } from "@/lib/lumen/familyColors";
 import Sidebar from "@/components/Sidebar";
 import { UploadWizardModal, type WizardChoice } from "./UploadWizardModal";
 import { UploadTargetsModal } from "./UploadTargetsModal";
+import { RepHistoryPanel } from "./RepHistoryPanel";
+import { repResponsibleInMonth, type RepAssignment } from "@/lib/lumen/repAssignments";
 import { useLanguage } from "@/lib/i18n/LanguageProvider";
 import { findingSummary, findingDecision } from "@/lib/i18n/findingText";
 import type { Translations } from "@/lib/i18n/translations";
@@ -109,8 +111,25 @@ export default function LumenClient({
   const [pendingTargetsFile, setPendingTargetsFile] = useState<File | null>(null);
   const [pendingTargetsSheet, setPendingTargetsSheet] = useState<RawSheet | null>(null);
   const [targetThreshold, setTargetThreshold] = useState(70);
+  const [assignments, setAssignments] = useState<RepAssignment[]>([]);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const targetsFileInputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    if (initialDatasetId) fetchAssignments(initialDatasetId, initialYear);
+    // Only on mount — subsequent dataset/year changes go through fetchReport.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  async function fetchAssignments(datasetId: string, y: number) {
+    try {
+      const res = await fetch(`/api/lumen/rep-assignments?year=${y}&datasetId=${datasetId}`);
+      const json = await res.json();
+      setAssignments(res.ok ? (json.assignments ?? []) : []);
+    } catch {
+      setAssignments([]);
+    }
+  }
 
   async function fetchReport(datasetId: string, y: number) {
     setLoadingReport(true);
@@ -123,6 +142,7 @@ export default function LumenClient({
     } finally {
       setLoadingReport(false);
     }
+    fetchAssignments(datasetId, y);
   }
 
   function selectDataset(datasetId: string) {
@@ -733,6 +753,9 @@ export default function LumenClient({
                   ? Math.round(((clusterLast.avgValue - clusterPrev.avgValue) / clusterPrev.avgValue) * 1000) / 10
                   : null;
 
+              const areaAssignments = assignments.filter((a) => a.area === area);
+              const responsibleInLatest = repResponsibleInMonth(areaAssignments, area, report.latestMonth);
+
               return (
                 <div
                   key={area}
@@ -787,6 +810,14 @@ export default function LumenClient({
                               d.pctChange ?? 0,
                               report.hasClusters ? d.cluster : t.dashboard.clusterWord,
                               clusterPct,
+                            )}
+                          </p>
+                        )}
+                        {responsibleInLatest && (
+                          <p className="mb-2 text-xs text-muted" dir="auto">
+                            {t.repHistory.responsibleInMonth(
+                              t.common.month(report.latestMonth),
+                              responsibleInLatest.rep ?? t.repHistory.vacant,
                             )}
                           </p>
                         )}
@@ -920,6 +951,14 @@ export default function LumenClient({
                         </div>
                         );
                       })()}
+
+                      <RepHistoryPanel
+                        area={area}
+                        datasetId={selectedDatasetId!}
+                        year={year}
+                        assignments={areaAssignments}
+                        onChanged={() => selectedDatasetId && fetchAssignments(selectedDatasetId, year)}
+                      />
 
                       {areaFindings.map((f, i) => (
                         <div key={i} className="break-words rounded-lg bg-surf2 px-3 py-2.5">
