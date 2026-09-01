@@ -27,6 +27,7 @@ import { CorrectionLogModal } from "./CorrectionLogModal";
 import { EditSalesMappingModal } from "./EditSalesMappingModal";
 import type { DataEdit } from "@/lib/lumen/corrections";
 import { EditableValue, EditableFieldValue } from "./EditableValue";
+import { UndoToast } from "./UndoToast";
 import { ExportModal, type ExportFormat } from "./ExportModal";
 import { buildExportItems } from "@/lib/lumen/exportItems";
 import { useLanguage } from "@/lib/i18n/LanguageProvider";
@@ -38,6 +39,11 @@ function areaCardId(area: string): string {
 }
 
 const UPLOAD_BATCH_SIZE = 1000;
+const UNDO_WINDOW_MS = 8000;
+
+type LastEdit =
+  | { kind: "sales"; area: string; family: string; month: number; oldValue: number; newValue: number }
+  | { kind: "linked"; recordId: string; key: string; oldValue: unknown; newValue: unknown };
 
 function formatNumber(n: number): string {
   return n.toLocaleString("en-US");
@@ -130,8 +136,42 @@ export default function LumenClient({
   const [showEditSalesMapping, setShowEditSalesMapping] = useState(false);
   const [showExportModal, setShowExportModal] = useState(false);
   const [exporting, setExporting] = useState(false);
+  const [lastEdit, setLastEdit] = useState<LastEdit | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const targetsFileInputRef = useRef<HTMLInputElement>(null);
+  const undoTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  function clearUndo() {
+    if (undoTimeoutRef.current) clearTimeout(undoTimeoutRef.current);
+    undoTimeoutRef.current = null;
+    setLastEdit(null);
+  }
+
+  function armUndo(edit: LastEdit) {
+    if (undoTimeoutRef.current) clearTimeout(undoTimeoutRef.current);
+    setLastEdit(edit);
+    undoTimeoutRef.current = setTimeout(() => setLastEdit(null), UNDO_WINDOW_MS);
+  }
+
+  useEffect(() => {
+    return () => {
+      if (undoTimeoutRef.current) clearTimeout(undoTimeoutRef.current);
+    };
+  }, []);
+
+  useEffect(() => {
+    function handleKeyDown(e: KeyboardEvent) {
+      if (!(e.ctrlKey || e.metaKey) || e.key.toLowerCase() !== "z" || e.shiftKey) return;
+      const target = e.target as HTMLElement | null;
+      const tag = target?.tagName;
+      if (tag === "INPUT" || tag === "TEXTAREA" || target?.isContentEditable) return;
+      e.preventDefault();
+      handleUndo();
+    }
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [lastEdit, selectedDatasetId, year]);
 
   useEffect(() => {
     if (initialDatasetId) {
@@ -209,6 +249,7 @@ export default function LumenClient({
   function selectDataset(datasetId: string) {
     setSelectedDatasetId(datasetId);
     setExpanded(new Set());
+    clearUndo();
     fetchReport(datasetId, year);
   }
 
@@ -609,36 +650,53 @@ export default function LumenClient({
     }
   }
 
-  async function handleEditSalesCell(area: string, family: string, month: number, newValue: number) {
+  async function handleEditSalesCell(area: string, family: string, month: number, newValue: number, isUndo = false) {
     if (!selectedDatasetId) return;
     try {
       const res = await fetch("/api/lumen/sales-records/cell", {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ datasetId: selectedDatasetId, year, month, area, family, newValue }),
+        body: JSON.stringify({ datasetId: selectedDatasetId, year, month, area, family, newValue, isUndo }),
       });
       const json = await res.json();
       if (!res.ok) throw new Error(json.error || t.inlineEdit.saveFailed);
       await fetchReport(selectedDatasetId, year);
+      if (!isUndo) {
+        armUndo({ kind: "sales", area, family, month, oldValue: json.oldValue, newValue: json.newValue });
+      }
     } catch (err) {
       setUploadError(err instanceof Error ? err.message : t.inlineEdit.saveFailed);
     }
   }
 
-  async function handleEditLinkedField(recordId: string, key: string, newValue: string) {
+  async function handleEditLinkedField(recordId: string, key: string, newValue: string, isUndo = false) {
     if (!selectedDatasetId) return;
     try {
       const res = await fetch(`/api/lumen/dataset-records/${recordId}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ key, newValue }),
+        body: JSON.stringify({ key, newValue, isUndo }),
       });
       const json = await res.json();
       if (!res.ok) throw new Error(json.error || t.inlineEdit.saveFailed);
       await fetchLinkedRecords(selectedDatasetId, year);
       await fetchDataEdits(selectedDatasetId);
+      if (!isUndo) {
+        armUndo({ kind: "linked", recordId, key, oldValue: json.oldValue, newValue: json.newValue });
+      }
     } catch (err) {
       setUploadError(err instanceof Error ? err.message : t.inlineEdit.saveFailed);
+    }
+  }
+
+  async function handleUndo() {
+    if (!lastEdit) return;
+    const edit = lastEdit;
+    clearUndo();
+    if (edit.kind === "sales") {
+      await handleEditSalesCell(edit.area, edit.family, edit.month, edit.oldValue, true);
+    } else {
+      await handleEditLinkedField(edit.recordId, edit.key, String(edit.oldValue), true);
     }
   }
 
@@ -799,7 +857,10 @@ export default function LumenClient({
           />
         </label>
         <button
-          onClick={() => selectedDatasetId && fetchReport(selectedDatasetId, year)}
+          onClick={() => {
+            clearUndo();
+            if (selectedDatasetId) fetchReport(selectedDatasetId, year);
+          }}
           disabled={loadingReport || !selectedDatasetId}
           className="w-full rounded-lg bg-gradient-to-br from-amber to-[#d68820] px-4 py-2 text-sm font-semibold text-bg disabled:opacity-50"
         >
@@ -916,6 +977,8 @@ export default function LumenClient({
       {showCorrectionLog && (
         <CorrectionLogModal dataEdits={dataEdits} onClose={() => setShowCorrectionLog(false)} />
       )}
+
+      {lastEdit && <UndoToast onUndo={handleUndo} onDismiss={clearUndo} />}
 
       {showEditSalesMapping && selectedDatasetId && (
         <EditSalesMappingModal

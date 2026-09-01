@@ -29,9 +29,16 @@ export function CorrectionLogModal({
             {dataEdits.map((e) => (
               <div key={e.id} className="rounded-lg border border-bdr bg-surf2/60 p-3 text-xs">
                 <div className="mb-1 flex items-center justify-between gap-2">
-                  <span className="min-w-0 truncate font-semibold text-white" dir="auto" title={e.targetLabel}>
-                    {e.targetLabel}
-                  </span>
+                  <div className="flex min-w-0 items-center gap-1.5">
+                    <span className="min-w-0 truncate font-semibold text-white" dir="auto" title={e.targetLabel}>
+                      {e.targetLabel}
+                    </span>
+                    {e.isUndo && (
+                      <span className="shrink-0 rounded-full border border-amber/40 bg-amber/20 px-1.5 py-0.5 text-[10px] text-amber">
+                        {t.inlineEdit.undoneBadge}
+                      </span>
+                    )}
+                  </div>
                   <span className="shrink-0 text-[11px] text-muted">
                     {new Date(e.createdAt).toLocaleString(lang === "ar" ? "ar-EG" : "en-US")}
                   </span>
