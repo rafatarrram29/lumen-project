@@ -73,6 +73,30 @@ export type Translations = {
     thresholdLabel: string;
     uploadSuccess: (n: number) => string;
   };
+  linkedFiles: {
+    panelTitle: string;
+    addButton: string;
+    fileTypeLabel: string;
+    typeAchievement: string;
+    typeKpis: string;
+    typeOther: string;
+    displayNameLabel: string;
+    mappingHelp: string;
+    joinKeysLabel: string;
+    joinKeyArea: string;
+    joinKeyRep: string;
+    joinKeyCluster: string;
+    joinKeyMonth: string;
+    joinKeysHint: string;
+    atLeastOneJoinKey: string;
+    replaceButton: string;
+    deleteButton: string;
+    deleteConfirm: (name: string) => string;
+    modalTitle: (fileName: string) => string;
+    replaceModalTitle: (fileName: string) => string;
+    uploadSuccess: (n: number) => string;
+    linkedContextTitle: string;
+  };
   repHistory: {
     title: string;
     addPeriod: string;
@@ -245,6 +269,30 @@ const en: Translations = {
     underTargetBy: (pct) => `Under target by ${pct}%`,
     thresholdLabel: "Alert threshold",
     uploadSuccess: (n) => `Uploaded ${n} target rows.`,
+  },
+  linkedFiles: {
+    panelTitle: "Linked files",
+    addButton: "+ Add linked file",
+    fileTypeLabel: "File type",
+    typeAchievement: "Achievement",
+    typeKpis: "KPIs",
+    typeOther: "Other",
+    displayNameLabel: "Display name",
+    mappingHelp: "Match this file's columns to the dimensions that link it back to your sales data.",
+    joinKeysLabel: "Link this file by",
+    joinKeyArea: "Area",
+    joinKeyRep: "Rep",
+    joinKeyCluster: "Cluster",
+    joinKeyMonth: "Month",
+    joinKeysHint: "Pick which columns connect this file to the same areas and months as your sales data.",
+    atLeastOneJoinKey: "Month must be linked, along with at least one of Area, Rep, or Cluster.",
+    replaceButton: "Replace",
+    deleteButton: "Delete",
+    deleteConfirm: (name) => `Delete "${name}"? This permanently removes all of its data. This cannot be undone.`,
+    modalTitle: (fileName) => `Add linked file — ${fileName}`,
+    replaceModalTitle: (fileName) => `Replace with ${fileName}`,
+    uploadSuccess: (n) => `Uploaded ${n} rows.`,
+    linkedContextTitle: "Linked data",
   },
   repHistory: {
     title: "Rep history",
@@ -424,6 +472,30 @@ const ar: Translations = {
     underTargetBy: (pct) => `تحت الهدف بنسبة ${pct}%`,
     thresholdLabel: "نسبة التنبيه",
     uploadSuccess: (n) => `تم رفع ${n} صف هدف.`,
+  },
+  linkedFiles: {
+    panelTitle: "الملفات المرتبطة",
+    addButton: "+ إضافة ملف مرتبط",
+    fileTypeLabel: "نوع الملف",
+    typeAchievement: "التحقيق (Achievement)",
+    typeKpis: "مؤشرات الأداء (KPIs)",
+    typeOther: "تاني",
+    displayNameLabel: "اسم العرض",
+    mappingHelp: "اربط أعمدة الملف ده بالأبعاد اللي هتوصله ببيانات المبيعات.",
+    joinKeysLabel: "اربط الملف ده عن طريق",
+    joinKeyArea: "المنطقة",
+    joinKeyRep: "المندوب",
+    joinKeyCluster: "الكلستر",
+    joinKeyMonth: "الشهر",
+    joinKeysHint: "اختار الأعمدة اللي هتوصل الملف ده بنفس المناطق والشهور بتاعة بيانات المبيعات.",
+    atLeastOneJoinKey: "الشهر لازم يتربط، بالإضافة لواحد على الأقل من المنطقة أو المندوب أو الكلستر.",
+    replaceButton: "استبدال",
+    deleteButton: "حذف",
+    deleteConfirm: (name) => `حذف "${name}"؟ ده هيمسح كل بياناته نهائيًا. الخطوة دي مينفعش نرجع فيها.`,
+    modalTitle: (fileName) => `إضافة ملف مرتبط — ${fileName}`,
+    replaceModalTitle: (fileName) => `استبدال بـ ${fileName}`,
+    uploadSuccess: (n) => `تم رفع ${n} صف.`,
+    linkedContextTitle: "بيانات مرتبطة",
   },
   repHistory: {
     title: "سجل المناديب",

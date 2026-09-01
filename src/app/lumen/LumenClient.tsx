@@ -20,6 +20,9 @@ import { UploadWizardModal, type WizardChoice } from "./UploadWizardModal";
 import { UploadTargetsModal } from "./UploadTargetsModal";
 import { RepHistoryPanel } from "./RepHistoryPanel";
 import { repResponsibleInMonth, type RepAssignment } from "@/lib/lumen/repAssignments";
+import { LinkedFilesPanel } from "./LinkedFilesPanel";
+import { AddLinkedFileModal, type LinkedFileSave } from "./AddLinkedFileModal";
+import { applyLinkedMapping, recordsForAreaMonth, type LinkedFile, type LinkedRecord } from "@/lib/lumen/linkedFiles";
 import { useLanguage } from "@/lib/i18n/LanguageProvider";
 import { findingSummary, findingDecision } from "@/lib/i18n/findingText";
 import type { Translations } from "@/lib/i18n/translations";
@@ -111,11 +114,19 @@ export default function LumenClient({
   const [pendingTargetsSheet, setPendingTargetsSheet] = useState<RawSheet | null>(null);
   const [targetThreshold, setTargetThreshold] = useState(70);
   const [assignments, setAssignments] = useState<RepAssignment[]>([]);
+  const [linkedFiles, setLinkedFiles] = useState<LinkedFile[]>([]);
+  const [linkedRecords, setLinkedRecords] = useState<LinkedRecord[]>([]);
+  const [pendingLinkedFile, setPendingLinkedFile] = useState<{ file: File; sheet: RawSheet } | null>(null);
+  const [replacingLinkedFileId, setReplacingLinkedFileId] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const targetsFileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
-    if (initialDatasetId) fetchAssignments(initialDatasetId, initialYear);
+    if (initialDatasetId) {
+      fetchAssignments(initialDatasetId, initialYear);
+      fetchLinkedFiles(initialDatasetId);
+      fetchLinkedRecords(initialDatasetId, initialYear);
+    }
     // Only on mount — subsequent dataset/year changes go through fetchReport.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -127,6 +138,26 @@ export default function LumenClient({
       setAssignments(res.ok ? (json.assignments ?? []) : []);
     } catch {
       setAssignments([]);
+    }
+  }
+
+  async function fetchLinkedFiles(datasetId: string) {
+    try {
+      const res = await fetch(`/api/lumen/dataset-files?datasetId=${datasetId}`);
+      const json = await res.json();
+      setLinkedFiles(res.ok ? (json.files ?? []) : []);
+    } catch {
+      setLinkedFiles([]);
+    }
+  }
+
+  async function fetchLinkedRecords(datasetId: string, y: number) {
+    try {
+      const res = await fetch(`/api/lumen/dataset-records?year=${y}&datasetId=${datasetId}`);
+      const json = await res.json();
+      setLinkedRecords(res.ok ? (json.records ?? []) : []);
+    } catch {
+      setLinkedRecords([]);
     }
   }
 
@@ -142,6 +173,8 @@ export default function LumenClient({
       setLoadingReport(false);
     }
     fetchAssignments(datasetId, y);
+    fetchLinkedFiles(datasetId);
+    fetchLinkedRecords(datasetId, y);
   }
 
   function selectDataset(datasetId: string) {
@@ -404,6 +437,116 @@ export default function LumenClient({
     }
   }
 
+  async function handleAddLinkedFile(file: File) {
+    setUploadError(null);
+    setUploadMessage(null);
+    setReplacingLinkedFileId(null);
+    try {
+      const sheet = await readWorkbookSheet(file);
+      setPendingLinkedFile({ file, sheet });
+    } catch (err) {
+      setUploadError(err instanceof Error ? err.message : "Could not read that file.");
+    }
+  }
+
+  async function handleReplaceLinkedFile(fileId: string, file: File) {
+    setUploadError(null);
+    setUploadMessage(null);
+    setReplacingLinkedFileId(fileId);
+    try {
+      const sheet = await readWorkbookSheet(file);
+      setPendingLinkedFile({ file, sheet });
+    } catch (err) {
+      setUploadError(err instanceof Error ? err.message : "Could not read that file.");
+    }
+  }
+
+  async function handleLinkedFileConfirm(save: LinkedFileSave) {
+    const pending = pendingLinkedFile;
+    const replaceId = replacingLinkedFileId;
+    setPendingLinkedFile(null);
+    setReplacingLinkedFileId(null);
+    if (!pending || !selectedDatasetId) return;
+
+    setUploading(true);
+    setUploadError(null);
+    setUploadMessage(null);
+
+    try {
+      const rows = applyLinkedMapping(pending.sheet, save.mapping);
+
+      let fileId: string;
+      if (replaceId) {
+        const replaceRes = await fetch(`/api/lumen/dataset-files/${replaceId}/replace`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ displayName: save.displayName, columnMapping: save.mapping, joinKeys: save.joinKeys }),
+        });
+        const replaceJson = await replaceRes.json();
+        if (!replaceRes.ok) throw new Error(replaceJson.error || "Could not replace the file");
+        fileId = replaceId;
+      } else {
+        const createRes = await fetch("/api/lumen/dataset-files", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            datasetId: selectedDatasetId,
+            fileType: save.fileType,
+            displayName: save.displayName,
+            sourceFile: pending.file.name,
+            columnMapping: save.mapping,
+            joinKeys: save.joinKeys,
+          }),
+        });
+        const createJson = await createRes.json();
+        if (!createRes.ok) throw new Error(createJson.error || "Could not create the linked file");
+        fileId = createJson.file.id;
+      }
+
+      const batches = [];
+      for (let i = 0; i < rows.length; i += UPLOAD_BATCH_SIZE) {
+        batches.push(rows.slice(i, i + UPLOAD_BATCH_SIZE));
+      }
+
+      let inserted = 0;
+      for (let i = 0; i < batches.length; i++) {
+        setUploadProgress(`Uploading batch ${i + 1} of ${batches.length}…`);
+        const res = await fetch(`/api/lumen/dataset-files/${fileId}/records`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ datasetId: selectedDatasetId, year, rows: batches[i] }),
+        });
+        const json = await res.json();
+        if (!res.ok) throw new Error(json.error || "Upload failed");
+        inserted += json.inserted;
+      }
+
+      setUploadMessage(t.linkedFiles.uploadSuccess(inserted));
+      await fetchLinkedFiles(selectedDatasetId);
+      await fetchLinkedRecords(selectedDatasetId, year);
+    } catch (err) {
+      setUploadError(err instanceof Error ? err.message : "Upload failed");
+    } finally {
+      setUploading(false);
+      setUploadProgress(null);
+    }
+  }
+
+  async function handleDeleteLinkedFile(file: LinkedFile) {
+    const proceed = window.confirm(t.linkedFiles.deleteConfirm(file.displayName));
+    if (!proceed || !selectedDatasetId) return;
+
+    try {
+      const res = await fetch(`/api/lumen/dataset-files/${file.id}`, { method: "DELETE" });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error || "Could not delete the file");
+      await fetchLinkedFiles(selectedDatasetId);
+      await fetchLinkedRecords(selectedDatasetId, year);
+    } catch (err) {
+      setUploadError(err instanceof Error ? err.message : "Could not delete the file");
+    }
+  }
+
   function toggle(area: string) {
     setExpanded((prev) => {
       const next = new Set(prev);
@@ -576,6 +719,16 @@ export default function LumenClient({
             </div>
           </div>
         )}
+
+        {selectedDatasetId && (
+          <LinkedFilesPanel
+            files={linkedFiles}
+            disabled={uploading}
+            onAddFile={handleAddLinkedFile}
+            onReplaceFile={handleReplaceLinkedFile}
+            onDeleteFile={handleDeleteLinkedFile}
+          />
+        )}
       </Sidebar>
 
       {pendingFiles.length > 0 && (
@@ -600,6 +753,20 @@ export default function LumenClient({
             setPendingTargetsSheet(null);
           }}
           onConfirm={handleTargetsConfirm}
+        />
+      )}
+
+      {pendingLinkedFile && selectedDatasetId && (
+        <AddLinkedFileModal
+          fileName={pendingLinkedFile.file.name}
+          sheet={pendingLinkedFile.sheet}
+          salesMapping={datasets.find((d) => d.id === selectedDatasetId)!.columnMapping}
+          existingFile={replacingLinkedFileId ? linkedFiles.find((f) => f.id === replacingLinkedFileId) : undefined}
+          onCancel={() => {
+            setPendingLinkedFile(null);
+            setReplacingLinkedFileId(null);
+          }}
+          onConfirm={handleLinkedFileConfirm}
         />
       )}
 
@@ -781,6 +948,10 @@ export default function LumenClient({
 
               const areaAssignments = assignments.filter((a) => a.area === area);
               const responsibleInLatest = repResponsibleInMonth(areaAssignments, area, report.latestMonth);
+
+              const linkedContext = linkedFiles
+                .map((f) => ({ file: f, records: recordsForAreaMonth(f, linkedRecords, area, report.latestMonth) }))
+                .filter((entry) => entry.records.length > 0);
 
               return (
                 <div
@@ -985,6 +1156,33 @@ export default function LumenClient({
                         assignments={areaAssignments}
                         onChanged={() => selectedDatasetId && fetchAssignments(selectedDatasetId, year)}
                       />
+
+                      {linkedContext.length > 0 && (
+                        <div>
+                          <div className="mb-2 text-xs font-semibold text-white">{t.linkedFiles.linkedContextTitle}</div>
+                          <div className="space-y-2">
+                            {linkedContext.map(({ file, records }) => (
+                              <div key={file.id} className="rounded-lg bg-surf2/60 p-3 text-xs">
+                                <div className="mb-1 flex items-center gap-1.5">
+                                  <span className="shrink-0 rounded-full border border-bdr px-1.5 py-0.5 text-[10px] text-muted">
+                                    {{ achievement: t.linkedFiles.typeAchievement, kpis: t.linkedFiles.typeKpis, other: t.linkedFiles.typeOther }[file.fileType]}
+                                  </span>
+                                  <span className="font-semibold text-white" dir="auto">{file.displayName}</span>
+                                </div>
+                                {records.map((r) => (
+                                  <div key={r.id} className="ps-1 text-muted">
+                                    {Object.entries(r.data).map(([k, v]) => (
+                                      <div key={k} dir="auto">
+                                        <span className="text-white">{k}:</span> {String(v)}
+                                      </div>
+                                    ))}
+                                  </div>
+                                ))}
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      )}
 
                       {areaFindings.map((f, i) => (
                         <div key={i} className="break-words rounded-lg bg-surf2 px-3 py-2.5">
