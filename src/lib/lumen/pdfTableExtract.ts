@@ -17,6 +17,23 @@
 // exactly the choice this module makes.
 
 import * as pdfjsLib from "pdfjs-dist/legacy/build/pdf.mjs";
+import { WorkerMessageHandler } from "pdfjs-dist/legacy/build/pdf.worker.mjs";
+
+// In Node, pdfjs-dist runs its parser through a "fake worker" (same thread,
+// no real Worker). To set that up it first checks for a
+// `globalThis.pdfjsWorker.WorkerMessageHandler` global — and only if that's
+// absent does it fall back to dynamically `import()`-ing a workerSrc path
+// computed relative to its own module location. That fallback path doesn't
+// survive being deployed as a Next.js serverless function (the file layout
+// on the server isn't the same as in node_modules), which surfaced in
+// production as "Setting up fake worker failed: Cannot find module
+// '.../pdf.worker.mjs'". Importing the worker module ourselves with a
+// normal static import — which bundlers *can* trace and ship correctly,
+// unlike the dynamic path — and publishing it on that global short-circuits
+// the fallback entirely, so the broken path is never taken.
+(globalThis as unknown as { pdfjsWorker?: { WorkerMessageHandler: unknown } }).pdfjsWorker = {
+  WorkerMessageHandler,
+};
 
 export type ExtractedTable = { headers: string[]; rows: string[][] };
 export type ExtractedPage = {
