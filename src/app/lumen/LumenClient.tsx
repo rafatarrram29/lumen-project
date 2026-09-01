@@ -31,6 +31,10 @@ import { buildExportItems } from "@/lib/lumen/exportItems";
 import { useLanguage } from "@/lib/i18n/LanguageProvider";
 import { findingSummary, findingDecision } from "@/lib/i18n/findingText";
 import type { Translations } from "@/lib/i18n/translations";
+import { ImsPanel, type ImsFile } from "./ImsPanel";
+import { AddImsFileModal, type ImsFileSave } from "./AddImsFileModal";
+import { applyImsMapping } from "@/lib/lumen/imsMapping";
+import type { ImsReport } from "@/lib/lumen/imsEngine";
 
 // recharts is a heavy dependency only ever needed once a trend chart is
 // actually shown (an area or item card expanded) — loading it eagerly
@@ -138,6 +142,11 @@ export default function LumenClient({
   const [replacingLinkedFileId, setReplacingLinkedFileId] = useState<string | null>(null);
   const [dataEdits, setDataEdits] = useState<DataEdit[]>([]);
   const [editedCells, setEditedCells] = useState<Map<string, { editedBy: string | null; editedAt: string }>>(new Map());
+  const [activeTab, setActiveTab] = useState<"sales" | "ims">("sales");
+  const [imsFiles, setImsFiles] = useState<ImsFile[]>([]);
+  const [imsReport, setImsReport] = useState<ImsReport | null>(null);
+  const [imsLoading, setImsLoading] = useState(false);
+  const [pendingImsFile, setPendingImsFile] = useState<{ file: File; sheet: RawSheet } | null>(null);
   const [showCorrectionLog, setShowCorrectionLog] = useState(false);
   const [showEditSalesMapping, setShowEditSalesMapping] = useState(false);
   const [showExportModal, setShowExportModal] = useState(false);
@@ -185,6 +194,8 @@ export default function LumenClient({
       fetchLinkedFiles(initialDatasetId);
       fetchLinkedRecords(initialDatasetId, initialYear);
       fetchDataEdits(initialDatasetId);
+      fetchImsFiles(initialDatasetId);
+      fetchImsReport(initialDatasetId, initialYear);
     }
     // Only on mount — subsequent dataset/year changes go through fetchReport.
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -220,6 +231,29 @@ export default function LumenClient({
     }
   }
 
+  async function fetchImsFiles(datasetId: string) {
+    try {
+      const res = await fetch(`/api/lumen/ims-files?datasetId=${datasetId}`);
+      const json = await res.json();
+      setImsFiles(res.ok ? (json.files ?? []) : []);
+    } catch {
+      setImsFiles([]);
+    }
+  }
+
+  async function fetchImsReport(datasetId: string, y: number) {
+    setImsLoading(true);
+    try {
+      const res = await fetch(`/api/lumen/ims-analyze?year=${y}&datasetId=${datasetId}`);
+      const json = await res.json();
+      setImsReport(res.ok ? json : null);
+    } catch {
+      setImsReport(null);
+    } finally {
+      setImsLoading(false);
+    }
+  }
+
   async function fetchDataEdits(datasetId: string) {
     try {
       const res = await fetch(`/api/lumen/data-edits?datasetId=${datasetId}`);
@@ -250,6 +284,8 @@ export default function LumenClient({
     fetchLinkedFiles(datasetId);
     fetchLinkedRecords(datasetId, y);
     fetchDataEdits(datasetId);
+    fetchImsFiles(datasetId);
+    fetchImsReport(datasetId, y);
   }
 
   function selectDataset(datasetId: string) {
@@ -725,6 +761,93 @@ export default function LumenClient({
     }
   }
 
+  async function handleAddImsFile(file: File) {
+    setUploadError(null);
+    setUploadMessage(null);
+    try {
+      const { readWorkbookSheet } = await import("@/lib/lumen/readWorkbookSheet");
+      const sheet = await readWorkbookSheet(file);
+      setPendingImsFile({ file, sheet });
+    } catch (err) {
+      setUploadError(err instanceof Error ? err.message : "Could not read that file.");
+    }
+  }
+
+  async function handleImsFileConfirm(save: ImsFileSave) {
+    const pending = pendingImsFile;
+    setPendingImsFile(null);
+    if (!pending || !selectedDatasetId) return;
+
+    setUploading(true);
+    setUploadError(null);
+    setUploadMessage(null);
+
+    try {
+      const { rows } = applyImsMapping(pending.sheet, save.mapping);
+
+      const createRes = await fetch("/api/lumen/ims-files", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          datasetId: selectedDatasetId,
+          displayName: save.displayName,
+          sourceFile: pending.file.name,
+          columnMapping: save.mapping,
+          ownCompany: save.ownCompany,
+        }),
+      });
+      const createJson = await createRes.json();
+      if (!createRes.ok) throw new Error(createJson.error || "Could not create the IMS file");
+      const fileId = createJson.file.id;
+
+      const batches = [];
+      for (let i = 0; i < rows.length; i += UPLOAD_BATCH_SIZE) {
+        batches.push(rows.slice(i, i + UPLOAD_BATCH_SIZE));
+      }
+
+      let inserted = 0;
+      for (let i = 0; i < batches.length; i++) {
+        setUploadProgress(`Uploading batch ${i + 1} of ${batches.length}…`);
+        const res = await fetch(`/api/lumen/ims-files/${fileId}/records`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            datasetId: selectedDatasetId,
+            year,
+            rows: batches[i].map((r) => ({ area: r.area, product: r.product, company: r.company, marketShare: r.marketShare, month: r.month })),
+          }),
+        });
+        const json = await res.json();
+        if (!res.ok) throw new Error(json.error || "Upload failed");
+        inserted += json.inserted;
+      }
+
+      setUploadMessage(t.ims.uploadSuccess(inserted));
+      await fetchImsFiles(selectedDatasetId);
+      await fetchImsReport(selectedDatasetId, year);
+    } catch (err) {
+      setUploadError(err instanceof Error ? err.message : "Upload failed");
+    } finally {
+      setUploading(false);
+      setUploadProgress(null);
+    }
+  }
+
+  async function handleDeleteImsFile(file: ImsFile) {
+    const proceed = window.confirm(t.ims.deleteConfirm(file.displayName));
+    if (!proceed || !selectedDatasetId) return;
+
+    try {
+      const res = await fetch(`/api/lumen/ims-files/${file.id}`, { method: "DELETE" });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error || "Could not delete the file");
+      await fetchImsFiles(selectedDatasetId);
+      await fetchImsReport(selectedDatasetId, year);
+    } catch (err) {
+      setUploadError(err instanceof Error ? err.message : "Could not delete the file");
+    }
+  }
+
   async function handleSaveSalesMapping(mapping: ColumnMapping) {
     if (!selectedDatasetId) return;
     try {
@@ -1066,6 +1189,15 @@ export default function LumenClient({
         />
       )}
 
+      {pendingImsFile && selectedDatasetId && (
+        <AddImsFileModal
+          fileName={pendingImsFile.file.name}
+          sheet={pendingImsFile.sheet}
+          onCancel={() => setPendingImsFile(null)}
+          onConfirm={handleImsFileConfirm}
+        />
+      )}
+
       {showCorrectionLog && (
         <CorrectionLogModal dataEdits={dataEdits} onClose={() => setShowCorrectionLog(false)} />
       )}
@@ -1091,6 +1223,42 @@ export default function LumenClient({
 
       <main className="min-w-0 flex-1 overflow-y-auto px-6 py-6">
       <div className="mx-auto max-w-4xl">
+      {selectedDatasetId && (
+        <div className="mb-5 flex gap-1 border-b border-bdr">
+          <button
+            type="button"
+            onClick={() => setActiveTab("sales")}
+            className={`border-b-2 px-3 py-2 text-sm transition-colors ${
+              activeTab === "sales" ? "border-amber text-white" : "border-transparent text-muted hover:text-white"
+            }`}
+          >
+            {t.ims.salesTabLabel}
+          </button>
+          <button
+            type="button"
+            onClick={() => setActiveTab("ims")}
+            className={`border-b-2 px-3 py-2 text-sm transition-colors ${
+              activeTab === "ims" ? "border-amber text-white" : "border-transparent text-muted hover:text-white"
+            }`}
+          >
+            {t.ims.tabLabel}
+          </button>
+        </div>
+      )}
+
+      {activeTab === "ims" && selectedDatasetId && (
+        <ImsPanel
+          report={imsReport}
+          files={imsFiles}
+          loading={imsLoading}
+          disabled={uploading}
+          onAddFile={handleAddImsFile}
+          onDeleteFile={handleDeleteImsFile}
+        />
+      )}
+
+      {activeTab === "sales" && (
+      <>
       {hasError && (
         <div className="rounded-2xl border border-bdr bg-surf p-5 text-sm text-muted">
           {report && "error" in report ? report.error : null}
@@ -1563,6 +1731,8 @@ export default function LumenClient({
             })}
           </div>
         </div>
+      )}
+      </>
       )}
       </div>
       </main>
