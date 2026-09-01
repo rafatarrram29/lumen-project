@@ -1,6 +1,6 @@
 -- Adds direct inline editing of individual data values, with full edit
 -- history. Run this once in the Supabase SQL Editor, after
--- lumen_corrections_migration.sql.
+-- lumen_linked_files_migration.sql.
 --
 -- Purely additive: new nullable/defaulted columns on the two existing raw
 -- data tables (used only to visually flag a row as manually edited), the

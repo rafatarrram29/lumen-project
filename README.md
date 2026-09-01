@@ -51,15 +51,12 @@ design reference only — it is not part of the running app.
    files, described below. Purely additive — it does not touch
    `lumen_datasets` or `lumen_sales_records`, so every existing dataset
    keeps working exactly as it does today.
-8. Then run `supabase/lumen_corrections_migration.sql`. This adds the
-   `lumen_corrections` table used by the flag-issue / correction log
-   feature described below.
-9. Then run `supabase/lumen_inline_edits_migration.sql`. This adds the
+8. Then run `supabase/lumen_inline_edits_migration.sql`. This adds the
    `lumen_data_edits` table plus the missing UPDATE policies used by
-   in-app inline editing, described below.
-10. Open **Settings -> API** and copy the **Project URL** and the **anon
+   in-app inline editing (the **Correction log** described below).
+9. Open **Settings -> API** and copy the **Project URL** and the **anon
    public** key.
-11. Open **Authentication -> Sign In / Providers** and make sure **Email**
+10. Open **Authentication -> Sign In / Providers** and make sure **Email**
    is enabled (it is by default). For local development, under
    **Authentication -> URL Configuration**, you can leave the defaults —
    we'll add your real domain there once deployed.
@@ -186,13 +183,6 @@ Every edit is recorded automatically in that dataset's **Correction log**
 (sidebar) under "Edit history": what changed, from what value to what
 value, who made the change, and when.
 
-Every area, item row, and decision also has a 🚩 **Flag issue** button —
-pick what's wrong (a wrong number, files linked incorrectly, a decision
-that doesn't make sense, or something else) and describe it in a sentence,
-for anything that needs a written note rather than a direct fix. Every flag
-is saved to the same Correction log, showing what was flagged, when, and
-whether it's still open or marked resolved.
-
 Two more things can be fixed without deleting and re-uploading a whole
 dataset:
 
@@ -250,3 +240,8 @@ entirely in the browser — no data is sent anywhere to build the file.
   advisory for a few uncommon image formats (ICNS/JXL/HEIF parsing) — not
   reachable here, since the export flow never feeds it a user-supplied
   image, only text and chart data.
+- The manual "flag an issue" report feature (and its `lumen_corrections`
+  table) has been replaced by direct inline editing — the app no longer
+  reads or writes that table. If you ran `lumen_corrections_migration.sql`
+  on an older setup, the table is harmless to leave in place; it just isn't
+  used anymore.

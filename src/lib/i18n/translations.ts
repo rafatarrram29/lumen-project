@@ -93,31 +93,14 @@ export type Translations = {
     exportButton: string;
     exporting: string;
     noItemsSelected: string;
-    pendingReviewNotice: string;
     generatedOn: (date: string) => string;
     valueLabel: string;
     changeLabel: string;
     ofTargetLabel: string;
   };
   corrections: {
-    flagButton: string;
-    modalTitle: string;
-    issueTypeLabel: string;
-    typeWrongNumber: string;
-    typeWrongLink: string;
-    typeBadDecision: string;
-    typeOther: string;
-    commentLabel: string;
-    commentPlaceholder: string;
-    submit: string;
-    submitSuccess: string;
     logTitle: string;
     logButton: string;
-    logEmpty: string;
-    statusOpen: string;
-    statusResolved: string;
-    markResolved: string;
-    markOpen: string;
   };
   editMapping: {
     editSalesButton: string;
@@ -352,31 +335,14 @@ const en: Translations = {
     exportButton: "Export",
     exporting: "Exporting…",
     noItemsSelected: "Select at least one item to export.",
-    pendingReviewNotice: "Some findings in this report are still under review.",
     generatedOn: (date) => `Generated on ${date}`,
     valueLabel: "Value",
     changeLabel: "Change",
     ofTargetLabel: "% of target",
   },
   corrections: {
-    flagButton: "🚩 Flag issue",
-    modalTitle: "Flag an issue",
-    issueTypeLabel: "What's wrong?",
-    typeWrongNumber: "Wrong number",
-    typeWrongLink: "Files linked incorrectly",
-    typeBadDecision: "Decision doesn't make sense",
-    typeOther: "Something else",
-    commentLabel: "Describe the issue",
-    commentPlaceholder: "What looks wrong, and what did you expect instead?",
-    submit: "Submit",
-    submitSuccess: "Thanks — logged.",
     logTitle: "Correction log",
     logButton: "📋 Correction log",
-    logEmpty: "No issues flagged for this dataset yet.",
-    statusOpen: "Open",
-    statusResolved: "Resolved",
-    markResolved: "Mark resolved",
-    markOpen: "Reopen",
   },
   editMapping: {
     editSalesButton: "Edit mapping",
@@ -617,31 +583,14 @@ const ar: Translations = {
     exportButton: "تصدير",
     exporting: "جاري التصدير…",
     noItemsSelected: "اختار عنصر واحد على الأقل عشان تصدّر.",
-    pendingReviewNotice: "بعض النتائج في التقرير ده لسه قيد المراجعة.",
     generatedOn: (date) => `تم الإنشاء في ${date}`,
     valueLabel: "القيمة",
     changeLabel: "التغيير",
     ofTargetLabel: "% من الهدف",
   },
   corrections: {
-    flagButton: "🚩 الإبلاغ عن مشكلة",
-    modalTitle: "الإبلاغ عن مشكلة",
-    issueTypeLabel: "إيه المشكلة؟",
-    typeWrongNumber: "رقم غلط",
-    typeWrongLink: "ربط ملفات غلط",
-    typeBadDecision: "القرار مش منطقي",
-    typeOther: "حاجة تانية",
-    commentLabel: "اوصف المشكلة",
-    commentPlaceholder: "إيه اللي شكله غلط، وإيه اللي كنت متوقعه بدل كده؟",
-    submit: "إرسال",
-    submitSuccess: "شكرًا — اتسجلت.",
     logTitle: "سجل التصحيحات",
     logButton: "📋 سجل التصحيحات",
-    logEmpty: "لسه مفيش مشاكل متبلّغ عنها في مجموعة البيانات دي.",
-    statusOpen: "مفتوحة",
-    statusResolved: "اتحلت",
-    markResolved: "تحديد كمُتحلة",
-    markOpen: "إعادة فتح",
   },
   editMapping: {
     editSalesButton: "تعديل الربط",
