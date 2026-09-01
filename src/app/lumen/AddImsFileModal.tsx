@@ -200,6 +200,7 @@ function MappingStep({
   fileName,
   sheet,
   initialDisplayName,
+  initialFixedMonth,
   stepLabel,
   onCancel,
   onBack,
@@ -208,6 +209,7 @@ function MappingStep({
   fileName: string;
   sheet: RawSheet;
   initialDisplayName?: string;
+  initialFixedMonth?: string;
   stepLabel?: string;
   onCancel: () => void;
   onBack?: () => void;
@@ -228,8 +230,11 @@ function MappingStep({
   // A snapshot file often has no per-row month column at all (a
   // comparison table, a single "as of" export) — this lets the user say
   // "this whole file is month N" once instead, only ever used when no
-  // Month column is mapped.
-  const [fixedMonth, setFixedMonth] = useState<string>("");
+  // Month column is mapped. A single PDF import batch is almost always
+  // all the same reporting period, so each table in the queue starts
+  // from whatever month the previous one was confirmed with instead of
+  // making the user retype it every time.
+  const [fixedMonth, setFixedMonth] = useState<string>(initialFixedMonth ?? "");
   const fixedMonthNumber = fixedMonth.trim() === "" ? null : Number(fixedMonth);
 
   const { companyOptions, companyGuess } = useMemo(() => {
@@ -425,6 +430,7 @@ export function AddImsFileModal({
   const [manualSheets, setManualSheets] = useState<Record<string, RawSheet>>({});
   const [queue, setQueue] = useState<QueueItem[] | null>(null);
   const [queueIndex, setQueueIndex] = useState(0);
+  const [lastFixedMonth, setLastFixedMonth] = useState<string>("");
 
   useEffect(() => {
     if (!isPdf) return;
@@ -519,6 +525,7 @@ export function AddImsFileModal({
   // run concurrently — each one creates its own IMS file server-side, and
   // the shared "uploading" indicator only makes sense one at a time.
   async function handleQueueConfirm(save: ImsFileSave) {
+    if (save.mapping.fixedMonth != null) setLastFixedMonth(String(save.mapping.fixedMonth));
     await onConfirm(save);
     if (queue && queueIndex + 1 < queue.length) {
       setQueueIndex((i) => i + 1);
@@ -553,6 +560,7 @@ export function AddImsFileModal({
         fileName={fileName}
         sheet={current.sheet}
         initialDisplayName={current.label}
+        initialFixedMonth={lastFixedMonth}
         stepLabel={queue.length > 1 ? t.ims.pdfMappingStepOf(queueIndex + 1, queue.length) : undefined}
         onCancel={onCancel}
         onBack={queueIndex === 0 ? () => setQueue(null) : undefined}
