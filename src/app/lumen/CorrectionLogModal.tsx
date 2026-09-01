@@ -1,6 +1,6 @@
 "use client";
 
-import type { Correction, IssueType } from "@/lib/lumen/corrections";
+import type { Correction, DataEdit, IssueType } from "@/lib/lumen/corrections";
 import { useLanguage } from "@/lib/i18n/LanguageProvider";
 import type { Translations } from "@/lib/i18n/translations";
 
@@ -15,10 +15,12 @@ function issueTypeLabel(type: IssueType, t: Translations): string {
 
 export function CorrectionLogModal({
   corrections,
+  dataEdits,
   onToggleStatus,
   onClose,
 }: {
   corrections: Correction[];
+  dataEdits: DataEdit[];
   onToggleStatus: (correction: Correction) => void;
   onClose: () => void;
 }) {
@@ -72,6 +74,30 @@ export function CorrectionLogModal({
                 >
                   {c.status === "open" ? t.corrections.markResolved : t.corrections.markOpen}
                 </button>
+              </div>
+            ))}
+          </div>
+        )}
+
+        <h3 className="mb-3 mt-6 text-sm font-semibold text-white">{t.inlineEdit.logSectionTitle}</h3>
+        {dataEdits.length === 0 ? (
+          <p className="text-sm text-muted">{t.inlineEdit.logEmpty}</p>
+        ) : (
+          <div className="space-y-2">
+            {dataEdits.map((e) => (
+              <div key={e.id} className="rounded-lg border border-bdr bg-surf2/60 p-3 text-xs">
+                <div className="mb-1 flex items-center justify-between gap-2">
+                  <span className="min-w-0 truncate font-semibold text-white" dir="auto" title={e.targetLabel}>
+                    {e.targetLabel}
+                  </span>
+                  <span className="shrink-0 text-[11px] text-muted">
+                    {new Date(e.createdAt).toLocaleString(lang === "ar" ? "ar-EG" : "en-US")}
+                  </span>
+                </div>
+                <div className="font-mono text-[11px] text-muted">
+                  {t.inlineEdit.changedFrom(e.oldValue, e.newValue)}
+                </div>
+                {e.editedBy && <div className="mt-1 text-[11px] text-muted" dir="auto">{e.editedBy}</div>}
               </div>
             ))}
           </div>

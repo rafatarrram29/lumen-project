@@ -1,0 +1,41 @@
+import { NextResponse } from "next/server";
+import { createClient } from "@/lib/supabase/server";
+
+export async function GET(request: Request) {
+  const supabase = await createClient();
+
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  if (!user) {
+    return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
+  }
+
+  const { searchParams } = new URL(request.url);
+  const datasetId = searchParams.get("datasetId");
+  if (!datasetId) {
+    return NextResponse.json({ error: "Missing datasetId" }, { status: 400 });
+  }
+
+  const { data, error } = await supabase
+    .from("lumen_data_edits")
+    .select("id, target_label, old_value, new_value, edited_by, created_at")
+    .eq("dataset_id", datasetId)
+    .order("created_at", { ascending: false });
+
+  if (error) {
+    return NextResponse.json({ error: error.message }, { status: 500 });
+  }
+
+  return NextResponse.json({
+    edits: (data ?? []).map((e) => ({
+      id: e.id as string,
+      targetLabel: e.target_label as string,
+      oldValue: e.old_value as string,
+      newValue: e.new_value as string,
+      editedBy: e.edited_by as string | null,
+      createdAt: e.created_at as string,
+    })),
+  });
+}

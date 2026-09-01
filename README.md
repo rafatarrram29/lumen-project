@@ -54,9 +54,12 @@ design reference only — it is not part of the running app.
 8. Then run `supabase/lumen_corrections_migration.sql`. This adds the
    `lumen_corrections` table used by the flag-issue / correction log
    feature described below.
-9. Open **Settings -> API** and copy the **Project URL** and the **anon
+9. Then run `supabase/lumen_inline_edits_migration.sql`. This adds the
+   `lumen_data_edits` table plus the missing UPDATE policies used by
+   in-app inline editing, described below.
+10. Open **Settings -> API** and copy the **Project URL** and the **anon
    public** key.
-10. Open **Authentication -> Sign In / Providers** and make sure **Email**
+11. Open **Authentication -> Sign In / Providers** and make sure **Email**
    is enabled (it is by default). For local development, under
    **Authentication -> URL Configuration**, you can leave the defaults —
    we'll add your real domain there once deployed.
@@ -167,13 +170,31 @@ completely unaffected.
 
 ## Correcting mistakes in-app
 
-Every area, item row, and decision has a 🚩 **Flag issue** button — pick
-what's wrong (a wrong number, files linked incorrectly, a decision that
-doesn't make sense, or something else) and describe it in a sentence. Every
-flag is saved to that dataset's **Correction log** (sidebar), showing what
-was flagged, when, and whether it's still open or marked resolved.
+Every item's value inside an area (its number for the compared and latest
+month) is directly editable — click it, type the corrected number, and
+press Enter. There's no need to re-upload anything: saving updates the
+underlying row(s) right away, and the whole dashboard recalculates from
+that new number automatically — the area's total, its cluster's average
+and systemic-drop check, targets vs actual, the rep leaderboard, and every
+finding/decision all reflect the edit the moment it's saved, with no manual
+refresh. The same click-to-edit works on any linked file's values
+(Achievement, KPIs, or other), though those only affect that file's own
+display, per the "linked view" scope described above. An edited value shows
+a small ✎ next to it — hover it to see who made the edit and when.
 
-Two things can be fixed without deleting and re-uploading a whole dataset:
+Every edit is recorded automatically in that dataset's **Correction log**
+(sidebar) under "Edit history": what changed, from what value to what
+value, who made the change, and when.
+
+Every area, item row, and decision also has a 🚩 **Flag issue** button —
+pick what's wrong (a wrong number, files linked incorrectly, a decision
+that doesn't make sense, or something else) and describe it in a sentence,
+for anything that needs a written note rather than a direct fix. Every flag
+is saved to the same Correction log, showing what was flagged, when, and
+whether it's still open or marked resolved.
+
+Two more things can be fixed without deleting and re-uploading a whole
+dataset:
 
 - **Which columns feed the sales mapping** (⚙ next to the dataset name) —
   useful when the wrong column was picked (e.g. "Zone" instead of "Area").

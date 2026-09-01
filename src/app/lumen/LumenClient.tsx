@@ -26,7 +26,8 @@ import { applyLinkedMapping, recordsForAreaMonth, type JoinKey, type LinkedFile,
 import { FlagIssueModal } from "./FlagIssueModal";
 import { CorrectionLogModal } from "./CorrectionLogModal";
 import { EditSalesMappingModal } from "./EditSalesMappingModal";
-import type { Correction, IssueType } from "@/lib/lumen/corrections";
+import type { Correction, DataEdit, IssueType } from "@/lib/lumen/corrections";
+import { EditableValue, EditableFieldValue } from "./EditableValue";
 import { ExportModal, type ExportFormat } from "./ExportModal";
 import { buildExportItems } from "@/lib/lumen/exportItems";
 import { useLanguage } from "@/lib/i18n/LanguageProvider";
@@ -125,6 +126,8 @@ export default function LumenClient({
   const [pendingLinkedFile, setPendingLinkedFile] = useState<{ file: File; sheet: RawSheet } | null>(null);
   const [replacingLinkedFileId, setReplacingLinkedFileId] = useState<string | null>(null);
   const [corrections, setCorrections] = useState<Correction[]>([]);
+  const [dataEdits, setDataEdits] = useState<DataEdit[]>([]);
+  const [editedCells, setEditedCells] = useState<Map<string, { editedBy: string | null; editedAt: string }>>(new Map());
   const [flagTarget, setFlagTarget] = useState<string | null>(null);
   const [showCorrectionLog, setShowCorrectionLog] = useState(false);
   const [showEditSalesMapping, setShowEditSalesMapping] = useState(false);
@@ -139,6 +142,7 @@ export default function LumenClient({
       fetchLinkedFiles(initialDatasetId);
       fetchLinkedRecords(initialDatasetId, initialYear);
       fetchCorrections(initialDatasetId);
+      fetchDataEdits(initialDatasetId);
     }
     // Only on mount — subsequent dataset/year changes go through fetchReport.
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -184,12 +188,27 @@ export default function LumenClient({
     }
   }
 
+  async function fetchDataEdits(datasetId: string) {
+    try {
+      const res = await fetch(`/api/lumen/data-edits?datasetId=${datasetId}`);
+      const json = await res.json();
+      setDataEdits(res.ok ? (json.edits ?? []) : []);
+    } catch {
+      setDataEdits([]);
+    }
+  }
+
   async function fetchReport(datasetId: string, y: number) {
     setLoadingReport(true);
     try {
       const res = await fetch(`/api/lumen/analyze?year=${y}&datasetId=${datasetId}`);
       const json = await res.json();
       setReport(json);
+      const cells = new Map<string, { editedBy: string | null; editedAt: string }>();
+      for (const c of json.editedCells ?? []) {
+        cells.set(c.key, { editedBy: c.editedBy, editedAt: c.editedAt });
+      }
+      setEditedCells(cells);
     } catch {
       setReport({ error: t.dashboard.couldNotLoad });
     } finally {
@@ -199,6 +218,7 @@ export default function LumenClient({
     fetchLinkedFiles(datasetId);
     fetchLinkedRecords(datasetId, y);
     fetchCorrections(datasetId);
+    fetchDataEdits(datasetId);
   }
 
   function selectDataset(datasetId: string) {
@@ -604,6 +624,39 @@ export default function LumenClient({
     }
   }
 
+  async function handleEditSalesCell(area: string, family: string, month: number, newValue: number) {
+    if (!selectedDatasetId) return;
+    try {
+      const res = await fetch("/api/lumen/sales-records/cell", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ datasetId: selectedDatasetId, year, month, area, family, newValue }),
+      });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error || t.inlineEdit.saveFailed);
+      await fetchReport(selectedDatasetId, year);
+    } catch (err) {
+      setUploadError(err instanceof Error ? err.message : t.inlineEdit.saveFailed);
+    }
+  }
+
+  async function handleEditLinkedField(recordId: string, key: string, newValue: string) {
+    if (!selectedDatasetId) return;
+    try {
+      const res = await fetch(`/api/lumen/dataset-records/${recordId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ key, newValue }),
+      });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error || t.inlineEdit.saveFailed);
+      await fetchLinkedRecords(selectedDatasetId, year);
+      await fetchDataEdits(selectedDatasetId);
+    } catch (err) {
+      setUploadError(err instanceof Error ? err.message : t.inlineEdit.saveFailed);
+    }
+  }
+
   function openFlagModal(label: string) {
     setFlagTarget(label);
   }
@@ -929,6 +982,7 @@ export default function LumenClient({
       {showCorrectionLog && (
         <CorrectionLogModal
           corrections={corrections}
+          dataEdits={dataEdits}
           onToggleStatus={handleToggleCorrectionStatus}
           onClose={() => setShowCorrectionLog(false)}
         />
@@ -1312,8 +1366,21 @@ export default function LumenClient({
                                   <span className="shrink-0 text-[10px] text-muted">{itemOpen ? t.common.hide : t.common.details}</span>
                                 </div>
                                 <div className="ps-4 font-mono text-[11px] break-words text-muted">
-                                  {t.common.month(report.comparedToMonth)}: {formatNumber(fc.prevValue)} →{" "}
-                                  {t.common.month(report.latestMonth)}: {formatNumber(fc.currValue)}
+                                  {t.common.month(report.comparedToMonth)}:{" "}
+                                  <EditableValue
+                                    value={fc.prevValue}
+                                    formatted={formatNumber(fc.prevValue)}
+                                    edited={editedCells.get(JSON.stringify([area, fam, report.comparedToMonth]))}
+                                    onSave={(v) => handleEditSalesCell(area, fam, report.comparedToMonth, v)}
+                                  />{" "}
+                                  →{" "}
+                                  {t.common.month(report.latestMonth)}:{" "}
+                                  <EditableValue
+                                    value={fc.currValue}
+                                    formatted={formatNumber(fc.currValue)}
+                                    edited={editedCells.get(JSON.stringify([area, fam, report.latestMonth]))}
+                                    onSave={(v) => handleEditSalesCell(area, fam, report.latestMonth, v)}
+                                  />
                                 </div>
 
                                 {itemOpen && (
@@ -1402,7 +1469,12 @@ export default function LumenClient({
                                   <div key={r.id} className="ps-1 text-muted">
                                     {Object.entries(r.data).map(([k, v]) => (
                                       <div key={k} dir="auto">
-                                        <span className="text-white">{k}:</span> {String(v)}
+                                        <span className="text-white">{k}:</span>{" "}
+                                        <EditableFieldValue
+                                          value={v}
+                                          edited={r.isEdited && r.editedAt ? { editedBy: r.editedBy, editedAt: r.editedAt } : undefined}
+                                          onSave={(newValue) => handleEditLinkedField(r.id, k, newValue)}
+                                        />
                                       </div>
                                     ))}
                                   </div>
