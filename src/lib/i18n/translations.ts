@@ -304,7 +304,6 @@ export type Translations = {
     repLeaderboard: string;
   };
   chart: {
-    indexedCaption: (areaLabel: string, compareLabel: string) => string;
     thisArea: string;
     lineAvg: string;
     lineAverage: string;
@@ -642,8 +641,6 @@ const en: Translations = {
     repLeaderboard: "Rep leaderboard",
   },
   chart: {
-    indexedCaption: (areaLabel, compareLabel) =>
-      `Indexed to 100 at the first month shown, so ${areaLabel} and the ${compareLabel.toLowerCase()} are comparable regardless of scale.`,
     thisArea: "This area:",
     lineAvg: "Line avg:",
     lineAverage: "Line average",
@@ -982,8 +979,6 @@ const ar: Translations = {
     repLeaderboard: "ترتيب المناديب",
   },
   chart: {
-    indexedCaption: (areaLabel, compareLabel) =>
-      `الأرقام محسوبة كمؤشر يبدأ من 100 في أول شهر، عشان ${areaLabel} و${compareLabel} يبقوا قابلين للمقارنة مهما اختلف حجم الأرقام.`,
     thisArea: "المنطقة دي:",
     lineAvg: "متوسط الخط:",
     lineAverage: "متوسط الخط",

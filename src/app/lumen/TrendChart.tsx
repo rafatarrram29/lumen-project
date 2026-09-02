@@ -100,7 +100,6 @@ export function TrendChart({
 
   return (
     <div>
-      <div className="mb-1 text-xs text-muted">{t.chart.indexedCaption(areaLabel, resolvedCompareLabel)}</div>
       <div className="h-56 w-full">
         <ResponsiveContainer width="100%" height="100%">
           <LineChart data={data} margin={{ top: 8, right: 8, left: -4, bottom: 0 }}>
