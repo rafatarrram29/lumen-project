@@ -43,7 +43,7 @@ export function isValidMapping(m: unknown): m is ColumnMapping {
     if (typeof mapping[key] !== "string" || (mapping[key] as string).trim() === "") return false;
   }
 
-  const optional: (keyof ColumnMapping)[] = ["qty", "rep", "line"];
+  const optional: (keyof ColumnMapping)[] = ["qty", "rep", "line", "uniqueId"];
   for (const key of optional) {
     if (mapping[key] !== null && typeof mapping[key] !== "string") return false;
   }

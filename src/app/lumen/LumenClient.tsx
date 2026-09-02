@@ -442,18 +442,30 @@ export default function LumenClient({
     fileLabel: string,
   ): Promise<{ inserted: number; warning?: string } | false> {
     const { rows: parsedRows, skipped } = applyColumnMapping(sheet, mapping);
-    // An exact repeat of a row within this same file (every column
-    // identical, including the value) is a source-file accident, not a
-    // decision to ask the uploader about — drop it automatically and keep
-    // going. This is scoped to THIS one file/upload attempt only; a new
-    // upload colliding with rows already committed from an earlier upload
-    // is a completely different case (still handled by the overlap/replace
-    // prompt above and the database's own uniqueness constraint).
-    const { kept: rows, removed: duplicatesRemoved } = dedupeExactDuplicates(
-      parsedRows,
-      (r) => `${r.month}|${r.area}|${r.item}|${r.rep ?? ""}|${r.salesValue}|${r.salesQty ?? ""}`,
-      (r) => `${r.area} / ${r.item} / month ${r.month}`,
-    );
+    // An exact repeat of a row within this same file (every TRACKED column
+    // identical, including the value) can only be safely auto-removed when
+    // the mapping includes a real per-row identifier (Customer ID, invoice
+    // number, ...): without one, two DIFFERENT customers who happen to
+    // order the same quantity at the same price look byte-identical to
+    // everything this app tracks, and are NOT duplicates — auto-deleting
+    // on that weaker key was measured to silently remove 68-75% of two
+    // real multi-customer sales files' rows. With a uniqueId mapped, the
+    // key can tell the two cases apart and it's safe to drop and continue;
+    // without one, this falls back to the original behavior further down
+    // (the server rejects the batch and asks the uploader to look at it).
+    // Either way this is scoped to THIS one file/upload attempt only — a
+    // new upload colliding with rows already committed from an earlier
+    // upload is a different case, still handled by the overlap/replace
+    // prompt above and the database's own uniqueness constraint.
+    const dedupeResult = mapping.uniqueId
+      ? dedupeExactDuplicates(
+          parsedRows,
+          (r) => `${r.month}|${r.area}|${r.item}|${r.rep ?? ""}|${r.salesValue}|${r.salesQty ?? ""}|${r.uniqueId ?? ""}`,
+          (r) => `${r.area} / ${r.item} / month ${r.month}`,
+        )
+      : { kept: parsedRows, removed: { count: 0, examples: [] as string[] } };
+    const rows = dedupeResult.kept;
+    const duplicatesRemoved = dedupeResult.removed;
     const monthsInFile = Array.from(new Set(rows.map((r) => r.month))).sort((a, b) => a - b);
     const areasInFile = Array.from(new Set(rows.map((r) => r.area)));
 
@@ -527,6 +539,16 @@ export default function LumenClient({
             datasetId,
             sourceFile: fileName,
             rows: batches[i],
+            // Tells the server which duplicate-check mode is safe to run:
+            // with a real per-row identifier mapped, each row already
+            // carries its own uniqueId (part of ParsedSalesRow), so the
+            // server can dedupe-and-continue using the SAME strong key
+            // this file was already deduped with above; without one, it
+            // falls back to the original reject-and-ask behavior, since
+            // there's no way to tell a real duplicate apart from two
+            // different customers who coincidentally share every tracked
+            // column.
+            hasUniqueId: Boolean(mapping.uniqueId),
             // Reported once (on the first batch only) — the whole file's
             // duplicates were already found and dropped above, before
             // batching, so there is exactly one summary for this upload.

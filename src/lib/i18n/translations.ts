@@ -258,6 +258,8 @@ export type Translations = {
     fieldMonth: string;
     fieldRep: string;
     fieldLine: string;
+    fieldUniqueId: string;
+    fieldUniqueIdHint: string;
   };
   dashboard: {
     areasAnalyzed: string;
@@ -594,6 +596,9 @@ const en: Translations = {
     fieldMonth: "Month",
     fieldRep: "Rep",
     fieldLine: "Line",
+    fieldUniqueId: "Unique row ID (optional)",
+    fieldUniqueIdHint:
+      "Mapping a Customer ID, invoice, or transaction number here lets an exact repeated row be removed automatically on upload instead of blocking it — without this, two different customers who happen to order the same quantity at the same price would otherwise look identical.",
   },
   dashboard: {
     areasAnalyzed: "Areas analyzed",
@@ -933,6 +938,9 @@ const ar: Translations = {
     fieldMonth: "الشهر",
     fieldRep: "المندوب",
     fieldLine: "الخط",
+    fieldUniqueId: "معرّف فريد للصف (اختياري)",
+    fieldUniqueIdHint:
+      "لو ربطت عمود زي رقم العميل (Customer ID) أو رقم الفاتورة هنا، أي صف متطابق تمامًا هيتشال تلقائيًا وقت الرفع من غير ما يوقف الرفع — من غيره، عميلين مختلفين طلبوا نفس الكمية بنفس السعر هيبانوا وكأنهم نفس الصف.",
   },
   dashboard: {
     areasAnalyzed: "المناطق المحللة",

@@ -16,6 +16,7 @@ const MAPPING_FIELDS: MappingField[] = [
   { key: "month", required: true },
   { key: "rep", required: false },
   { key: "line", required: false },
+  { key: "uniqueId", required: false },
 ];
 
 function fieldLabel(key: MappingFieldKey, t: Translations): string {
@@ -27,6 +28,7 @@ function fieldLabel(key: MappingFieldKey, t: Translations): string {
     month: t.wizard.fieldMonth,
     rep: t.wizard.fieldRep,
     line: t.wizard.fieldLine,
+    uniqueId: t.wizard.fieldUniqueId,
   }[key];
 }
 
@@ -77,6 +79,7 @@ export function UploadWizardModal({
     month: guess.month ?? null,
     rep: guess.rep ?? null,
     line: guess.line ?? null,
+    uniqueId: guess.uniqueId ?? null,
   });
 
   const existingDataset = datasets.find((d) => d.id === existingDatasetId) ?? null;
@@ -100,6 +103,7 @@ export function UploadWizardModal({
           month: mapping.month!,
           rep: mapping.rep,
           line: mapping.line,
+          uniqueId: mapping.uniqueId,
         },
       });
     } else {
@@ -207,6 +211,9 @@ export function UploadWizardModal({
                   </label>
                 ))}
               </div>
+              {mapping.uniqueId && (
+                <p className="mt-2 text-[11px] text-muted">{t.wizard.fieldUniqueIdHint}</p>
+              )}
             </div>
           </div>
         )}

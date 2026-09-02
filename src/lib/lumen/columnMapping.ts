@@ -14,6 +14,16 @@ export type ColumnMapping = {
   month: string;
   rep: string | null;
   line: string | null;
+  // Optional: a per-row identifier (Customer ID, invoice/transaction
+  // number — whatever the source file has) that tells a genuinely
+  // repeated row apart from two DIFFERENT rows that simply happen to
+  // share the same area/item/month/value/qty (e.g. two different
+  // customers ordering the same common quantity at the same list price —
+  // completely normal in real multi-customer sales data, and NOT a
+  // duplicate). Only when this is mapped can an exact-repeat check safely
+  // auto-remove duplicates on upload instead of asking; unmapped, that
+  // check has no way to distinguish the two cases and must keep asking.
+  uniqueId: string | null;
 };
 
 export type ParsedSalesRow = {
@@ -25,6 +35,7 @@ export type ParsedSalesRow = {
   month: number;
   rep: string | null;
   line: string | null;
+  uniqueId: string | null;
 };
 
 export type RawSheet = {
@@ -116,6 +127,10 @@ const GUESS_RULES: GuessRule[] = [
   // "line" itself is deliberately not a guess keyword — it's too generic
   // and would false-match an unrelated column like "Product Line".
   { field: "line", keywords: ["group", "district", "zone"] },
+  // Deliberately specific ("customer id", not bare "customer") so this
+  // never guesses a customer NAME column instead of an actual identifier
+  // — a name isn't reliably unique the way an ID/invoice number is.
+  { field: "uniqueId", keywords: ["customer id", "customer no", "customer code", "invoice no", "invoice number", "invoice", "transaction id", "row id"] },
 ];
 
 export function guessMapping(headers: string[]): Partial<Record<keyof ColumnMapping, string>> {
@@ -267,6 +282,7 @@ export function applyColumnMapping(
     const qtyRaw = mapping.qty ? r[mapping.qty] : null;
     const repRaw = mapping.rep ? r[mapping.rep] : null;
     const lineRaw = mapping.line ? r[mapping.line] : null;
+    const uniqueIdRaw = mapping.uniqueId ? r[mapping.uniqueId] : null;
     const qty = qtyRaw != null ? parseNumeric(qtyRaw) : NaN;
 
     rows.push({
@@ -278,6 +294,7 @@ export function applyColumnMapping(
       month,
       rep: repRaw != null ? textCellValue(sheet, i, mapping.rep!, repRaw) : null,
       line: lineRaw != null ? textCellValue(sheet, i, mapping.line!, lineRaw) : null,
+      uniqueId: uniqueIdRaw != null ? textCellValue(sheet, i, mapping.uniqueId!, uniqueIdRaw) : null,
     });
   });
 
