@@ -25,6 +25,38 @@ export function findDuplicateKeys<T>(items: T[], keyFn: (item: T) => string): { 
     .map(([key, count]) => ({ key, count }));
 }
 
+// An exact repeat of a row within the SAME upload attempt (e.g. a source
+// file that accidentally has the same line twice) is a data-entry accident
+// in the file, not a decision the uploader needs to make — silently keep
+// the first occurrence and drop the rest, rather than rejecting the whole
+// upload and forcing a manual choice. This is a fundamentally different
+// case from a NEW upload colliding with rows already committed from a
+// PREVIOUS upload (a real "did you mean to replace this month" question,
+// still handled by the overlap/replace prompt and the database's own
+// uniqueness constraint) — this function only ever looks within the one
+// batch of rows it's given.
+export function dedupeExactDuplicates<T>(
+  items: T[],
+  keyFn: (item: T) => string,
+  describe: (item: T) => string,
+): { kept: T[]; removed: { count: number; examples: string[] } } {
+  const seen = new Set<string>();
+  const kept: T[] = [];
+  const examples: string[] = [];
+  let count = 0;
+  for (const item of items) {
+    const key = keyFn(item);
+    if (seen.has(key)) {
+      count++;
+      if (examples.length < 5) examples.push(describe(item));
+      continue;
+    }
+    seen.add(key);
+    kept.push(item);
+  }
+  return { kept, removed: { count, examples } };
+}
+
 // Postgres's unique-violation error code — used to recognize a
 // duplicate rejected by the database itself (e.g. one that collides with
 // a row from an earlier, already-committed batch) and turn it into a
