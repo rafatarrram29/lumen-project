@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
-import { findDuplicateKeys, POSTGRES_UNIQUE_VIOLATION } from "@/lib/lumen/duplicateCheck";
+import { dedupeExactDuplicates, POSTGRES_UNIQUE_VIOLATION } from "@/lib/lumen/duplicateCheck";
 
 const MAX_ROWS_PER_REQUEST = 5000;
 
@@ -36,6 +36,10 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
   const datasetId = typeof body?.datasetId === "string" ? body.datasetId : null;
   const year = Number(body?.year);
   const rows: IncomingRow[] = Array.isArray(body?.rows) ? body.rows : [];
+  const clientDuplicatesRemoved: { count: number; examples: string[] } | null =
+    body?.duplicatesRemoved && typeof body.duplicatesRemoved.count === "number"
+      ? { count: body.duplicatesRemoved.count, examples: Array.isArray(body.duplicatesRemoved.examples) ? body.duplicatesRemoved.examples : [] }
+      : null;
 
   if (!datasetId) return NextResponse.json({ error: "Missing datasetId" }, { status: 400 });
   if (!Number.isInteger(year) || year < 2000 || year > 2100) {
@@ -75,28 +79,23 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     return NextResponse.json({ error: "No valid rows in payload" }, { status: 400 });
   }
 
-  // Same principle as the sales upload's duplicate check: key on the full
-  // row including the measured value, not just area/product/month/company
-  // — a real IMS export can have several genuinely distinct rows sharing
-  // those (a finer time slice, a repeated audit), and only a byte-identical
-  // row is an actual duplicate.
-  const duplicates = findDuplicateKeys(
+  // An exact repeat of a row within this same batch is a source-file
+  // accident, not a decision the uploader needs to make — drop it and
+  // insert the rest (the client already dedupes the whole file before
+  // batching; this is a defensive backstop for any caller that doesn't).
+  // Keyed on the full row including the measured value, not just
+  // area/product/month/company — a real IMS export can have several
+  // genuinely distinct rows sharing those (a finer time slice, a repeated
+  // audit), and only a byte-identical row is an actual duplicate. A NEW
+  // upload colliding with rows already committed from an EARLIER one is a
+  // different case entirely, still caught below by POSTGRES_UNIQUE_VIOLATION.
+  const { kept, removed: batchDuplicatesRemoved } = dedupeExactDuplicates(
     records,
     (r) => `${r.dataset_id}|${r.year}|${r.month}|${r.area ?? ""}|${r.product ?? ""}|${r.company ?? ""}|${r.market_share}`,
+    (r) => `${r.area ?? "—"} / ${r.product ?? "—"} / month ${r.month}`,
   );
-  if (duplicates.length > 0) {
-    return NextResponse.json(
-      {
-        error:
-          `This batch has ${duplicates.length} row(s) repeated more than once, identical in every column ` +
-          `— check the source file for an accidentally repeated row, or if this is a re-upload of a month you ` +
-          `already have, delete and re-add the file instead of adding to it.`,
-      },
-      { status: 409 },
-    );
-  }
 
-  const { error } = await supabase.from("lumen_ims_records").insert(records);
+  const { error } = await supabase.from("lumen_ims_records").insert(kept);
   if (error) {
     if (error.code === POSTGRES_UNIQUE_VIOLATION) {
       return NextResponse.json(
@@ -107,5 +106,18 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 
-  return NextResponse.json({ inserted: records.length });
+  const totalRemoved = (clientDuplicatesRemoved?.count ?? 0) + batchDuplicatesRemoved.count;
+  if (totalRemoved > 0) {
+    const examples = [...(clientDuplicatesRemoved?.examples ?? []), ...batchDuplicatesRemoved.examples].slice(0, 5);
+    await supabase.from("lumen_data_edits").insert({
+      dataset_id: datasetId,
+      target_label: `IMS upload: ${totalRemoved} duplicate row(s) removed automatically`,
+      old_value: `${totalRemoved} duplicate row(s) found`,
+      new_value: `kept one copy of each — e.g. ${examples.join("; ") || "an identical repeated row"}`,
+      edited_by: user.email ?? user.id,
+      is_undo: false,
+    });
+  }
+
+  return NextResponse.json({ inserted: kept.length });
 }

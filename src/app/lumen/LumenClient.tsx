@@ -35,6 +35,7 @@ import { ImsPanel, type ImsFile } from "./ImsPanel";
 import { AddImsFileModal, type ImsFileSave } from "./AddImsFileModal";
 import { applyImsMapping } from "@/lib/lumen/imsMapping";
 import type { ImsReport } from "@/lib/lumen/imsEngine";
+import { dedupeExactDuplicates } from "@/lib/lumen/duplicateCheck";
 
 // recharts is a heavy dependency only ever needed once a trend chart is
 // actually shown (an area or item card expanded) — loading it eagerly
@@ -440,7 +441,31 @@ export default function LumenClient({
     fileName: string,
     fileLabel: string,
   ): Promise<{ inserted: number; warning?: string } | false> {
-    const { rows, skipped } = applyColumnMapping(sheet, mapping);
+    const { rows: parsedRows, skipped } = applyColumnMapping(sheet, mapping);
+    // An exact repeat of a row within this same file (every TRACKED column
+    // identical, including the value) can only be safely auto-removed when
+    // the mapping includes a real per-row identifier (Customer ID, invoice
+    // number, ...): without one, two DIFFERENT customers who happen to
+    // order the same quantity at the same price look byte-identical to
+    // everything this app tracks, and are NOT duplicates — auto-deleting
+    // on that weaker key was measured to silently remove 68-75% of two
+    // real multi-customer sales files' rows. With a uniqueId mapped, the
+    // key can tell the two cases apart and it's safe to drop and continue;
+    // without one, this falls back to the original behavior further down
+    // (the server rejects the batch and asks the uploader to look at it).
+    // Either way this is scoped to THIS one file/upload attempt only — a
+    // new upload colliding with rows already committed from an earlier
+    // upload is a different case, still handled by the overlap/replace
+    // prompt above and the database's own uniqueness constraint.
+    const dedupeResult = mapping.uniqueId
+      ? dedupeExactDuplicates(
+          parsedRows,
+          (r) => `${r.month}|${r.area}|${r.item}|${r.rep ?? ""}|${r.salesValue}|${r.salesQty ?? ""}|${r.uniqueId ?? ""}`,
+          (r) => `${r.area} / ${r.item} / month ${r.month}`,
+        )
+      : { kept: parsedRows, removed: { count: 0, examples: [] as string[] } };
+    const rows = dedupeResult.kept;
+    const duplicatesRemoved = dedupeResult.removed;
     const monthsInFile = Array.from(new Set(rows.map((r) => r.month))).sort((a, b) => a - b);
     const areasInFile = Array.from(new Set(rows.map((r) => r.area)));
 
@@ -509,7 +534,26 @@ export default function LumenClient({
         const res = await fetch("/api/lumen/upload", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ year, datasetId, sourceFile: fileName, rows: batches[i] }),
+          body: JSON.stringify({
+            year,
+            datasetId,
+            sourceFile: fileName,
+            rows: batches[i],
+            // Tells the server which duplicate-check mode is safe to run:
+            // with a real per-row identifier mapped, each row already
+            // carries its own uniqueId (part of ParsedSalesRow), so the
+            // server can dedupe-and-continue using the SAME strong key
+            // this file was already deduped with above; without one, it
+            // falls back to the original reject-and-ask behavior, since
+            // there's no way to tell a real duplicate apart from two
+            // different customers who coincidentally share every tracked
+            // column.
+            hasUniqueId: Boolean(mapping.uniqueId),
+            // Reported once (on the first batch only) — the whole file's
+            // duplicates were already found and dropped above, before
+            // batching, so there is exactly one summary for this upload.
+            ...(i === 0 && duplicatesRemoved.count > 0 ? { duplicatesRemoved } : {}),
+          }),
         });
         const json = await res.json();
         if (!res.ok) throw new Error(json.error || "Upload failed");
@@ -533,7 +577,7 @@ export default function LumenClient({
 
     // Final sanity check: does the dataset actually now hold as many rows
     // for these months as we just inserted? This should always match —
-    // the per-batch duplicate rejection and the database's own uniqueness
+    // the within-file dedup above and the database's own uniqueness
     // constraint both prevent a mismatch — but this is the one place we
     // can catch anything neither of those anticipated before the user
     // walks away trusting a silently wrong number.
@@ -541,6 +585,12 @@ export default function LumenClient({
     if (skipped.count > 0) {
       warnings.push(
         `${fileLabel}: skipped ${skipped.count} row(s) that couldn't be read (${skipped.examples.join("; ") || "missing area/item/value/month"}) — check the source file for those rows.`,
+      );
+    }
+    if (duplicatesRemoved.count > 0) {
+      warnings.push(
+        `${fileLabel}: removed ${duplicatesRemoved.count} row(s) repeated identically within this file ` +
+          `(e.g. ${duplicatesRemoved.examples.join("; ") || "a repeated row"}) — kept one copy of each, logged in the Correction log.`,
       );
     }
     try {
@@ -673,7 +723,12 @@ export default function LumenClient({
     setUploadMessage(null);
 
     try {
-      const rows = applyLinkedMapping(pending.sheet, save.mapping);
+      const parsedRows = applyLinkedMapping(pending.sheet, save.mapping);
+      const { kept: rows, removed: duplicatesRemoved } = dedupeExactDuplicates(
+        parsedRows,
+        (r) => `${r.month}|${r.area ?? ""}|${r.rep ?? ""}|${r.line ?? ""}|${JSON.stringify(r.data)}`,
+        (r) => `${r.area ?? "—"} / month ${r.month}`,
+      );
 
       let fileId: string;
       if (replaceId) {
@@ -714,16 +769,26 @@ export default function LumenClient({
         const res = await fetch(`/api/lumen/dataset-files/${fileId}/records`, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ datasetId: selectedDatasetId, year, rows: batches[i] }),
+          body: JSON.stringify({
+            datasetId: selectedDatasetId,
+            year,
+            rows: batches[i],
+            ...(i === 0 && duplicatesRemoved.count > 0 ? { duplicatesRemoved } : {}),
+          }),
         });
         const json = await res.json();
         if (!res.ok) throw new Error(json.error || "Upload failed");
         inserted += json.inserted;
       }
 
-      setUploadMessage(t.linkedFiles.uploadSuccess(inserted));
+      setUploadMessage(
+        duplicatesRemoved.count > 0
+          ? `${t.linkedFiles.uploadSuccess(inserted)} Removed ${duplicatesRemoved.count} duplicate row(s) repeated within this file — logged in the Correction log.`
+          : t.linkedFiles.uploadSuccess(inserted),
+      );
       await fetchLinkedFiles(selectedDatasetId);
       await fetchLinkedRecords(selectedDatasetId, year);
+      await fetchDataEdits(selectedDatasetId);
     } catch (err) {
       setUploadError(err instanceof Error ? err.message : "Upload failed");
     } finally {
@@ -795,7 +860,12 @@ export default function LumenClient({
     setUploadMessage(null);
 
     try {
-      const { rows, skipped } = applyImsMapping(save.sheet, save.mapping);
+      const { rows: parsedRows, skipped } = applyImsMapping(save.sheet, save.mapping);
+      const { kept: rows, removed: duplicatesRemoved } = dedupeExactDuplicates(
+        parsedRows,
+        (r) => `${r.month}|${r.area ?? ""}|${r.product ?? ""}|${r.company ?? ""}|${r.marketShare}`,
+        (r) => `${r.area ?? "—"} / ${r.product ?? "—"} / month ${r.month}`,
+      );
 
       const createRes = await fetch("/api/lumen/ims-files", {
         method: "POST",
@@ -834,6 +904,7 @@ export default function LumenClient({
               month: r.month,
               growthRate: r.growthRate,
             })),
+            ...(i === 0 && duplicatesRemoved.count > 0 ? { duplicatesRemoved } : {}),
           }),
         });
         const json = await res.json();
@@ -841,13 +912,15 @@ export default function LumenClient({
         inserted += json.inserted;
       }
 
-      setUploadMessage(
-        skipped.count > 0
-          ? `${t.ims.uploadSuccess(inserted)} Skipped ${skipped.count} row(s) (${skipped.examples.join("; ") || "invalid values"}).`
-          : t.ims.uploadSuccess(inserted),
-      );
+      const notes: string[] = [];
+      if (skipped.count > 0) notes.push(`Skipped ${skipped.count} row(s) (${skipped.examples.join("; ") || "invalid values"}).`);
+      if (duplicatesRemoved.count > 0) {
+        notes.push(`Removed ${duplicatesRemoved.count} duplicate row(s) repeated within this file — logged in the Correction log.`);
+      }
+      setUploadMessage(notes.length > 0 ? `${t.ims.uploadSuccess(inserted)} ${notes.join(" ")}` : t.ims.uploadSuccess(inserted));
       await fetchImsFiles(selectedDatasetId);
       await fetchImsReport(selectedDatasetId, year);
+      await fetchDataEdits(selectedDatasetId);
     } catch (err) {
       setUploadError(err instanceof Error ? err.message : "Upload failed");
     } finally {
