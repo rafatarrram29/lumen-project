@@ -1554,7 +1554,6 @@ export default function LumenClient({
                             </tr>
                           </tbody>
                         </table>
-                        <p className="mt-1.5 text-xs text-muted">{t.dashboard.valueExplainer}</p>
                       </div>
 
                       {d.monthlySeries.length >= 2 && (
