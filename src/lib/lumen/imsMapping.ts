@@ -34,7 +34,7 @@
 // which then makes every competitor look like its own unrelated product
 // with no company set — exactly why "Top competitor" comes back empty for
 // this table shape even though the source file has real competitor data.
-import { parseNumeric, type RawSheet } from "./columnMapping";
+import { parseNumeric, textCellValue, type RawSheet } from "./columnMapping";
 import type { SkippedRowInfo } from "./columnMapping";
 
 export type ImsColumnMapping = {
@@ -168,7 +168,7 @@ export function applyImsMapping(
   const examples: string[] = [];
   let skippedCount = 0;
 
-  for (const r of sheet.rows) {
+  sheet.rows.forEach((r, i) => {
     const areaVal = mapping.area ? r[mapping.area] : null;
     const productVal = mapping.product ? r[mapping.product] : null;
     const shareVal = r[mapping.marketShare];
@@ -186,15 +186,15 @@ export function applyImsMapping(
       (mapping.month && monthVal == null)
     ) {
       skippedCount++;
-      continue;
+      return;
     }
 
-    const areaStr = areaVal != null ? String(areaVal).trim() : null;
-    const productStr = productVal != null ? String(productVal).trim() : null;
+    const areaStr = areaVal != null ? textCellValue(sheet, i, mapping.area!, areaVal) : null;
+    const productStr = productVal != null ? textCellValue(sheet, i, mapping.product!, productVal) : null;
     if (isAggregateLabel(areaStr) || isAggregateLabel(productStr)) {
       skippedCount++;
       if (examples.length < 5) examples.push(`skipped a "${areaStr ?? productStr}" summary row`);
-      continue;
+      return;
     }
 
     const marketShare = parseShare(shareVal);
@@ -208,7 +208,7 @@ export function applyImsMapping(
             : `could not read month "${monthVal}" as a number`,
         );
       }
-      continue;
+      return;
     }
 
     const companyRaw = mapping.company ? r[mapping.company] : null;
@@ -222,12 +222,12 @@ export function applyImsMapping(
     rows.push({
       area: areaStr,
       product: productStr ?? mapping.fixedProduct,
-      company: companyRaw != null ? String(companyRaw).trim() : null,
+      company: companyRaw != null ? textCellValue(sheet, i, mapping.company!, companyRaw) : null,
       marketShare,
       month,
       growthRate,
     });
-  }
+  });
 
   if (rows.length === 0) {
     throw new Error("No usable rows found after applying the IMS column mapping.");

@@ -109,10 +109,14 @@ export function EditableFieldValue({
   value,
   edited,
   onSave,
+  className,
+  title,
 }: {
   value: unknown;
   edited?: { editedBy: string | null; editedAt: string };
   onSave: (newValue: string) => Promise<void>;
+  className?: string;
+  title?: string;
 }) {
   const { t, lang } = useLanguage();
   const [editing, setEditing] = useState(false);
@@ -149,7 +153,7 @@ export function EditableFieldValue({
             setEditing(false);
           }
         }}
-        className="w-32 rounded border border-amber bg-surf2 px-1 py-0.5 text-xs text-white outline-none disabled:opacity-50"
+        className={`w-32 rounded border border-amber bg-surf2 px-1 py-0.5 text-xs text-white outline-none disabled:opacity-50 ${className ?? ""}`}
       />
     );
   }
@@ -165,7 +169,8 @@ export function EditableFieldValue({
     <span
       role="button"
       tabIndex={0}
-      title={editedTitle ?? t.inlineEdit.editHint}
+      dir="auto"
+      title={editedTitle ?? title ?? t.inlineEdit.editHint}
       onClick={(e) => {
         e.stopPropagation();
         setDraft(String(value));
@@ -179,7 +184,7 @@ export function EditableFieldValue({
           setEditing(true);
         }
       }}
-      className="cursor-pointer underline decoration-dotted decoration-muted/50 hover:decoration-white"
+      className={`cursor-pointer underline decoration-dotted decoration-muted/50 hover:decoration-white ${className ?? ""}`}
     >
       {String(value)}
       {edited && (

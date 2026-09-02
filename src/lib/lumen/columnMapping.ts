@@ -30,7 +30,26 @@ export type ParsedSalesRow = {
 export type RawSheet = {
   headers: string[];
   rows: Record<string, unknown>[];
+  // Same rows, but every cell read as its rendered display text (SheetJS's
+  // cell.w) instead of the underlying value — populated only for real
+  // spreadsheet uploads (readWorkbookSheet.ts). Absent for PDF-derived
+  // sheets (tableToRawSheet), which have no separate "raw value vs display
+  // text" distinction to begin with: PDF cells are already plain text.
+  displayRows?: Record<string, unknown>[];
 };
+
+// A text-designated field (item/area/rep/line/product/company — never a
+// number/date/share field) should show exactly what the file displays, not
+// a numeric reinterpretation of it. A spreadsheet cell holding something
+// like "25/500" or "007" can get auto-typed as a number by Excel or by
+// plaintext/CSV parsing, at which point the underlying raw value has
+// nothing to do with the text as written (see readWorkbookSheet.ts) — the
+// sheet's own rendered display text (displayRows) is the literal, as-typed
+// value and always wins when available.
+export function textCellValue(sheet: RawSheet, rowIndex: number, key: string, rawValue: unknown): string {
+  const display = sheet.displayRows?.[rowIndex]?.[key];
+  return String(display ?? rawValue).trim();
+}
 
 export type TargetColumnMapping = {
   area: string | null;
@@ -169,12 +188,12 @@ export function applyTargetMapping(
   const examples: string[] = [];
   let skippedCount = 0;
 
-  for (const r of sheet.rows) {
+  sheet.rows.forEach((r, i) => {
     const monthVal = r[mapping.month];
     const valueVal = r[mapping.value];
     if (monthVal == null || valueVal == null) {
       skippedCount++;
-      continue;
+      return;
     }
 
     const month = Math.trunc(parseNumeric(monthVal));
@@ -186,7 +205,7 @@ export function applyTargetMapping(
           Number.isNaN(targetValue) ? `could not read value "${valueVal}" as a number` : `could not read month "${monthVal}" as a number`,
         );
       }
-      continue;
+      return;
     }
 
     const areaVal = mapping.area ? r[mapping.area] : null;
@@ -194,13 +213,13 @@ export function applyTargetMapping(
     const itemVal = mapping.item ? r[mapping.item] : null;
 
     rows.push({
-      area: areaVal != null ? String(areaVal).trim() : null,
-      rep: repVal != null ? String(repVal).trim() : null,
-      item: itemVal != null ? String(itemVal).trim() : null,
+      area: areaVal != null ? textCellValue(sheet, i, mapping.area!, areaVal) : null,
+      rep: repVal != null ? textCellValue(sheet, i, mapping.rep!, repVal) : null,
+      item: itemVal != null ? textCellValue(sheet, i, mapping.item!, itemVal) : null,
       month,
       targetValue,
     });
-  }
+  });
 
   if (rows.length === 0) {
     throw new Error("No usable rows found after applying the target column mapping.");
@@ -217,14 +236,14 @@ export function applyColumnMapping(
   const examples: string[] = [];
   let skippedCount = 0;
 
-  for (const r of sheet.rows) {
+  sheet.rows.forEach((r, i) => {
     const areaVal = r[mapping.area];
     const itemVal = r[mapping.item];
     const valueVal = r[mapping.value];
     const monthVal = r[mapping.month];
     if (areaVal == null || itemVal == null || valueVal == null || monthVal == null) {
       skippedCount++;
-      continue;
+      return;
     }
 
     const salesValue = parseNumeric(valueVal);
@@ -236,30 +255,31 @@ export function applyColumnMapping(
           Number.isNaN(salesValue) ? `could not read value "${valueVal}" as a number` : `could not read month "${monthVal}" as a number`,
         );
       }
-      continue;
+      return;
     }
 
-    // Trimmed so a stray leading/trailing space on just some rows of an
-    // otherwise-identical area/item/rep name doesn't silently split it
-    // into a second, near-invisible bucket in the report (e.g. "Domiat 1"
-    // vs "Domiat 1 " being treated as two different areas).
-    const item = String(itemVal).trim();
+    // Read as the file's own displayed text (not a numeric reinterpretation
+    // of the cell) and trimmed, so a stray leading/trailing space on just
+    // some rows of an otherwise-identical area/item/rep name doesn't
+    // silently split it into a second, near-invisible bucket in the report
+    // (e.g. "Domiat 1" vs "Domiat 1 " being treated as two different areas).
+    const item = textCellValue(sheet, i, mapping.item, itemVal);
     const qtyRaw = mapping.qty ? r[mapping.qty] : null;
     const repRaw = mapping.rep ? r[mapping.rep] : null;
     const lineRaw = mapping.line ? r[mapping.line] : null;
     const qty = qtyRaw != null ? parseNumeric(qtyRaw) : NaN;
 
     rows.push({
-      area: String(areaVal).trim(),
+      area: textCellValue(sheet, i, mapping.area, areaVal),
       item,
       family: item,
       salesQty: !Number.isNaN(qty) ? qty : null,
       salesValue,
       month,
-      rep: repRaw != null ? String(repRaw).trim() : null,
-      line: lineRaw != null ? String(lineRaw).trim() : null,
+      rep: repRaw != null ? textCellValue(sheet, i, mapping.rep!, repRaw) : null,
+      line: lineRaw != null ? textCellValue(sheet, i, mapping.line!, lineRaw) : null,
     });
-  }
+  });
 
   if (rows.length === 0) {
     throw new Error("No usable rows found after applying the column mapping.");

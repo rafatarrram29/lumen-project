@@ -6,6 +6,7 @@ import type { ImsColumnMapping } from "@/lib/lumen/imsMapping";
 import { useLanguage } from "@/lib/i18n/LanguageProvider";
 import type { Translations } from "@/lib/i18n/translations";
 import { ImsTrendChart } from "./ImsTrendChart";
+import { EditableFieldValue } from "./EditableValue";
 
 export type ImsFile = {
   id: string;
@@ -129,6 +130,8 @@ export function ImsPanel({
   disabled,
   onAddFile,
   onDeleteFile,
+  onRenameGroup,
+  onRenameCompany,
 }: {
   report: ImsReport | null;
   files: ImsFile[];
@@ -136,6 +139,11 @@ export function ImsPanel({
   disabled: boolean;
   onAddFile: (file: File) => void;
   onDeleteFile: (file: ImsFile) => void;
+  // A mis-extracted or mis-typed product/area/company name (e.g. a wrong
+  // dosage strength pulled from a PDF) corrected here cascades across
+  // every IMS file in the dataset — see /api/lumen/ims-files/rename.
+  onRenameGroup: (ap: ImsAreaProduct, newLabel: string) => void;
+  onRenameCompany: (oldName: string, newName: string) => void;
 }) {
   const { t } = useLanguage();
   const addInputRef = useRef<HTMLInputElement>(null);
@@ -271,8 +279,14 @@ export function ImsPanel({
           </div>
 
           <div className="mb-5 rounded-2xl border border-bdr bg-surf p-4">
-            <div className="mb-2 text-sm font-semibold text-white" dir="auto">
-              {t.ims.analysisTitle(groupLabel(selected))}
+            <div className="mb-2 flex items-center gap-1.5 text-sm font-semibold text-white">
+              <span>{t.ims.analysisTitleLabel}</span>
+              <span aria-hidden>—</span>
+              <EditableFieldValue
+                value={groupLabel(selected)}
+                title={t.inlineEdit.renameHint}
+                onSave={async (v) => onRenameGroup(selected, v.trim())}
+              />
             </div>
             <p className="mb-2 break-words text-sm text-muted" dir="auto">
               {t.ims.positionShareLine(
@@ -306,9 +320,12 @@ export function ImsPanel({
                       key={c.company}
                       className={`flex items-center justify-between px-3 py-2 text-sm ${i > 0 ? "border-t border-bdr/60" : ""}`}
                     >
-                      <span className="min-w-0 truncate text-white" dir="auto" title={c.company}>
-                        {c.company}
-                      </span>
+                      <EditableFieldValue
+                        value={c.company}
+                        className="min-w-0 truncate text-white"
+                        title={t.inlineEdit.renameHint}
+                        onSave={async (v) => onRenameCompany(c.company, v.trim())}
+                      />
                       <span className="ms-3 shrink-0 font-mono text-xs text-muted">{formatShare(c.share)}</span>
                     </div>
                   ))}

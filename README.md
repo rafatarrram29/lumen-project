@@ -90,9 +90,17 @@ design reference only — it is not part of the running app.
     optional `growth_rate` column to `lumen_ims_records`, for a source
     file's own growth-rate column (e.g. "GR") when it has one — used for
     the Market Insights dashboard's growth figures. Purely additive.
-16. Open **Settings -> API** and copy the **Project URL** and the **anon
+16. Then run `supabase/lumen_rename_cascade_migration.sql`. Adds UPDATE
+    policies (no new columns) so renaming an item/area/product name (the
+    inline rename feature — click any item, area, or IMS product/company
+    name to correct it) cascades into `lumen_targets`,
+    `lumen_rep_assignments`, and `lumen_ims_records`, not just the main
+    Sales table. Without this, a rename still works immediately for Sales
+    and linked files; it just won't reach Targets, Rep assignment history,
+    or IMS records until this is run.
+17. Open **Settings -> API** and copy the **Project URL** and the **anon
    public** key.
-17. Open **Authentication -> Sign In / Providers** and make sure **Email**
+18. Open **Authentication -> Sign In / Providers** and make sure **Email**
    is enabled (it is by default). For local development, under
    **Authentication -> URL Configuration**, you can leave the defaults —
    we'll add your real domain there once deployed.

@@ -4,7 +4,7 @@
 // — so its rows can be matched back to the same area/month shown in the
 // sales-based dashboard as supplementary context, without changing the
 // underlying sales analysis at all.
-import { parseNumeric, type RawSheet } from "./columnMapping";
+import { parseNumeric, textCellValue, type RawSheet } from "./columnMapping";
 
 export type LinkedFileType = "achievement" | "kpis" | "other";
 
@@ -123,11 +123,11 @@ export function applyLinkedMapping(sheet: RawSheet, mapping: LinkedFileMapping):
   );
   const rows: ParsedLinkedRow[] = [];
 
-  for (const r of sheet.rows) {
+  sheet.rows.forEach((r, i) => {
     const monthVal = r[mapping.month];
-    if (monthVal == null) continue;
+    if (monthVal == null) return;
     const month = Math.trunc(parseNumeric(monthVal));
-    if (Number.isNaN(month)) continue;
+    if (Number.isNaN(month)) return;
 
     const areaVal = mapping.area ? r[mapping.area] : null;
     const repVal = mapping.rep ? r[mapping.rep] : null;
@@ -140,18 +140,19 @@ export function applyLinkedMapping(sheet: RawSheet, mapping: LinkedFileMapping):
     }
 
     rows.push({
-      // Trimmed so this file's rows still match the sales-report area they
-      // belong to even if the join-key cell has stray whitespace that the
-      // sales file's own area name doesn't (or vice versa) — untrimmed,
-      // that mismatch would make this linked file silently show no data
-      // for an area it actually has a row for.
-      area: areaVal != null ? String(areaVal).trim() : null,
-      rep: repVal != null ? String(repVal).trim() : null,
-      line: lineVal != null ? String(lineVal).trim() : null,
+      // Read as the file's own displayed text and trimmed, so this file's
+      // rows still match the sales-report area they belong to even if the
+      // join-key cell has stray whitespace that the sales file's own area
+      // name doesn't (or vice versa) — untrimmed, that mismatch would make
+      // this linked file silently show no data for an area it actually has
+      // a row for.
+      area: areaVal != null ? textCellValue(sheet, i, mapping.area!, areaVal) : null,
+      rep: repVal != null ? textCellValue(sheet, i, mapping.rep!, repVal) : null,
+      line: lineVal != null ? textCellValue(sheet, i, mapping.line!, lineVal) : null,
       month,
       data,
     });
-  }
+  });
 
   if (rows.length === 0) {
     throw new Error("No usable rows found after applying the column mapping.");

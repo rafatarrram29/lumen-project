@@ -34,7 +34,15 @@ function checkIsSpreadsheet(buffer: ArrayBuffer, fileName: string) {
 export async function readWorkbookSheet(file: File): Promise<RawSheet> {
   const buffer = await file.arrayBuffer();
   checkIsSpreadsheet(buffer, file.name);
-  const workbook = XLSX.read(buffer, { type: "array" });
+  // raw:true here is a no-op for a real .xlsx/.xls binary (its cells already
+  // carry explicit types) but is required for CSV/plaintext: SheetJS's
+  // default plaintext parsing "helpfully" infers numbers/dates from cell
+  // text, which silently mangles anything that looks numeric-but-isn't —
+  // a leading-zero code ("007" -> 7), a trailing zero ("42000.50" ->
+  // 42000.5), or a slash-separated value (a dosage strength like "25/500")
+  // read as something else entirely. raw:true keeps every plaintext cell
+  // exactly as typed, character for character.
+  const workbook = XLSX.read(buffer, { type: "array", raw: true });
   const sheet = workbook.Sheets[workbook.SheetNames[0]];
 
   const grid = XLSX.utils.sheet_to_json<unknown[]>(sheet, {
@@ -64,5 +72,20 @@ export async function readWorkbookSheet(file: File): Promise<RawSheet> {
     throw new Error("Couldn't find any data rows in that file.");
   }
 
-  return { headers: Object.keys(raw[0]), rows: raw };
+  // A genuine .xlsx cell can still be stored as a NUMBER with a custom
+  // display format even when it's conceptually a text label (e.g. a
+  // dosage/fraction-look-alike value someone typed into a cell Excel then
+  // auto-typed) — raw:true above only protects plaintext parsing, not this.
+  // sheet_to_json's own raw:false asks for the cell's rendered display text
+  // (cell.w) instead of the underlying number (cell.v); computed here as a
+  // second, parallel pass so text-designated fields (item/product/area/...)
+  // can prefer "what the file actually shows" while numeric fields keep
+  // using the primary, number-typed `rows` above untouched.
+  const display = XLSX.utils.sheet_to_json<Record<string, unknown>>(sheet, {
+    range: headerRowIndex,
+    defval: null,
+    raw: false,
+  });
+
+  return { headers: Object.keys(raw[0]), rows: raw, displayRows: display };
 }
