@@ -286,7 +286,6 @@ export type Translations = {
     decliningStreak: string;
     yes: string;
     no: string;
-    valueExplainer: string;
     trendLastMonths: (n: number) => string;
     byItem: string;
     rootCauseItem: string;
@@ -624,8 +623,6 @@ const en: Translations = {
     decliningStreak: "3-month declining streak",
     yes: "Yes",
     no: "No",
-    valueExplainer:
-      '"Value" is the sum of the mapped Value column from your uploaded file (all items combined, no currency conversion). "Quantity" is the sum of the mapped Quantity column for the same area and month.',
     trendLastMonths: (n) => `Trend — last ${n} months`,
     byItem: "By item",
     rootCauseItem: "Root cause item:",
@@ -966,8 +963,6 @@ const ar: Translations = {
     decliningStreak: "انخفاض متواصل لـ 3 شهور",
     yes: "نعم",
     no: "لا",
-    valueExplainer:
-      '"القيمة" هي مجموع عمود القيمة المحدد من ملفك (كل الأصناف مع بعض، من غير تحويل عملة). "الكمية" هي مجموع عمود الكمية المحدد لنفس المنطقة والشهر.',
     trendLastMonths: (n) => `الاتجاه — آخر ${n} شهور`,
     byItem: "حسب الصنف",
     rootCauseItem: "الصنف السبب:",
