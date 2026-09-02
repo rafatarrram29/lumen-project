@@ -53,7 +53,9 @@ const UNDO_WINDOW_MS = 8000;
 
 type LastEdit =
   | { kind: "sales"; area: string; family: string; month: number; oldValue: number; newValue: number }
-  | { kind: "linked"; recordId: string; key: string; oldValue: unknown; newValue: unknown };
+  | { kind: "linked"; recordId: string; key: string; oldValue: unknown; newValue: unknown }
+  | { kind: "rename"; field: "area" | "item"; oldValue: string; newValue: string }
+  | { kind: "imsRename"; field: "area" | "product" | "company"; oldValue: string; newValue: string };
 
 function formatNumber(n: number): string {
   return n.toLocaleString("en-US");
@@ -925,14 +927,65 @@ export default function LumenClient({
     }
   }
 
+  // Renames an item/area name across the whole dataset (Sales, Targets,
+  // Rep assignment history, linked files) — the identity every level of
+  // the report groups and matches by, unlike sales-records/cell's
+  // per-cell VALUE edit. See src/app/api/lumen/sales-records/rename for
+  // exactly which tables get updated.
+  async function handleRenameSalesField(field: "area" | "item", oldValue: string, newValue: string, isUndo = false) {
+    if (!selectedDatasetId || oldValue === newValue) return;
+    try {
+      const res = await fetch("/api/lumen/sales-records/rename", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ datasetId: selectedDatasetId, field, oldValue, newValue, isUndo }),
+      });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error || t.inlineEdit.saveFailed);
+      await fetchReport(selectedDatasetId, year);
+      if (!isUndo) armUndo({ kind: "rename", field, oldValue, newValue });
+    } catch (err) {
+      setUploadError(err instanceof Error ? err.message : t.inlineEdit.saveFailed);
+    }
+  }
+
+  // Same idea for the IMS side (Market Insights) — renames an area,
+  // product, or company name across every IMS file in the dataset.
+  async function handleRenameImsField(
+    field: "area" | "product" | "company",
+    oldValue: string,
+    newValue: string,
+    isUndo = false,
+  ) {
+    if (!selectedDatasetId || oldValue === newValue) return;
+    try {
+      const res = await fetch("/api/lumen/ims-files/rename", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ datasetId: selectedDatasetId, field, oldValue, newValue, isUndo }),
+      });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error || t.inlineEdit.saveFailed);
+      await fetchImsReport(selectedDatasetId, year);
+      await fetchDataEdits(selectedDatasetId);
+      if (!isUndo) armUndo({ kind: "imsRename", field, oldValue, newValue });
+    } catch (err) {
+      setUploadError(err instanceof Error ? err.message : t.inlineEdit.saveFailed);
+    }
+  }
+
   async function handleUndo() {
     if (!lastEdit) return;
     const edit = lastEdit;
     clearUndo();
     if (edit.kind === "sales") {
       await handleEditSalesCell(edit.area, edit.family, edit.month, edit.oldValue, true);
-    } else {
+    } else if (edit.kind === "linked") {
       await handleEditLinkedField(edit.recordId, edit.key, String(edit.oldValue), true);
+    } else if (edit.kind === "rename") {
+      await handleRenameSalesField(edit.field, edit.newValue, edit.oldValue, true);
+    } else {
+      await handleRenameImsField(edit.field, edit.newValue, edit.oldValue, true);
     }
   }
 
@@ -1282,6 +1335,14 @@ export default function LumenClient({
           disabled={uploading}
           onAddFile={handleAddImsFile}
           onDeleteFile={handleDeleteImsFile}
+          onRenameGroup={(ap, newLabel) => {
+            // A group is "about" its product when the file has one, else
+            // its area (see ImsPanel's own groupLabel) — rename whichever
+            // one actually holds the displayed name.
+            if (ap.product !== null) handleRenameImsField("product", ap.product, newLabel);
+            else if (ap.area !== null) handleRenameImsField("area", ap.area, newLabel);
+          }}
+          onRenameCompany={(oldName, newName) => handleRenameImsField("company", oldName, newName)}
         />
       )}
 
@@ -1493,7 +1554,12 @@ export default function LumenClient({
                   >
                     <div className="min-w-0">
                       <div className="flex items-center gap-2">
-                        <span className="truncate font-medium" dir="auto">{area}</span>
+                        <EditableFieldValue
+                          value={area}
+                          className="truncate font-medium"
+                          title={t.inlineEdit.renameHint}
+                          onSave={(v) => handleRenameSalesField("area", area, v.trim())}
+                        />
                         {report.hasLines && (
                           <span className="shrink-0 rounded-full border border-bdr px-1.5 py-0.5 text-[10px] text-muted" dir="auto">
                             {d.line}
@@ -1600,7 +1666,12 @@ export default function LumenClient({
                                     className="h-2 w-2 shrink-0 rounded-full"
                                     style={{ backgroundColor: colorForFamily(fam) }}
                                   />
-                                  <span className="min-w-0 flex-1 truncate text-muted" dir="auto">{fam}</span>
+                                  <EditableFieldValue
+                                    value={fam}
+                                    className="min-w-0 flex-1 truncate text-muted"
+                                    title={t.inlineEdit.renameHint}
+                                    onSave={(v) => handleRenameSalesField("item", fam, v.trim())}
+                                  />
                                   <span
                                     className={`shrink-0 font-mono ${
                                       fc.pctChange !== null && fc.pctChange < 0 ? "text-red" : "text-green"

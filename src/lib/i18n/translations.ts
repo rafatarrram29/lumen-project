@@ -113,6 +113,7 @@ export type Translations = {
   };
   inlineEdit: {
     editHint: string;
+    renameHint: string;
     editedTitle: (editor: string, date: string) => string;
     saveFailed: string;
     logSectionTitle: string;
@@ -221,7 +222,7 @@ export type Translations = {
     shareGainLossSubtitle: string;
     marketRankingTitle: string;
     monthlyTrendTitle: string;
-    analysisTitle: (product: string) => string;
+    analysisTitleLabel: string;
     positionShareLine: (share: string, rank: string) => string;
     positionGrowthLine: (ourGrowth: string, marketGrowth: string) => string;
     competitorsTitle: string;
@@ -437,6 +438,7 @@ const en: Translations = {
   },
   inlineEdit: {
     editHint: "Click to edit",
+    renameHint: "Click to rename — this updates every place this name appears",
     editedTitle: (editor, date) => `Edited by ${editor} on ${date}`,
     saveFailed: "Could not save that edit.",
     logSectionTitle: "Edit history",
@@ -555,7 +557,7 @@ const en: Translations = {
     shareGainLossSubtitle: "Market share point change",
     marketRankingTitle: "Market Ranking",
     monthlyTrendTitle: "Monthly Trend — Us vs Top Competitors",
-    analysisTitle: (product) => `Analysis — ${product}`,
+    analysisTitleLabel: "Analysis",
     positionShareLine: (share, rank) => `Latest share: ${share} — ${rank}.`,
     positionGrowthLine: (ourGrowth, marketGrowth) => `Our growth: ${ourGrowth} vs the market's ${marketGrowth}.`,
     competitorsTitle: "Competitors",
@@ -775,6 +777,7 @@ const ar: Translations = {
   },
   inlineEdit: {
     editHint: "دوس عشان تعدّل",
+    renameHint: "دوس عشان تغيّر الاسم — التغيير ده هيتحدث في كل مكان الاسم ده ظاهر فيه",
     editedTitle: (editor, date) => `اتعدّل بواسطة ${editor} في ${date}`,
     saveFailed: "التعديل ده معملوش حفظ.",
     logSectionTitle: "سجل التعديلات",
@@ -893,7 +896,7 @@ const ar: Translations = {
     shareGainLossSubtitle: "التغير في نقاط الحصة السوقية",
     marketRankingTitle: "ترتيب السوق",
     monthlyTrendTitle: "الاتجاه الشهري — إحنا مقابل أكبر المنافسين",
-    analysisTitle: (product) => `تحليل — ${product}`,
+    analysisTitleLabel: "تحليل",
     positionShareLine: (share, rank) => `آخر حصة: ${share} — ${rank}.`,
     positionGrowthLine: (ourGrowth, marketGrowth) => `نمونا: ${ourGrowth} مقابل نمو السوق: ${marketGrowth}.`,
     competitorsTitle: "المنافسون",
