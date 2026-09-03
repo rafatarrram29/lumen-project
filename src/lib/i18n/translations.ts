@@ -326,6 +326,24 @@ export type Translations = {
     transferSummary: (family: string, pct: number, area: string) => string;
     transferDecision: (family: string, area: string) => string;
   };
+  install: {
+    bannerTitle: string;
+    bannerBody: string;
+    installButton: string;
+    later: string;
+    sidebarLink: string;
+    modalTitle: string;
+    androidTitle: string;
+    androidStep1: string;
+    androidStep2: string;
+    androidStep3: string;
+    iosTitle: string;
+    iosStep1: string;
+    iosStep2: string;
+    iosStep3: string;
+    alreadyInstalled: string;
+    close: string;
+  };
 };
 
 const en: Translations = {
@@ -673,6 +691,24 @@ const en: Translations = {
     transferDecision: (family, area) =>
       `Review what worked for ${family} in ${area} and check whether the same approach applies to similar customers in other areas.`,
   },
+  install: {
+    bannerTitle: "Install Lumen on this device",
+    bannerBody: "Add it to your home screen for one-tap access, like a regular app.",
+    installButton: "Install",
+    later: "Maybe later",
+    sidebarLink: "Add to Home Screen",
+    modalTitle: "Add Lumen to your Home Screen",
+    androidTitle: "Android (Chrome)",
+    androidStep1: "Tap the ⋮ menu in the top-right corner of Chrome.",
+    androidStep2: "Tap \"Install app\" or \"Add to Home screen\".",
+    androidStep3: "Confirm — Lumen will open like a standalone app from now on.",
+    iosTitle: "iPhone / iPad (Safari)",
+    iosStep1: "Tap the Share icon (square with an arrow) in Safari's toolbar.",
+    iosStep2: "Scroll down and tap \"Add to Home Screen\".",
+    iosStep3: "Tap \"Add\" — Lumen's icon will appear on your Home Screen.",
+    alreadyInstalled: "Lumen is already installed on this device.",
+    close: "Close",
+  },
 };
 
 const ar: Translations = {
@@ -1017,6 +1053,24 @@ const ar: Translations = {
     transferSummary: (family, pct, area) => `${family} زاد ${pct}% في ${area} في حين إن الخط ككل نزل.`,
     transferDecision: (family, area) =>
       `راجع إيه اللي نجح مع ${family} في ${area} وشوف لو نفس الأسلوب ينفع مع عملاء مشابهين في مناطق تانية.`,
+  },
+  install: {
+    bannerTitle: "ثبّت Lumen على جهازك",
+    bannerBody: "ضيفه للشاشة الرئيسية عشان توصله بلمسة واحدة، زي أي تطبيق عادي.",
+    installButton: "تثبيت",
+    later: "لاحقًا",
+    sidebarLink: "إضافة للشاشة الرئيسية",
+    modalTitle: "إضافة Lumen للشاشة الرئيسية",
+    androidTitle: "أندرويد (Chrome)",
+    androidStep1: "اضغط على قائمة ⋮ في أعلى يمين Chrome.",
+    androidStep2: "اضغط \"تثبيت التطبيق\" أو \"إضافة إلى الشاشة الرئيسية\".",
+    androidStep3: "أكّد — هيفتح Lumen من دلوقتي زي تطبيق مستقل.",
+    iosTitle: "آيفون / آيباد (Safari)",
+    iosStep1: "اضغط على أيقونة المشاركة (مربع بسهم) في شريط أدوات Safari.",
+    iosStep2: "انزل لتحت واضغط \"إضافة إلى الشاشة الرئيسية\".",
+    iosStep3: "اضغط \"إضافة\" — هتظهر أيقونة Lumen على شاشتك الرئيسية.",
+    alreadyInstalled: "Lumen متثبت بالفعل على الجهاز ده.",
+    close: "إغلاق",
   },
 };
 

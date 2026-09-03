@@ -1,7 +1,9 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { Space_Grotesk, JetBrains_Mono } from "next/font/google";
 import { LanguageProvider } from "@/lib/i18n/LanguageProvider";
 import { ThemeProvider } from "@/lib/theme/ThemeProvider";
+import ServiceWorkerRegister from "@/components/ServiceWorkerRegister";
+import { InstallProvider } from "@/components/InstallPrompt";
 import "./globals.css";
 
 // Applies a persisted theme choice to <html> before the page paints, so
@@ -26,6 +28,21 @@ const jetbrainsMono = JetBrains_Mono({
 export const metadata: Metadata = {
   title: "Lumen — Territory Decision Engine",
   description: "Upload your monthly sales export, get territory-level decisions.",
+  // manifest.ts (this directory) is auto-linked by Next.js's own file
+  // convention, but iOS Safari specifically only honors these apple-*
+  // tags for "Add to Home Screen" — it ignores the Web Manifest spec
+  // (start_url, display: standalone, icons) almost entirely.
+  icons: {
+    apple: "/icons/apple-touch-icon.png",
+  },
+  appleWebApp: {
+    title: "Lumen",
+    statusBarStyle: "black-translucent",
+  },
+};
+
+export const viewport: Viewport = {
+  themeColor: "#121a38",
 };
 
 export default function RootLayout({ children }: LayoutProps<"/">) {
@@ -38,8 +55,11 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
         <script dangerouslySetInnerHTML={{ __html: themeInitScript }} />
       </head>
       <body className="min-h-full flex flex-col font-sans">
+        <ServiceWorkerRegister />
         <ThemeProvider>
-          <LanguageProvider>{children}</LanguageProvider>
+          <LanguageProvider>
+            <InstallProvider>{children}</InstallProvider>
+          </LanguageProvider>
         </ThemeProvider>
       </body>
     </html>
