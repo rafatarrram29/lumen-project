@@ -48,7 +48,16 @@ export function StatTile({
   );
 }
 
-type BarRow = { key: string; label: string; pctChange: number };
+// pctChange is null for an entity with data in only ONE of the two
+// compared months (a brand-new item's first month, or one that stopped
+// selling entirely) — no percentage is mathematically defined starting or
+// ending at zero, but the entity itself is still real and worth showing,
+// tagged "New"/"Stopped" instead of a percentage. Used to be silently
+// dropped from every comparison list before it ever reached this
+// component, which is exactly why a dataset with several new/discontinued
+// items could show far fewer rows than the number of real distinct
+// entities in the file.
+type BarRow = { key: string; label: string; pctChange: number | null; prevValue?: number; currValue?: number };
 
 function DivergingBarChart({
   rows,
@@ -65,19 +74,31 @@ function DivergingBarChart({
     const id = requestAnimationFrame(() => setMounted(true));
     return () => cancelAnimationFrame(id);
   }, []);
-
-  const plotted = rows.sort((a, b) => Math.abs(b.pctChange) - Math.abs(a.pctChange)).slice(0, maxRows);
+  // A New/Stopped row (no percentage) has nothing to rank by size, so it's
+  // treated as maximally noteworthy and sorted to the top rather than
+  // dropped to the bottom by an implicit "smallest" comparison.
+  const sorted = [...rows].sort(
+    (a, b) => (b.pctChange === null ? Infinity : Math.abs(b.pctChange)) - (a.pctChange === null ? Infinity : Math.abs(a.pctChange)),
+  );
+  const [expanded, setExpanded] = useState(false);
+  const plotted = expanded ? sorted : sorted.slice(0, maxRows);
   if (plotted.length === 0) return null;
 
-  const maxAbs = Math.max(...plotted.map((r) => Math.abs(r.pctChange)), 1);
-  const remaining = rows.length - plotted.length;
+  const numericAbs = plotted.map((r) => (r.pctChange !== null ? Math.abs(r.pctChange) : null)).filter((v): v is number => v !== null);
+  const maxAbs = Math.max(...numericAbs, 1);
+  const remaining = sorted.length - plotted.length;
 
   return (
     <>
       <div className="space-y-2.5">
         {plotted.map((row, i) => {
-          const isDrop = row.pctChange < 0;
-          const targetWidthPct = (Math.abs(row.pctChange) / maxAbs) * 50;
+          // pctChange is null only when prevValue is 0 (a percentage
+          // starting from zero is undefined) — an entity fully stopping
+          // still produces a well-defined -100%, so null here always means
+          // "just appeared", shown as growth-like (green) rather than a
+          // percentage.
+          const isDrop = row.pctChange !== null && row.pctChange < 0;
+          const targetWidthPct = row.pctChange !== null ? (Math.abs(row.pctChange) / maxAbs) * 50 : 50;
 
           const Row = onRowClick ? "button" : "div";
 
@@ -108,9 +129,22 @@ function DivergingBarChart({
                   }}
                 />
               </div>
-              <div className={`w-16 shrink-0 text-end font-mono ${isDrop ? "text-red" : "text-green"}`}>
-                {isDrop ? "" : "+"}
-                {row.pctChange}%
+              <div
+                className={`w-16 shrink-0 text-end font-mono ${isDrop ? "text-red" : "text-green"}`}
+                title={
+                  row.prevValue !== undefined && row.currValue !== undefined
+                    ? `${row.prevValue.toLocaleString("en-US")} → ${row.currValue.toLocaleString("en-US")}`
+                    : undefined
+                }
+              >
+                {row.pctChange !== null ? (
+                  <>
+                    {row.pctChange < 0 ? "" : "+"}
+                    {row.pctChange}%
+                  </>
+                ) : (
+                  <span className="text-[11px]">{t.dashboard.newEntry}</span>
+                )}
               </div>
             </Row>
           );
@@ -118,7 +152,22 @@ function DivergingBarChart({
       </div>
 
       {remaining > 0 && (
-        <p className="mt-3 text-xs text-muted">{t.dashboard.moreInList(remaining)}</p>
+        <button
+          type="button"
+          onClick={() => setExpanded(true)}
+          className="mt-3 text-xs text-amber hover:underline"
+        >
+          {t.dashboard.showAll(sorted.length)}
+        </button>
+      )}
+      {expanded && sorted.length > maxRows && (
+        <button
+          type="button"
+          onClick={() => setExpanded(false)}
+          className="mt-3 text-xs text-muted hover:underline"
+        >
+          {t.dashboard.showLess}
+        </button>
       )}
     </>
   );
@@ -128,13 +177,17 @@ export function AreaChangeBars({
   areas,
   onSelectArea,
 }: {
-  areas: [string, { pctChange: number | null }][];
+  areas: [string, { pctChange: number | null; prevValue?: number; currValue?: number }][];
   onSelectArea?: (area: string) => void;
 }) {
   const { t } = useLanguage();
-  const rows: BarRow[] = areas
-    .filter(([, d]) => d.pctChange !== null)
-    .map(([area, d]) => ({ key: area, label: area, pctChange: d.pctChange! }));
+  const rows: BarRow[] = areas.map(([area, d]) => ({
+    key: area,
+    label: area,
+    pctChange: d.pctChange,
+    prevValue: d.prevValue,
+    currValue: d.currValue,
+  }));
 
   if (rows.length === 0) return null;
 
@@ -154,13 +207,17 @@ export function FamilyChangeBars({
   families,
   title,
 }: {
-  families: Record<string, { pctChange: number | null }>;
+  families: Record<string, { pctChange: number | null; prevValue?: number; currValue?: number }>;
   title?: string;
 }) {
   const { t } = useLanguage();
-  const rows: BarRow[] = Object.entries(families)
-    .filter(([, d]) => d.pctChange !== null)
-    .map(([family, d]) => ({ key: family, label: family, pctChange: d.pctChange! }));
+  const rows: BarRow[] = Object.entries(families).map(([family, d]) => ({
+    key: family,
+    label: family,
+    pctChange: d.pctChange,
+    prevValue: d.prevValue,
+    currValue: d.currValue,
+  }));
 
   if (rows.length === 0) return null;
 
@@ -170,7 +227,7 @@ export function FamilyChangeBars({
         <h2 className="text-sm font-semibold text-white">{title ?? t.dashboard.itemComparison}</h2>
         <Legend />
       </div>
-      <DivergingBarChart rows={rows} maxRows={10} />
+      <DivergingBarChart rows={rows} maxRows={15} />
     </div>
   );
 }

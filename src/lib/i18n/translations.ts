@@ -279,6 +279,9 @@ export type Translations = {
     decline: string;
     growth: string;
     moreInList: (n: number) => string;
+    showAll: (n: number) => string;
+    showLess: string;
+    newEntry: string;
     allAreas: string;
     noChangeThisMonth: string;
     partOfLineDrop: string;
@@ -618,6 +621,9 @@ const en: Translations = {
     decline: "Decline",
     growth: "Growth",
     moreInList: (n) => `+${n} more in the list below.`,
+    showAll: (n) => `Show all ${n}`,
+    showLess: "Show less",
+    newEntry: "New",
     allAreas: "All areas",
     noChangeThisMonth: "No significant change this month.",
     partOfLineDrop: "Part of the line-wide drop — see the systemic finding above.",
@@ -960,6 +966,9 @@ const ar: Translations = {
     decline: "انخفاض",
     growth: "نمو",
     moreInList: (n) => `+${n} كمان في القائمة تحت.`,
+    showAll: (n) => `اعرض كل الـ ${n}`,
+    showLess: "اعرض أقل",
+    newEntry: "جديد",
     allAreas: "كل المناطق",
     noChangeThisMonth: "مفيش تغيير ملحوظ الشهر ده.",
     partOfLineDrop: "جزء من الانخفاض الجماعي — شوف النتيجة الرئيسية فوق.",

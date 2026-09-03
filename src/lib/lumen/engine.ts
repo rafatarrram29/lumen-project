@@ -196,33 +196,53 @@ function groupAreaFamilyMonthTotals(
   return data;
 }
 
+// A comparison entity (item, area, rep) that has data for only ONE of the
+// two months being compared — a brand-new item's first month, or one that
+// stopped selling entirely — used to be silently dropped from every
+// comparison list (both months were required), which is exactly why a
+// dataset with several genuinely new/discontinued items could show far
+// fewer rows than the number of distinct items actually in the file. The
+// missing side is treated as 0 instead: pctChange is correctly null (no
+// percentage is defined starting or ending at zero — see pctChange above),
+// but prevValue/currValue/absDrop still carry the real number, and the UI
+// can show it as "New" or "Stopped" rather than making it disappear.
+// Returns null only when there is truly no data for EITHER month.
+function changeFor(prevTotal: number | undefined, currTotal: number | undefined): FamilyChange | null {
+  if (prevTotal === undefined && currTotal === undefined) return null;
+  const p = prevTotal ?? 0;
+  const c = currTotal ?? 0;
+  return {
+    prevValue: Math.round(p),
+    currValue: Math.round(c),
+    pctChange: pctChange(p, c),
+    absDrop: Math.round(p - c),
+  };
+}
+
 function familyTotalsFor(
   areas: Iterable<string>,
   familyTotals: Map<string, Map<string, Map<number, number>>>,
   prev: number,
   latest: number,
 ): Record<string, FamilyChange> {
-  const acc = new Map<string, [number, number]>();
+  const acc = new Map<string, [number | undefined, number | undefined]>();
   for (const area of areas) {
     const famData = familyTotals.get(area);
     if (!famData) continue;
     for (const [fam, months] of famData) {
-      if (months.has(latest) && months.has(prev)) {
-        const entry = acc.get(fam) ?? [0, 0];
-        entry[0] += months.get(prev)!;
-        entry[1] += months.get(latest)!;
-        acc.set(fam, entry);
-      }
+      if (!months.has(latest) && !months.has(prev)) continue;
+      const entry = acc.get(fam) ?? [undefined, undefined];
+      const prevVal = months.get(prev);
+      const currVal = months.get(latest);
+      if (prevVal !== undefined) entry[0] = (entry[0] ?? 0) + prevVal;
+      if (currVal !== undefined) entry[1] = (entry[1] ?? 0) + currVal;
+      acc.set(fam, entry);
     }
   }
   const result: Record<string, FamilyChange> = {};
   for (const [fam, [p, c]] of acc) {
-    result[fam] = {
-      prevValue: Math.round(p),
-      currValue: Math.round(c),
-      pctChange: pctChange(p, c),
-      absDrop: Math.round(p - c),
-    };
+    const change = changeFor(p, c);
+    if (change) result[fam] = change;
   }
   return result;
 }
@@ -361,16 +381,8 @@ export function buildReport(records: SalesRecord[], year: number, targets: Targe
     if (!(area in areaChanges)) continue;
     const famChanges: Record<string, FamilyChange> = {};
     for (const [fam, months] of famData) {
-      if (months.has(latest) && months.has(prev)) {
-        const p = months.get(prev)!;
-        const c = months.get(latest)!;
-        famChanges[fam] = {
-          prevValue: Math.round(p),
-          currValue: Math.round(c),
-          pctChange: pctChange(p, c),
-          absDrop: Math.round(p - c),
-        };
-      }
+      const change = changeFor(months.get(prev), months.get(latest));
+      if (change) famChanges[fam] = change;
     }
     if (Object.keys(famChanges).length > 0) areaFamilyChanges[area] = famChanges;
   }
@@ -477,14 +489,8 @@ export function buildReport(records: SalesRecord[], year: number, targets: Targe
   for (const [rep, months] of repTotals) {
     const curr = months.get(latest);
     const prevTotal = months.get(prev);
-    if (curr !== undefined && prevTotal !== undefined) {
-      repChanges[rep] = {
-        prevValue: Math.round(prevTotal.value),
-        currValue: Math.round(curr.value),
-        pctChange: pctChange(prevTotal.value, curr.value),
-        absDrop: Math.round(prevTotal.value - curr.value),
-      };
-    }
+    const change = changeFor(prevTotal?.value, curr?.value);
+    if (change) repChanges[rep] = change;
     const series = chartMonths
       .filter((m) => months.has(m))
       .map((m) => {
