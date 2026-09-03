@@ -36,6 +36,7 @@ import { AddImsFileModal, type ImsFileSave } from "./AddImsFileModal";
 import { applyImsMapping } from "@/lib/lumen/imsMapping";
 import type { ImsReport } from "@/lib/lumen/imsEngine";
 import { dedupeExactDuplicates } from "@/lib/lumen/duplicateCheck";
+import { GlobalSearch } from "./GlobalSearch";
 
 // recharts is a heavy dependency only ever needed once a trend chart is
 // actually shown (an area or item card expanded) — loading it eagerly
@@ -47,6 +48,14 @@ const ItemTrendChart = dynamic(() => import("./ItemTrendChart").then((m) => m.It
 
 function areaCardId(area: string): string {
   return `area-card-${encodeURIComponent(area)}`;
+}
+
+function itemCardId(item: string): string {
+  return `item-card-${encodeURIComponent(item)}`;
+}
+
+function repCardId(rep: string): string {
+  return `rep-card-${encodeURIComponent(rep)}`;
 }
 
 const UPLOAD_BATCH_SIZE = 1000;
@@ -1106,6 +1115,20 @@ export default function LumenClient({
     });
   }
 
+  function selectItem(item: string) {
+    setExpandedItems((prev) => new Set(prev).add(item));
+    requestAnimationFrame(() => {
+      document.getElementById(itemCardId(item))?.scrollIntoView({ behavior: "smooth", block: "center" });
+    });
+  }
+
+  function selectRep(rep: string) {
+    setExpandedReps((prev) => new Set(prev).add(rep));
+    requestAnimationFrame(() => {
+      document.getElementById(repCardId(rep))?.scrollIntoView({ behavior: "smooth", block: "center" });
+    });
+  }
+
   function toggleItem(item: string) {
     setExpandedItems((prev) => {
       const next = new Set(prev);
@@ -1133,6 +1156,67 @@ export default function LumenClient({
       if (f.type === "systemic_drop" && f.rootCauseFamily === item) linesForItem.push(f.line);
     }
     return { areas: areasForItem, lines: linesForItem };
+  }
+
+  // Shared between the per-area "byItem" breakdown and the top-level,
+  // all-areas "Items" list — both expand the exact same trend/ranking/root
+  // cause detail for a given item, the only difference being which
+  // aggregate (one area's vs. every area's) the row above it shows.
+  function renderItemDetail(item: string) {
+    if (!report || "error" in report) return null;
+    const itemSeries = report.itemMonthlySeries[item] ?? [];
+    const areaRanking = Object.entries(report.areaFamilyChanges)
+      .map(([a, changes]) => [a, changes[item]] as const)
+      .filter((entry): entry is [string, (typeof report.areaFamilyChanges)[string][string]] => entry[1] !== undefined)
+      .sort((a, b) => b[1].currValue - a[1].currValue);
+    const { areas: rootCauseAreas, lines: rootCauseLines } = findingsForItem(item);
+
+    return (
+      <div className="ms-4 mt-2 space-y-3 rounded-lg bg-surf2/60 p-3">
+        {itemSeries.length >= 2 && (
+          <div>
+            <div className="mb-1 text-[11px] font-semibold text-white">{t.dashboard.trendLastMonths(itemSeries.length)}</div>
+            <ItemTrendChart label={item} series={itemSeries} />
+          </div>
+        )}
+
+        {areaRanking.length > 0 && (
+          <div>
+            <div className="mb-1 text-[11px] font-semibold text-white">{t.dashboard.byAreaMonth(report.latestMonth)}</div>
+            <div className="space-y-1">
+              {areaRanking.map(([a, changes], i) => (
+                <div key={a} className="flex items-center justify-between gap-2 text-[11px]">
+                  <span className="min-w-0 flex-1 truncate text-muted" dir="auto">
+                    {a}
+                    {i === 0 && areaRanking.length > 1 && (
+                      <span className="ms-1.5 rounded-full border border-green/40 px-1.5 py-0.5 text-[9px] text-green">
+                        {t.dashboard.top}
+                      </span>
+                    )}
+                    {i === areaRanking.length - 1 && areaRanking.length > 1 && (
+                      <span className="ms-1.5 rounded-full border border-red/40 px-1.5 py-0.5 text-[9px] text-red">
+                        {t.dashboard.lowest}
+                      </span>
+                    )}
+                  </span>
+                  <span className="shrink-0 font-mono text-white">{formatNumber(changes.currValue)}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {(rootCauseAreas.length > 0 || rootCauseLines.length > 0) && (
+          <div className="text-[11px] text-muted">
+            <span className="font-semibold text-amber">{t.dashboard.rootCauseFor} </span>
+            {[
+              ...rootCauseAreas,
+              ...rootCauseLines.map((c) => (c === "All areas" ? t.dashboard.theLineWideDrop : t.dashboard.theLineWideDropIn(c))),
+            ].join(", ")}
+          </div>
+        )}
+      </div>
+    );
   }
 
   const hasError = report && "error" in report;
@@ -1377,6 +1461,19 @@ export default function LumenClient({
 
       <main className="min-w-0 flex-1 overflow-y-auto px-6 py-6">
       <div className="mx-auto max-w-4xl">
+      {report && !hasError && (
+        <GlobalSearch
+          areas={areas.map(([area]) => area)}
+          items={Object.keys(report.familyChanges)}
+          reps={report.hasReps ? Object.keys(report.repChanges) : []}
+          onSelect={(group, name) => {
+            if (activeTab !== "sales") setActiveTab("sales");
+            if (group === "area") selectArea(name);
+            else if (group === "item") selectItem(name);
+            else selectRep(name);
+          }}
+        />
+      )}
       {selectedDatasetId && (
         <div className="mb-5 flex gap-1 border-b border-bdr">
           <button
@@ -1503,6 +1600,45 @@ export default function LumenClient({
             <FamilyChangeBars families={report.familyChanges} />
           </div>
 
+          {Object.keys(report.familyChanges).length > 0 && (
+            <div className="mb-5 rounded-2xl border border-bdr bg-surf p-4 sm:p-5">
+              <h3 className="mb-2 text-xs font-semibold text-white">{t.dashboard.allItems}</h3>
+              <div className="space-y-2">
+                {Object.entries(report.familyChanges)
+                  .sort((a, b) => (a[1].pctChange ?? Infinity) - (b[1].pctChange ?? Infinity))
+                  .map(([fam, fc]) => {
+                    const itemOpen = expandedItems.has(fam);
+                    return (
+                      <div key={fam} id={itemCardId(fam)} className="scroll-mt-4 text-xs">
+                        <button
+                          onClick={() => toggleItem(fam)}
+                          className="flex w-full items-center gap-2 rounded-lg text-start transition-colors hover:bg-surf2/60"
+                        >
+                          <span className="h-2 w-2 shrink-0 rounded-full" style={{ backgroundColor: colorForFamily(fam) }} />
+                          <span className="min-w-0 flex-1 truncate text-muted" dir="auto">{fam}</span>
+                          <span
+                            className={`shrink-0 font-mono ${
+                              fc.pctChange !== null && fc.pctChange < 0 ? "text-red" : "text-green"
+                            }`}
+                          >
+                            {fc.pctChange !== null && fc.pctChange > 0 ? "+" : ""}
+                            {fc.pctChange ?? "—"}
+                            {fc.pctChange !== null ? "%" : ""}
+                          </span>
+                          <span className="shrink-0 text-[10px] text-muted">{itemOpen ? t.common.hide : t.common.details}</span>
+                        </button>
+                        <div className="ps-4 font-mono text-[11px] break-words text-muted">
+                          {t.common.month(report.comparedToMonth)}: {formatNumber(fc.prevValue)} →{" "}
+                          {t.common.month(report.latestMonth)}: {formatNumber(fc.currValue)}
+                        </div>
+                        {itemOpen && renderItemDetail(fam)}
+                      </div>
+                    );
+                  })}
+              </div>
+            </div>
+          )}
+
           {report.hasReps && (
             <div className="mb-5">
               <RepLeaderboard
@@ -1529,7 +1665,7 @@ export default function LumenClient({
                     const repOpen = expandedReps.has(rep);
                     const repSeries = report.repMonthlySeries[rep] ?? [];
                     return (
-                      <div key={rep} className="text-xs">
+                      <div key={rep} id={repCardId(rep)} className="scroll-mt-4 text-xs">
                         <button
                           onClick={() => toggleRep(rep)}
                           className="flex w-full items-center gap-2 rounded-lg text-start transition-colors hover:bg-surf2/60"
@@ -1719,12 +1855,6 @@ export default function LumenClient({
                           <div className="space-y-2">
                             {familyEntries.map(([fam, fc]) => {
                               const itemOpen = expandedItems.has(fam);
-                              const itemSeries = report.itemMonthlySeries[fam] ?? [];
-                              const areaRanking = Object.entries(report.areaFamilyChanges)
-                                .map(([a, changes]) => [a, changes[fam]] as const)
-                                .filter((entry): entry is [string, (typeof report.areaFamilyChanges)[string][string]] => entry[1] !== undefined)
-                                .sort((a, b) => b[1].currValue - a[1].currValue);
-                              const { areas: rootCauseAreas, lines: rootCauseLines } = findingsForItem(fam);
 
                               return (
                               <div key={fam} className="text-xs">
@@ -1774,60 +1904,7 @@ export default function LumenClient({
                                   />
                                 </div>
 
-                                {itemOpen && (
-                                  <div className="ms-4 mt-2 space-y-3 rounded-lg bg-surf2/60 p-3">
-                                    {itemSeries.length >= 2 && (
-                                      <div>
-                                        <div className="mb-1 text-[11px] font-semibold text-white">
-                                          {t.dashboard.trendLastMonths(itemSeries.length)}
-                                        </div>
-                                        <ItemTrendChart label={fam} series={itemSeries} />
-                                      </div>
-                                    )}
-
-                                    {areaRanking.length > 0 && (
-                                      <div>
-                                        <div className="mb-1 text-[11px] font-semibold text-white">
-                                          {t.dashboard.byAreaMonth(report.latestMonth)}
-                                        </div>
-                                        <div className="space-y-1">
-                                          {areaRanking.map(([a, changes], i) => (
-                                            <div key={a} className="flex items-center justify-between gap-2 text-[11px]">
-                                              <span className="min-w-0 flex-1 truncate text-muted" dir="auto">
-                                                {a}
-                                                {i === 0 && areaRanking.length > 1 && (
-                                                  <span className="ms-1.5 rounded-full border border-green/40 px-1.5 py-0.5 text-[9px] text-green">
-                                                    {t.dashboard.top}
-                                                  </span>
-                                                )}
-                                                {i === areaRanking.length - 1 && areaRanking.length > 1 && (
-                                                  <span className="ms-1.5 rounded-full border border-red/40 px-1.5 py-0.5 text-[9px] text-red">
-                                                    {t.dashboard.lowest}
-                                                  </span>
-                                                )}
-                                              </span>
-                                              <span className="shrink-0 font-mono text-white">
-                                                {formatNumber(changes.currValue)}
-                                              </span>
-                                            </div>
-                                          ))}
-                                        </div>
-                                      </div>
-                                    )}
-
-                                    {(rootCauseAreas.length > 0 || rootCauseLines.length > 0) && (
-                                      <div className="text-[11px] text-muted">
-                                        <span className="font-semibold text-amber">{t.dashboard.rootCauseFor} </span>
-                                        {[
-                                          ...rootCauseAreas,
-                                          ...rootCauseLines.map((c) =>
-                                            c === "All areas" ? t.dashboard.theLineWideDrop : t.dashboard.theLineWideDropIn(c),
-                                          ),
-                                        ].join(", ")}
-                                      </div>
-                                    )}
-                                  </div>
-                                )}
+                                {itemOpen && renderItemDetail(fam)}
                               </div>
                               );
                             })}

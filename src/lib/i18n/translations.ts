@@ -294,6 +294,7 @@ export type Translations = {
     no: string;
     trendLastMonths: (n: number) => string;
     byItem: string;
+    allItems: string;
     rootCauseItem: string;
     valueDrop: (n: string) => string;
     byAreaMonth: (m: number) => string;
@@ -325,6 +326,13 @@ export type Translations = {
     localDecision: (family: string, area: string) => string;
     transferSummary: (family: string, pct: number, area: string) => string;
     transferDecision: (family: string, area: string) => string;
+  };
+  search: {
+    placeholder: string;
+    areasGroup: string;
+    itemsGroup: string;
+    repsGroup: string;
+    noResults: (query: string) => string;
   };
   install: {
     bannerTitle: string;
@@ -655,6 +663,7 @@ const en: Translations = {
     no: "No",
     trendLastMonths: (n) => `Trend — last ${n} months`,
     byItem: "By item",
+    allItems: "All items",
     rootCauseItem: "Root cause item:",
     valueDrop: (n) => `${n} value drop`,
     byAreaMonth: (m) => `By area — Month ${m}`,
@@ -690,6 +699,13 @@ const en: Translations = {
     transferSummary: (family, pct, area) => `${family} grew ${pct}% in ${area} while the line overall declined.`,
     transferDecision: (family, area) =>
       `Review what worked for ${family} in ${area} and check whether the same approach applies to similar customers in other areas.`,
+  },
+  search: {
+    placeholder: "Search areas, items, reps...",
+    areasGroup: "Areas",
+    itemsGroup: "Items / Drugs",
+    repsGroup: "Reps",
+    noResults: (query) => `No results for "${query}"`,
   },
   install: {
     bannerTitle: "Install Lumen on this device",
@@ -1018,6 +1034,7 @@ const ar: Translations = {
     no: "لا",
     trendLastMonths: (n) => `الاتجاه — آخر ${n} شهور`,
     byItem: "حسب الصنف",
+    allItems: "كل الأصناف",
     rootCauseItem: "الصنف السبب:",
     valueDrop: (n) => `انخفاض قيمة ${n}`,
     byAreaMonth: (m) => `حسب المنطقة — شهر ${m}`,
@@ -1053,6 +1070,13 @@ const ar: Translations = {
     transferSummary: (family, pct, area) => `${family} زاد ${pct}% في ${area} في حين إن الخط ككل نزل.`,
     transferDecision: (family, area) =>
       `راجع إيه اللي نجح مع ${family} في ${area} وشوف لو نفس الأسلوب ينفع مع عملاء مشابهين في مناطق تانية.`,
+  },
+  search: {
+    placeholder: "دوّر على منطقة، صنف، مندوب...",
+    areasGroup: "مناطق",
+    itemsGroup: "أصناف / أدوية",
+    repsGroup: "مناديب",
+    noResults: (query) => `مفيش نتائج لـ "${query}"`,
   },
   install: {
     bannerTitle: "ثبّت Lumen على جهازك",
