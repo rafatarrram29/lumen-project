@@ -98,9 +98,14 @@ design reference only — it is not part of the running app.
     Sales table. Without this, a rename still works immediately for Sales
     and linked files; it just won't reach Targets, Rep assignment history,
     or IMS records until this is run.
-17. Open **Settings -> API** and copy the **Project URL** and the **anon
+17. Then run `supabase/lumen_signup_notify_migration.sql`. Adds the
+    `lumen_signup_notifications` table used by the **New-signup admin
+    notifications** feature described below. Purely additive, and the
+    feature works fine without it — RESEND_API_KEY just needs to be set
+    too (see step 2) for it to actually do anything.
+18. Open **Settings -> API** and copy the **Project URL** and the **anon
    public** key.
-18. Open **Authentication -> Sign In / Providers** and make sure **Email**
+19. Open **Authentication -> Sign In / Providers** and make sure **Email**
    is enabled (it is by default). For local development, under
    **Authentication -> URL Configuration**, you can leave the defaults —
    we'll add your real domain there once deployed.
@@ -112,7 +117,9 @@ cp .env.local.example .env.local
 ```
 
 Fill in `NEXT_PUBLIC_SUPABASE_URL` and `NEXT_PUBLIC_SUPABASE_ANON_KEY` with
-the values from step 1.
+the values from step 1. `RESEND_API_KEY`, `ADMIN_NOTIFY_EMAIL`, and
+`RESEND_FROM_EMAIL` are optional — see **New-signup admin notifications**
+below.
 
 ## 3. Run locally
 
@@ -132,7 +139,7 @@ in, then upload a monthly sales export — `.xlsx`, `.xls`, `.xlsm`, `.csv`,
    the deployed branch).
 2. Go to [vercel.com](https://vercel.com), sign up, and click **Add New ->
    Project**, then import this GitHub repo.
-3. In the project's **Environment Variables** settings, add the same two
+3. In the project's **Environment Variables** settings, add the same
    variables from your `.env.local`.
 4. Click **Deploy**. Vercel gives you a free `your-project.vercel.app` URL
    immediately. A custom domain can be added later under **Settings ->
@@ -403,6 +410,43 @@ per browser and applied instantly on the next visit, before the page even
 paints (no flash of the wrong theme). Every interactive element — charts,
 tables, badges, the Export/Undo buttons — reads from the same theme tokens,
 so both modes stay fully legible everywhere, in either language.
+
+## New-signup admin notifications (optional)
+
+Every time a new account finishes email verification for the first time,
+the app owner gets a one-time email — the new user's address and the exact
+UTC timestamp of the sign-up — via [Resend](https://resend.com) (a free API
+key, no mail server to run). Ordinary sign-ins afterward never send another
+email for that account, no matter how many times the person logs in.
+
+Setup:
+
+1. Run `supabase/lumen_signup_notify_migration.sql` (see step 17 above) —
+   this adds the `lumen_signup_notifications` table the app uses to remember
+   which accounts it's already notified about.
+2. Create a free account at [resend.com](https://resend.com) and copy an API
+   key from **API Keys**.
+3. Set `RESEND_API_KEY` and `ADMIN_NOTIFY_EMAIL` (the address that should
+   receive the notification) in `.env.local` and in Vercel's Environment
+   Variables. `RESEND_FROM_EMAIL` is optional — it defaults to Resend's
+   `onboarding@resend.dev` test sender, which can send to any address with
+   no domain setup; switch it to a verified sender on your own domain later
+   if you want the notification to look less like a test email.
+
+Leaving `RESEND_API_KEY` or `ADMIN_NOTIFY_EMAIL` unset doesn't break
+sign-up — it just means nobody gets emailed, and a message is logged on the
+server instead.
+
+How "only once" actually works: the confirmation link Supabase emails a new
+signer-upper points at `/auth/callback?type=signup`, which — right after
+exchanging that link's code for a session — tries to insert one row for
+that user into `lumen_signup_notifications`. That table's primary key is
+the user's ID, so a second insert for the same account (an old confirmation
+link clicked again, a password-reset link, or a plain later sign-in — none
+of which carry `type=signup` or even reach this code path) either never
+attempts the insert or fails outright, and the email is skipped. The
+notification email's own delivery failing (bad API key, Resend down) is
+logged and otherwise ignored — it can never block the user's actual sign-in.
 
 ## Notes on current scope
 
