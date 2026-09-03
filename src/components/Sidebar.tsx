@@ -4,6 +4,7 @@ import Link from "next/link";
 import type { ReactNode } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { useLanguage } from "@/lib/i18n/LanguageProvider";
+import { useInstall } from "./InstallPrompt";
 import LanguageToggle from "./LanguageToggle";
 import ThemeToggle from "./ThemeToggle";
 
@@ -15,6 +16,7 @@ export default function Sidebar({
   children?: ReactNode;
 }) {
   const { t } = useLanguage();
+  const { isStandalone, openModal } = useInstall();
 
   async function handleLogout() {
     const supabase = createClient();
@@ -43,6 +45,15 @@ export default function Sidebar({
       {children}
 
       <div className="mt-4 border-t border-bdr pt-4">
+        {!isStandalone && (
+          <button
+            onClick={openModal}
+            className="mb-3 flex items-center gap-1.5 text-sm text-muted hover:text-white"
+          >
+            <span aria-hidden>⊕</span>
+            {t.install.sidebarLink}
+          </button>
+        )}
         <div className="mb-2 truncate text-xs text-muted">{userEmail}</div>
         <button onClick={handleLogout} className="text-sm text-muted hover:text-red">
           {t.common.signOut}
