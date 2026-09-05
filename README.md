@@ -103,9 +103,17 @@ design reference only — it is not part of the running app.
     notifications** feature described below. Purely additive, and the
     feature works fine without it — RESEND_API_KEY just needs to be set
     too (see step 2) for it to actually do anything.
-18. Open **Settings -> API** and copy the **Project URL** and the **anon
+18. Then run `supabase/lumen_security_hardening_migration.sql`. **Run this
+    one even on an existing project.** It removes any unrestricted
+    "anyone signed in may do this" policy left over from before per-user
+    isolation existed (one of them let a single unfiltered delete wipe
+    every user's sales rows), re-asserts the ownership-scoped policies,
+    and adds the machinery for restricting sign-up to your own email
+    domains — see **Restricting who can sign up** below. It only ever
+    removes permissions, never rows, and is safe to run twice.
+19. Open **Settings -> API** and copy the **Project URL** and the **anon
    public** key.
-19. Open **Authentication -> Sign In / Providers** and make sure **Email**
+20. Open **Authentication -> Sign In / Providers** and make sure **Email**
    is enabled (it is by default). For local development, under
    **Authentication -> URL Configuration**, you can leave the defaults —
    we'll add your real domain there once deployed.
@@ -373,9 +381,15 @@ file — use "Replace" on it, which shows the same editable mapping.
      digits and comma-formatted numbers are now parsed correctly, and any
      row that still can't be read is now reported to you as a warning after
      the upload finishes, instead of disappearing unnoticed.
-- If you created the `lumen_sales_records` table before the DELETE policy
-  was added to `lumen_schema.sql`, run `supabase/lumen_add_delete_policy.sql`
-  once — without it, re-uploading a month fails silently.
+- **Re-uploading a month fails silently.** This means the ownership-scoped
+  DELETE policy is missing. Run
+  `supabase/lumen_security_hardening_migration.sql` (setup step 18), which
+  puts it in place. Earlier versions of this README pointed at
+  `lumen_add_delete_policy.sql` here, which fixed the symptom with a policy
+  that let **any** signed-in account wipe **every** user's sales rows in one
+  unfiltered delete — that file now removes the unsafe policy instead of
+  creating it, so running it is harmless, but the hardening migration is the
+  one to use.
 - **"This file doesn't match this dataset's saved column mapping"** means
   the file you're adding doesn't have the same column names as the ones
   originally mapped for that dataset. Either pick the dataset that actually
@@ -410,6 +424,60 @@ per browser and applied instantly on the next visit, before the page even
 paints (no flash of the wrong theme). Every interactive element — charts,
 tables, badges, the Export/Undo buttons — reads from the same theme tokens,
 so both modes stay fully legible everywhere, in either language.
+
+## Restricting who can sign up (optional)
+
+Out of the box, anyone with any email address can create an account. If
+Lumen is meant for one company, you can limit sign-up to your own email
+domains — enforced by the **database**, not the browser.
+
+That distinction matters. The anon key shipped to the browser is public by
+design, so anyone can call Supabase's sign-up endpoint directly and skip
+the login page entirely. A check written in the React form would stop
+nobody. The rule therefore lives in a `before insert` trigger on
+`auth.users`, which every sign-up path has to go through.
+
+Setup:
+
+1. Run `supabase/lumen_security_hardening_migration.sql` (see step 18
+   above). This creates the `lumen_allowed_email_domains` table and the
+   trigger that reads it.
+2. Add the domains you want to allow, in the SQL Editor:
+
+   ```sql
+   insert into public.lumen_allowed_email_domains (domain)
+   values ('yourcompany.com')
+   on conflict do nothing;
+   ```
+
+   Run it once per domain, or list several rows in one statement.
+
+Things worth knowing:
+
+- **An empty list means "allow everyone."** Running the migration on its
+  own changes nothing about who may sign up — the restriction only
+  switches on when the table has at least one row. This is deliberate: it
+  makes the migration impossible to lock yourself out with.
+- **Existing accounts are never affected.** The trigger runs on insert
+  only, so everyone who has already signed up keeps their account and
+  keeps signing in, whatever their address.
+- **Matching is case-insensitive** on the part after the last `@`.
+  `SALES@YourCompany.COM` matches a stored `yourcompany.com`, and a stored
+  `PartnerCo.NET` matches `x@partnerco.net`.
+- **Subdomains are not included automatically.** Allowing
+  `yourcompany.com` does not allow `hr.yourcompany.com` — add that as its
+  own row if you want it.
+- **To see the list:** `select * from public.lumen_allowed_email_domains;`
+- **To lift the restriction entirely:**
+  `delete from public.lumen_allowed_email_domains;` — back to allowing
+  everyone, with no deploy.
+
+A rejected sign-up shows one clear sentence on the login page ("This email
+address isn't allowed to sign up. Use your company email, or ask the
+administrator to approve your domain."), in whichever language the page is
+set to. Supabase often rewrites a trigger's own error into a generic
+"Database error saving new user" before it reaches the browser, so the app
+treats both wordings as the same thing rather than showing that message raw.
 
 ## New-signup admin notifications (optional)
 

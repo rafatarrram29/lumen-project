@@ -5,6 +5,17 @@ import { createClient } from "@/lib/supabase/client";
 import { useLanguage } from "@/lib/i18n/LanguageProvider";
 import LanguageToggle from "@/components/LanguageToggle";
 
+// The domain allow-list is enforced by a trigger on the database (see
+// supabase/lumen_security_hardening_migration.sql) — the only place it
+// can't be bypassed, since the anon key is public and anyone can call
+// sign-up directly. Supabase usually replaces a trigger's own message
+// with a generic "Database error saving new user" on its way to the
+// browser, so match both and show one clear sentence either way.
+function domainRejected(message: string): boolean {
+  const m = message.toLowerCase();
+  return m.includes("approved email domains") || m.includes("database error saving new user");
+}
+
 export default function LoginPage() {
   const { t } = useLanguage();
   const [mode, setMode] = useState<"signin" | "signup" | "forgot">("signin");
@@ -42,7 +53,7 @@ export default function LoginPage() {
         },
       });
       if (error) {
-        setError(error.message);
+        setError(domainRejected(error.message) ? t.login.domainNotAllowed : error.message);
         setLoading(false);
         return;
       }
