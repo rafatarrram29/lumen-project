@@ -69,6 +69,22 @@ function FindingCard({ finding, t }: { finding: ImsFinding; t: Translations }) {
   );
 }
 
+/**
+ * What the Market Share card says underneath the percentage.
+ *
+ * The portfolio rank first, because that is the one that always means
+ * something and the one the Market Ranking list beside it shows. The
+ * competitive rank is added only when this group actually has competitor
+ * rows — otherwise it is "1 of 1" for everything, which is what made every
+ * product look identical here.
+ */
+function rankSubtitle(ap: ImsAreaProduct, t: Translations): string {
+  const parts: string[] = [];
+  if (ap.portfolioRank !== null) parts.push(t.ims.rankByShare(ap.portfolioRank, ap.portfolioTotal));
+  if (ap.rank !== null && ap.totalInGroup > 1) parts.push(t.ims.rankInCategory(ap.rank, ap.totalInGroup));
+  return parts.length > 0 ? parts.join(" · ") : t.ims.notAvailable;
+}
+
 function RankingRow({
   ap,
   rank,
@@ -146,7 +162,13 @@ export function ImsPanel({
   const addInputRef = useRef<HTMLInputElement>(null);
 
   const hasData = report !== null && report.areaProducts.length > 0;
-  const groups = report && hasData ? [...report.areaProducts].sort((a, b) => (b.latestShare ?? -1) - (a.latestShare ?? -1)) : [];
+  // Ordered by the engine's own portfolio ranking rather than re-sorted
+  // here, so the list and the Market Share card cannot disagree about
+  // where a product sits.
+  const groups =
+    report && hasData
+      ? [...report.areaProducts].sort((a, b) => (a.portfolioRank ?? Infinity) - (b.portfolioRank ?? Infinity))
+      : [];
 
   // Derived during render rather than synced via an effect: falls back to
   // the top-ranked group whenever the user's last explicit pick isn't (or
@@ -252,7 +274,7 @@ export function ImsPanel({
             <StatTile
               label={t.ims.ytdMarketShare}
               value={formatShare(selected.latestShare)}
-              subtitle={selected.rank !== null ? t.ims.rankInCategory(selected.rank, selected.totalInGroup) : t.ims.notAvailable}
+              subtitle={rankSubtitle(selected, t)}
               accent="var(--red)"
               delayMs={0}
             />
@@ -292,7 +314,11 @@ export function ImsPanel({
             <p className="mb-2 break-words text-sm text-muted" dir="auto">
               {t.ims.positionShareLine(
                 formatShare(selected.latestShare),
-                selected.rank !== null ? t.ims.rankInCategory(selected.rank, selected.totalInGroup) : t.ims.notAvailable,
+                // The same rule as the card's subtitle — this line carried
+                // the identical "Rank #1 of 1 in category" for every
+                // product, and fixing only the card would have left the
+                // wrong number sitting right underneath the right one.
+                rankSubtitle(selected, t),
               )}
             </p>
             {(selected.ourGrowthRate !== null || selected.marketGrowthRate !== null) && (
@@ -341,7 +367,7 @@ export function ImsPanel({
                 <RankingRow
                   key={groupLabel(ap)}
                   ap={ap}
-                  rank={i + 1}
+                  rank={ap.portfolioRank ?? i + 1}
                   active={groupLabel(ap) === selectedLabel}
                   onSelect={() => setPickedLabel(groupLabel(ap))}
                   t={t}

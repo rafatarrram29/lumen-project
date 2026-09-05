@@ -217,6 +217,7 @@ export type Translations = {
     notAvailable: string;
     ytdMarketShare: string;
     rankInCategory: (rank: number, total: number) => string;
+    rankByShare: (rank: number, total: number) => string;
     ourGrowth: string;
     ourGrowthSubtitle: string;
     marketGrowthLabel: string;
@@ -588,6 +589,7 @@ const en: Translations = {
     notAvailable: "Not available",
     ytdMarketShare: "YTD Market Share",
     rankInCategory: (rank, total) => `Rank #${rank} of ${total} in category`,
+    rankByShare: (rank, total) => `Rank #${rank} of ${total} by share`,
     ourGrowth: "Our Growth",
     ourGrowthSubtitle: "Latest period",
     marketGrowthLabel: "Market Growth",
@@ -964,6 +966,7 @@ const ar: Translations = {
     notAvailable: "غير متاح",
     ytdMarketShare: "الحصة السوقية (YTD)",
     rankInCategory: (rank, total) => `الترتيب #${rank} من ${total} في الفئة`,
+    rankByShare: (rank, total) => `الترتيب #${rank} من ${total} حسب الحصة`,
     ourGrowth: "نمونا",
     ourGrowthSubtitle: "آخر فترة",
     marketGrowthLabel: "نمو السوق",
