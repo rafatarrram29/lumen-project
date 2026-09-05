@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { createClient } from "@/lib/supabase/server";
+import { requireUser } from "@/lib/lumen/requireUser";
 
 // Inline-edits a single "area x item x month" sales figure. There is
 // normally exactly one raw lumen_sales_records row behind that figure, but
@@ -12,15 +12,9 @@ import { createClient } from "@/lib/supabase/server";
 // else needs to be told about this edit — the next report fetch already
 // reflects it.
 export async function PATCH(request: Request) {
-  const supabase = await createClient();
-
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-
-  if (!user) {
-    return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
-  }
+  const auth = await requireUser();
+  if (auth.response) return auth.response;
+  const { supabase, user } = auth;
 
   const body = await request.json().catch(() => null);
   const datasetId = typeof body?.datasetId === "string" ? body.datasetId : null;

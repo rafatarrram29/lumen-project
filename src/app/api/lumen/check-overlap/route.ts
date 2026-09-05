@@ -1,20 +1,14 @@
 import { NextResponse } from "next/server";
-import { createClient } from "@/lib/supabase/server";
+import { requireUser } from "@/lib/lumen/requireUser";
 import { fetchAllRows } from "@/lib/lumen/fetchAllRows";
 
 // POST (not GET+query-string) because `areas` is free-text from the
 // uploaded file and can contain commas, which would break a comma-joined
 // query param.
 export async function POST(request: Request) {
-  const supabase = await createClient();
-
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-
-  if (!user) {
-    return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
-  }
+  const auth = await requireUser();
+  if (auth.response) return auth.response;
+  const { supabase } = auth;
 
   const body = await request.json().catch(() => null);
   const year = Number(body?.year);

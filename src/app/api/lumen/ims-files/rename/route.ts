@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { createClient } from "@/lib/supabase/server";
+import { requireUser } from "@/lib/lumen/requireUser";
 
 // Renames an area, product, or company name across every IMS file in a
 // dataset — the IMS-side counterpart of sales-records/rename. The same
@@ -8,15 +8,9 @@ import { createClient } from "@/lib/supabase/server";
 // concentration, a mis-typed company name) needs to apply dataset-wide,
 // not just to whichever one file/table it was first noticed in.
 export async function PATCH(request: Request) {
-  const supabase = await createClient();
-
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-
-  if (!user) {
-    return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
-  }
+  const auth = await requireUser();
+  if (auth.response) return auth.response;
+  const { supabase, user } = auth;
 
   const body = await request.json().catch(() => null);
   const datasetId = typeof body?.datasetId === "string" ? body.datasetId : null;

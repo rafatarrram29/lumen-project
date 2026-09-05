@@ -9,7 +9,7 @@
 //
 // Bump this on any change to the caching logic itself so old clients pick
 // up the new worker and drop their old cache.
-const CACHE_VERSION = "lumen-v1";
+const CACHE_VERSION = "lumen-v2";
 const OFFLINE_URL = "/offline.html";
 
 // Known-stable, hand-written URLs (not build-hashed) — safe to precache by
@@ -38,6 +38,25 @@ self.addEventListener("activate", (event) => {
       .keys()
       .then((keys) => Promise.all(keys.filter((k) => k !== CACHE_VERSION).map((k) => caches.delete(k))))
       .then(() => self.clients.claim()),
+  );
+});
+
+// Signing out has to take the cache with it. Navigations are cached above,
+// so without this the previous user's dashboard HTML stays on the device
+// and would be served to whoever signs in next while offline — on a shared
+// phone or a kiosk that is somebody else's data on somebody else's screen.
+// The page asks for this on sign-out; the precache is rebuilt straight
+// away so the offline fallback keeps working afterwards.
+self.addEventListener("message", (event) => {
+  if (event.data?.type !== "LUMEN_CLEAR_CACHE") return;
+  event.waitUntil(
+    caches
+      .keys()
+      .then((keys) => Promise.all(keys.map((k) => caches.delete(k))))
+      .then(() => caches.open(CACHE_VERSION))
+      .then((cache) => cache.addAll(PRECACHE_URLS))
+      .then(() => event.source?.postMessage({ type: "LUMEN_CACHE_CLEARED" }))
+      .catch(() => event.source?.postMessage({ type: "LUMEN_CACHE_CLEARED" })),
   );
 });
 

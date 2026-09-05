@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { createClient } from "@/lib/supabase/server";
+import { requireUser } from "@/lib/lumen/requireUser";
 import { extractTablesFromPdf } from "@/lib/lumen/pdfTableExtract";
 
 const MAX_PDF_BYTES = 20 * 1024 * 1024; // 20MB
@@ -9,15 +9,8 @@ const MAX_PDF_BYTES = 20 * 1024 * 1024; // 20MB
 // preview before anything is imported. Never touches Sales in any way —
 // see the module comment in pdfTableExtract.ts.
 export async function POST(request: Request) {
-  const supabase = await createClient();
-
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-
-  if (!user) {
-    return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
-  }
+  const auth = await requireUser();
+  if (auth.response) return auth.response;
 
   const formData = await request.formData().catch(() => null);
   const file = formData?.get("file");
