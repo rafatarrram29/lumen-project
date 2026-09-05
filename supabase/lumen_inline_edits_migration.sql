@@ -25,8 +25,10 @@ alter table public.lumen_dataset_records
   add column if not exists edited_by text;
 
 -- STEP 2 — lumen_sales_records has select/insert/delete policies already
--- (the delete one added later by lumen_add_delete_policy.sql), but no
--- UPDATE policy, so inline edits would silently fail under RLS.
+-- (the ownership-scoped delete one comes from
+-- lumen_user_isolation_migration.sql, re-asserted by
+-- lumen_security_hardening_migration.sql), but no UPDATE policy, so inline
+-- edits would silently fail under RLS.
 drop policy if exists "Users can update rows in their own or legacy datasets" on public.lumen_sales_records;
 create policy "Users can update rows in their own or legacy datasets"
   on public.lumen_sales_records for update
