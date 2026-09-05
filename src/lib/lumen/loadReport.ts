@@ -25,6 +25,9 @@ export type EditedCell = { key: string; editedBy: string | null; editedAt: strin
 
 export type ReportPayload = Report & { editedCells: EditedCell[] };
 
+/** The sales-row shape both the aggregate and the raw table return. */
+export type SalesRowShape = SalesRow;
+
 type SalesRow = {
   area: string;
   family: string;
@@ -75,6 +78,51 @@ export async function latestYearWithData(
   return Number.isInteger(year) ? year : new Date().getFullYear();
 }
 
+/** The database-side aggregate — see supabase/lumen_aggregates_migration.sql. */
+const AGGREGATE_FUNCTION = "lumen_sales_aggregate";
+
+/**
+ * The sales rows the engine needs, pre-summed by the database.
+ *
+ * The engine's first act on receiving rows is to sum them into per-area,
+ * per-item, per-rep, per-month totals, so shipping one row per transaction
+ * across the wire to do that in Node is work and bandwidth spent for
+ * nothing. lumen_sales_aggregate() does the same grouping in Postgres and
+ * returns one row per (area, item, month, line, rep) — the payload then
+ * scales with how many areas, items and months exist rather than with how
+ * much was sold, which is the difference between one line and a company.
+ *
+ * Falls back to reading the raw rows if the aggregate is unavailable for
+ * any reason — most obviously a project where the migration has not been
+ * run yet. That path is the previous behaviour exactly: slower, identical
+ * output, so nothing breaks while the migration is still pending.
+ */
+export async function readSalesRows(
+  supabase: SupabaseServerClient,
+  datasetId: string,
+  year: number,
+): Promise<{ data: SalesRow[]; error: string | null; aggregated: boolean }> {
+  const aggregated = await fetchAllRows<SalesRow>(() =>
+    supabase.rpc(AGGREGATE_FUNCTION, { p_dataset_id: datasetId, p_year: year }),
+  );
+  if (!aggregated.error) return { ...aggregated, aggregated: true };
+
+  console.warn(
+    `[lumen] ${AGGREGATE_FUNCTION}() unavailable (${aggregated.error}) — ` +
+      "falling back to reading raw sales rows. Run " +
+      "supabase/lumen_aggregates_migration.sql to speed this up.",
+  );
+
+  const raw = await fetchAllRows<SalesRow>(() =>
+    supabase
+      .from("lumen_sales_records")
+      .select("area, family, sales_value, sales_qty, month, line, rep, is_edited, edited_at, edited_by")
+      .eq("year", year)
+      .eq("dataset_id", datasetId),
+  );
+  return { ...raw, aggregated: false };
+}
+
 export async function loadReport(
   supabase: SupabaseServerClient,
   datasetId: string,
@@ -83,14 +131,7 @@ export async function loadReport(
   // Neither query depends on the other's result — fetching them
   // concurrently instead of one after another roughly halves the wait.
   const [sales, targetRows] = await Promise.all([
-    fetchAllRows<SalesRow>(
-      () =>
-        supabase
-          .from("lumen_sales_records")
-          .select("area, family, sales_value, sales_qty, month, line, rep, is_edited, edited_at, edited_by")
-          .eq("year", year)
-          .eq("dataset_id", datasetId),
-    ),
+    readSalesRows(supabase, datasetId, year),
     fetchAllRows<TargetRow>(
       () =>
         supabase
