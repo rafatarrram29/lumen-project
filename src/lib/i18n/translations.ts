@@ -24,6 +24,7 @@ export type Translations = {
     signUpFree: string;
     haveAccount: string;
     checkEmail: string;
+    domainNotAllowed: string;
     forgotPassword: string;
     resetTitle: string;
     resetSubtitle: string;
@@ -378,6 +379,7 @@ const en: Translations = {
     signUpFree: "Sign up free",
     haveAccount: "Already have an account?",
     checkEmail: "Check your email to confirm your account before signing in.",
+    domainNotAllowed: "This email address isn't allowed to sign up. Use your company email, or ask the administrator to approve your domain.",
     forgotPassword: "Forgot password?",
     resetTitle: "Reset your password",
     resetSubtitle: "Enter your email and we'll send you a link to set a new password.",
@@ -751,6 +753,7 @@ const ar: Translations = {
     signUpFree: "سجّل مجانًا",
     haveAccount: "لديك حساب بالفعل؟",
     checkEmail: "تحقق من بريدك الإلكتروني لتأكيد حسابك قبل تسجيل الدخول.",
+    domainNotAllowed: "الإيميل ده غير مسموح له بإنشاء حساب. استخدم إيميل الشركة، أو اطلب من المسؤول إضافة نطاقك.",
     forgotPassword: "نسيت كلمة المرور؟",
     resetTitle: "إعادة تعيين كلمة المرور",
     resetSubtitle: "اكتب بريدك الإلكتروني وهنبعتلك رابط لتحديد كلمة مرور جديدة.",
