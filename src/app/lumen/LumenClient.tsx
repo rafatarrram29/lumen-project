@@ -18,13 +18,12 @@ import Sidebar from "@/components/Sidebar";
 import { UploadWizardModal, type WizardChoice } from "./UploadWizardModal";
 import { UploadTargetsModal } from "./UploadTargetsModal";
 import { RepHistoryPanel } from "./RepHistoryPanel";
-import { repResponsibleInMonth, type RepAssignment } from "@/lib/lumen/repAssignments";
+import { repResponsibleInMonth } from "@/lib/lumen/repAssignments";
 import { LinkedFilesPanel } from "./LinkedFilesPanel";
 import { AddLinkedFileModal, type LinkedFileSave } from "./AddLinkedFileModal";
-import { applyLinkedMapping, recordsForAreaMonth, type JoinKey, type LinkedFile, type LinkedRecord } from "@/lib/lumen/linkedFiles";
+import { applyLinkedMapping, recordsForAreaMonth, type JoinKey, type LinkedFile } from "@/lib/lumen/linkedFiles";
 import { CorrectionLogModal } from "./CorrectionLogModal";
 import { EditSalesMappingModal } from "./EditSalesMappingModal";
-import type { DataEdit } from "@/lib/lumen/corrections";
 import { EditableValue, EditableFieldValue } from "./EditableValue";
 import { UndoToast } from "./UndoToast";
 import { ExportModal, type ExportFormat } from "./ExportModal";
@@ -35,10 +34,10 @@ import type { Translations } from "@/lib/i18n/translations";
 import type { ImsFile } from "./ImsPanel";
 import { AddImsFileModal, type ImsFileSave } from "./AddImsFileModal";
 import { applyImsMapping } from "@/lib/lumen/imsMapping";
-import type { ImsReport } from "@/lib/lumen/imsEngine";
 import { dedupeExactDuplicates } from "@/lib/lumen/duplicateCheck";
 import { imsGroupLabel } from "@/lib/lumen/imsLabels";
 import { GlobalSearch } from "./GlobalSearch";
+import { useLumenData } from "./useLumenData";
 
 // recharts is a heavy dependency only ever needed once a trend chart is
 // actually shown (an area or item card expanded, or the Market Insights
@@ -119,10 +118,6 @@ function TargetChip({
   );
 }
 
-function editedCellMap(cells: EditedCell[]) {
-  return new Map(cells.map((c) => [c.key, { editedBy: c.editedBy, editedAt: c.editedAt }]));
-}
-
 export default function LumenClient({
   userEmail,
   userId,
@@ -141,11 +136,10 @@ export default function LumenClient({
   initialEditedCells: EditedCell[];
 }) {
   const { t, lang } = useLanguage();
+
   const [year, setYear] = useState(initialYear);
   const [datasets, setDatasets] = useState<Dataset[]>(initialDatasets);
   const [selectedDatasetId, setSelectedDatasetId] = useState<string | null>(initialDatasetId);
-  const [report, setReport] = useState<Report | null>(initialReport);
-  const [loadingReport, setLoadingReport] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [uploadProgress, setUploadProgress] = useState<string | null>(null);
   const [uploadError, setUploadError] = useState<string | null>(null);
@@ -157,28 +151,12 @@ export default function LumenClient({
   const [pendingTargetsFile, setPendingTargetsFile] = useState<File | null>(null);
   const [pendingTargetsSheet, setPendingTargetsSheet] = useState<RawSheet | null>(null);
   const [targetThreshold, setTargetThreshold] = useState(70);
-  const [assignments, setAssignments] = useState<RepAssignment[]>([]);
-  const [linkedFiles, setLinkedFiles] = useState<LinkedFile[]>([]);
-  const [linkedRecords, setLinkedRecords] = useState<LinkedRecord[]>([]);
   const [pendingLinkedFile, setPendingLinkedFile] = useState<{ file: File; sheet: RawSheet } | null>(null);
   const [replacingLinkedFileId, setReplacingLinkedFileId] = useState<string | null>(null);
-  const [dataEdits, setDataEdits] = useState<DataEdit[]>([]);
-  // Seeded from the server render rather than starting empty: the marks on
-  // manually corrected figures used to appear only after the first refetch,
-  // which made them look intermittent.
-  const [editedCells, setEditedCells] = useState(() => editedCellMap(initialEditedCells));
   const [activeTab, setActiveTab] = useState<"sales" | "ims">("sales");
-  // Which (dataset, year) the Market Insights data currently in state
-  // belongs to; null means "not loaded, or no longer valid". A ref rather
-  // than state because nothing renders from it — it only decides whether
-  // opening the tab needs to fetch.
-  const imsLoadedKeyRef = useRef<string | null>(null);
   // Set when global search jumps to a Market Insights group; used as the
   // panel's key so it opens on that group.
   const [imsFocusGroup, setImsFocusGroup] = useState<string | null>(null);
-  const [imsFiles, setImsFiles] = useState<ImsFile[]>([]);
-  const [imsReport, setImsReport] = useState<ImsReport | null>(null);
-  const [imsLoading, setImsLoading] = useState(false);
   const [pendingImsFile, setPendingImsFile] = useState<{ file: File; sheet: RawSheet | null } | null>(null);
   const [showCorrectionLog, setShowCorrectionLog] = useState(false);
   const [showEditSalesMapping, setShowEditSalesMapping] = useState(false);
@@ -188,6 +166,39 @@ export default function LumenClient({
   const fileInputRef = useRef<HTMLInputElement>(null);
   const targetsFileInputRef = useRef<HTMLInputElement>(null);
   const undoTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Every read the dashboard performs lives in useLumenData — see the note
+  // at the top of that file. What stays here is the state the user drives
+  // directly (what is selected, expanded, being uploaded) and the mutations.
+  const {
+    report,
+    setReport,
+    loadingReport,
+    editedCells,
+    assignments,
+    linkedFiles,
+    linkedRecords,
+    dataEdits,
+    imsFiles,
+    imsReport,
+    imsLoading,
+    fetchReport,
+    fetchAssignments,
+    fetchLinkedFiles,
+    fetchLinkedRecords,
+    fetchDataEdits,
+    loadImsData,
+    ensureImsLoaded,
+  } = useLumenData({
+    initialReport,
+    initialEditedCells,
+    initialDatasetId,
+    initialYear,
+    selectedDatasetId,
+    year,
+    activeTab,
+    couldNotLoadMessage: t.dashboard.couldNotLoad,
+  });
 
   function clearUndo() {
     if (undoTimeoutRef.current) clearTimeout(undoTimeoutRef.current);
@@ -207,153 +218,6 @@ export default function LumenClient({
     };
   }, []);
 
-  useEffect(() => {
-    function handleKeyDown(e: KeyboardEvent) {
-      if (!(e.ctrlKey || e.metaKey) || e.key.toLowerCase() !== "z" || e.shiftKey) return;
-      const target = e.target as HTMLElement | null;
-      const tag = target?.tagName;
-      if (tag === "INPUT" || tag === "TEXTAREA" || target?.isContentEditable) return;
-      e.preventDefault();
-      handleUndo();
-    }
-    window.addEventListener("keydown", handleKeyDown);
-    return () => window.removeEventListener("keydown", handleKeyDown);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [lastEdit, selectedDatasetId, year]);
-
-  useEffect(() => {
-    if (initialDatasetId) {
-      fetchAssignments(initialDatasetId, initialYear);
-      loadLinkedData(initialDatasetId, initialYear);
-      fetchDataEdits(initialDatasetId);
-    }
-    // Only on mount — subsequent dataset/year changes go through fetchReport.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
-  async function fetchAssignments(datasetId: string, y: number) {
-    try {
-      const res = await fetch(`/api/lumen/rep-assignments?year=${y}&datasetId=${datasetId}`);
-      const json = await res.json();
-      setAssignments(res.ok ? (json.assignments ?? []) : []);
-    } catch {
-      setAssignments([]);
-    }
-  }
-
-  async function fetchLinkedFiles(datasetId: string): Promise<LinkedFile[]> {
-    try {
-      const res = await fetch(`/api/lumen/dataset-files?datasetId=${datasetId}`);
-      const json = await res.json();
-      const files: LinkedFile[] = res.ok ? (json.files ?? []) : [];
-      setLinkedFiles(files);
-      return files;
-    } catch {
-      setLinkedFiles([]);
-      return [];
-    }
-  }
-
-  /**
-   * Linked-file records are worth fetching only if there are linked files.
-   * /api/lumen/dataset-records pages through the whole lumen_dataset_records
-   * table for the dataset — and for a dataset with no linked files (most of
-   * them) every one of those rows was guaranteed to come back empty. Asking
-   * for the file list first costs one small query and skips a potentially
-   * large one.
-   */
-  async function loadLinkedData(datasetId: string, y: number) {
-    const files = await fetchLinkedFiles(datasetId);
-    if (files.length === 0) {
-      setLinkedRecords([]);
-      return;
-    }
-    await fetchLinkedRecords(datasetId, y);
-  }
-
-  async function fetchLinkedRecords(datasetId: string, y: number) {
-    try {
-      const res = await fetch(`/api/lumen/dataset-records?year=${y}&datasetId=${datasetId}`);
-      const json = await res.json();
-      setLinkedRecords(res.ok ? (json.records ?? []) : []);
-    } catch {
-      setLinkedRecords([]);
-    }
-  }
-
-  async function fetchImsFiles(datasetId: string) {
-    try {
-      const res = await fetch(`/api/lumen/ims-files?datasetId=${datasetId}`);
-      const json = await res.json();
-      setImsFiles(res.ok ? (json.files ?? []) : []);
-    } catch {
-      setImsFiles([]);
-    }
-  }
-
-  async function fetchImsReport(datasetId: string, y: number) {
-    setImsLoading(true);
-    try {
-      const res = await fetch(`/api/lumen/ims-analyze?year=${y}&datasetId=${datasetId}`);
-      const json = await res.json();
-      setImsReport(res.ok ? json : null);
-    } catch {
-      setImsReport(null);
-    } finally {
-      setImsLoading(false);
-    }
-  }
-
-  /** Loads everything the Market Insights tab needs, for one dataset/year. */
-  async function loadImsData(datasetId: string, y: number) {
-    // Claim the key before awaiting, so a second click while the first
-    // request is still in flight doesn't fire an identical one.
-    imsLoadedKeyRef.current = `${datasetId}:${y}`;
-    await Promise.all([fetchImsFiles(datasetId), fetchImsReport(datasetId, y)]);
-  }
-
-  /** Fetches the Market Insights data if what's in state isn't current. */
-  function ensureImsLoaded() {
-    if (!selectedDatasetId) return;
-    if (imsLoadedKeyRef.current === `${selectedDatasetId}:${year}`) return;
-    loadImsData(selectedDatasetId, year);
-  }
-
-  async function fetchDataEdits(datasetId: string) {
-    try {
-      const res = await fetch(`/api/lumen/data-edits?datasetId=${datasetId}`);
-      const json = await res.json();
-      setDataEdits(res.ok ? (json.edits ?? []) : []);
-    } catch {
-      setDataEdits([]);
-    }
-  }
-
-  async function fetchReport(datasetId: string, y: number) {
-    setLoadingReport(true);
-    try {
-      const res = await fetch(`/api/lumen/analyze?year=${y}&datasetId=${datasetId}`);
-      const json = await res.json();
-      setReport(json);
-      setEditedCells(editedCellMap(json.editedCells ?? []));
-    } catch {
-      setReport({ error: t.dashboard.couldNotLoad });
-    } finally {
-      setLoadingReport(false);
-    }
-    fetchAssignments(datasetId, y);
-    loadLinkedData(datasetId, y);
-    fetchDataEdits(datasetId);
-    // Market Insights is deliberately NOT loaded here.
-    // /api/lumen/ims-analyze reads the whole sales table as well as the IMS
-    // table, so calling it alongside the sales report meant every page load
-    // read the sales table TWICE — the larger of the two reads, duplicated,
-    // for a tab most visits never open. Invalidate instead, and let opening
-    // the tab pay for its own data. If the tab is already open, that's now,
-    // since a sales edit changes the IMS comparison too.
-    imsLoadedKeyRef.current = null;
-    if (activeTab === "ims") ensureImsLoaded();
-  }
 
   function selectDataset(datasetId: string) {
     setSelectedDatasetId(datasetId);
@@ -1123,6 +987,25 @@ export default function LumenClient({
       await handleRenameImsField(edit.field, edit.newValue, edit.oldValue, true);
     }
   }
+
+  // Ctrl/Cmd+Z anywhere outside a text field undoes the last inline edit.
+  // Placed here, below handleUndo, rather than up with the other effects:
+  // from up there it was reading a function declared hundreds of lines
+  // later, which is both hard to follow and a real hazard — the listener
+  // would capture whichever version existed at that point.
+  useEffect(() => {
+    function handleKeyDown(e: KeyboardEvent) {
+      if (!(e.ctrlKey || e.metaKey) || e.key.toLowerCase() !== "z" || e.shiftKey) return;
+      const target = e.target as HTMLElement | null;
+      const tag = target?.tagName;
+      if (tag === "INPUT" || tag === "TEXTAREA" || target?.isContentEditable) return;
+      e.preventDefault();
+      handleUndo();
+    }
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [lastEdit, selectedDatasetId, year]);
 
   async function handleExport(format: ExportFormat, selectedIds: Set<string>) {
     if (!report || "error" in report) return;
