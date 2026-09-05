@@ -20,8 +20,8 @@ import { UploadTargetsModal } from "./UploadTargetsModal";
 import { RepHistoryPanel } from "./RepHistoryPanel";
 import { repResponsibleInMonth } from "@/lib/lumen/repAssignments";
 import { LinkedFilesPanel } from "./LinkedFilesPanel";
-import { AddLinkedFileModal, type LinkedFileSave } from "./AddLinkedFileModal";
-import { applyLinkedMapping, recordsForAreaMonth, type JoinKey, type LinkedFile } from "@/lib/lumen/linkedFiles";
+import { AddLinkedFileModal } from "./AddLinkedFileModal";
+import { recordsForAreaMonth } from "@/lib/lumen/linkedFiles";
 import { CorrectionLogModal } from "./CorrectionLogModal";
 import { EditSalesMappingModal } from "./EditSalesMappingModal";
 import { EditableValue, EditableFieldValue } from "./EditableValue";
@@ -31,13 +31,14 @@ import { buildExportItems } from "@/lib/lumen/exportItems";
 import { useLanguage } from "@/lib/i18n/LanguageProvider";
 import { findingSummary, findingDecision } from "@/lib/i18n/findingText";
 import type { Translations } from "@/lib/i18n/translations";
-import type { ImsFile } from "./ImsPanel";
-import { AddImsFileModal, type ImsFileSave } from "./AddImsFileModal";
-import { applyImsMapping } from "@/lib/lumen/imsMapping";
+import { AddImsFileModal } from "./AddImsFileModal";
 import { dedupeExactDuplicates } from "@/lib/lumen/duplicateCheck";
 import { imsGroupLabel } from "@/lib/lumen/imsLabels";
 import { GlobalSearch } from "./GlobalSearch";
 import { useLumenData } from "./useLumenData";
+import { UPLOAD_BATCH_SIZE, UNDO_WINDOW_MS, type UploadStatus } from "./uploadShared";
+import { useLinkedFileUploads } from "./useLinkedFileUploads";
+import { useImsFileUploads } from "./useImsFileUploads";
 
 // recharts is a heavy dependency only ever needed once a trend chart is
 // actually shown (an area or item card expanded, or the Market Insights
@@ -61,8 +62,6 @@ function repCardId(rep: string): string {
   return `rep-card-${encodeURIComponent(rep)}`;
 }
 
-const UPLOAD_BATCH_SIZE = 1000;
-const UNDO_WINDOW_MS = 8000;
 
 type LastEdit =
   | { kind: "sales"; area: string; family: string; month: number; oldValue: number; newValue: number }
@@ -151,13 +150,10 @@ export default function LumenClient({
   const [pendingTargetsFile, setPendingTargetsFile] = useState<File | null>(null);
   const [pendingTargetsSheet, setPendingTargetsSheet] = useState<RawSheet | null>(null);
   const [targetThreshold, setTargetThreshold] = useState(70);
-  const [pendingLinkedFile, setPendingLinkedFile] = useState<{ file: File; sheet: RawSheet } | null>(null);
-  const [replacingLinkedFileId, setReplacingLinkedFileId] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<"sales" | "ims">("sales");
   // Set when global search jumps to a Market Insights group; used as the
   // panel's key so it opens on that group.
   const [imsFocusGroup, setImsFocusGroup] = useState<string | null>(null);
-  const [pendingImsFile, setPendingImsFile] = useState<{ file: File; sheet: RawSheet | null } | null>(null);
   const [showCorrectionLog, setShowCorrectionLog] = useState(false);
   const [showEditSalesMapping, setShowEditSalesMapping] = useState(false);
   const [showExportModal, setShowExportModal] = useState(false);
@@ -211,6 +207,52 @@ export default function LumenClient({
     setLastEdit(edit);
     undoTimeoutRef.current = setTimeout(() => setLastEdit(null), UNDO_WINDOW_MS);
   }
+
+  // The four setters behind the one upload status bar, handed to each
+  // upload flow as a unit rather than as four loose arguments.
+  const uploadStatus: UploadStatus = {
+    setUploading,
+    setProgress: setUploadProgress,
+    setError: setUploadError,
+    setMessage: setUploadMessage,
+  };
+
+  const {
+    pendingLinkedFile,
+    setPendingLinkedFile,
+    replacingLinkedFileId,
+    setReplacingLinkedFileId,
+    handleAddLinkedFile,
+    handleReplaceLinkedFile,
+    handleLinkedFileConfirm,
+    handleDeleteLinkedFile,
+    handleEditJoinKeys,
+  } = useLinkedFileUploads({
+    datasetId: selectedDatasetId,
+    year,
+    t,
+    status: uploadStatus,
+    fetchLinkedFiles,
+    fetchLinkedRecords,
+    fetchDataEdits,
+  });
+
+  const {
+    pendingImsFile,
+    setPendingImsFile,
+    handleAddImsFile,
+    handleImsFileConfirm,
+    handleDeleteImsFile,
+    handleRenameImsField,
+  } = useImsFileUploads({
+    datasetId: selectedDatasetId,
+    year,
+    t,
+    status: uploadStatus,
+    loadImsData,
+    fetchDataEdits,
+    armUndo,
+  });
 
   useEffect(() => {
     return () => {
@@ -613,263 +655,6 @@ export default function LumenClient({
     }
   }
 
-  async function handleAddLinkedFile(file: File) {
-    setUploadError(null);
-    setUploadMessage(null);
-    setReplacingLinkedFileId(null);
-    try {
-      const { readWorkbookSheet } = await import("@/lib/lumen/readWorkbookSheet");
-      const sheet = await readWorkbookSheet(file);
-      setPendingLinkedFile({ file, sheet });
-    } catch (err) {
-      setUploadError(err instanceof Error ? err.message : "Could not read that file.");
-    }
-  }
-
-  async function handleReplaceLinkedFile(fileId: string, file: File) {
-    setUploadError(null);
-    setUploadMessage(null);
-    setReplacingLinkedFileId(fileId);
-    try {
-      const { readWorkbookSheet } = await import("@/lib/lumen/readWorkbookSheet");
-      const sheet = await readWorkbookSheet(file);
-      setPendingLinkedFile({ file, sheet });
-    } catch (err) {
-      setUploadError(err instanceof Error ? err.message : "Could not read that file.");
-    }
-  }
-
-  async function handleLinkedFileConfirm(save: LinkedFileSave) {
-    const pending = pendingLinkedFile;
-    const replaceId = replacingLinkedFileId;
-    setPendingLinkedFile(null);
-    setReplacingLinkedFileId(null);
-    if (!pending || !selectedDatasetId) return;
-
-    setUploading(true);
-    setUploadError(null);
-    setUploadMessage(null);
-
-    try {
-      const parsedRows = applyLinkedMapping(pending.sheet, save.mapping);
-      const { kept: rows, removed: duplicatesRemoved } = dedupeExactDuplicates(
-        parsedRows,
-        (r) => `${r.month}|${r.area ?? ""}|${r.rep ?? ""}|${r.line ?? ""}|${JSON.stringify(r.data)}`,
-        (r) => `${r.area ?? "—"} / month ${r.month}`,
-      );
-
-      let fileId: string;
-      if (replaceId) {
-        const replaceRes = await fetch(`/api/lumen/dataset-files/${replaceId}/replace`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ displayName: save.displayName, columnMapping: save.mapping, joinKeys: save.joinKeys }),
-        });
-        const replaceJson = await replaceRes.json();
-        if (!replaceRes.ok) throw new Error(replaceJson.error || "Could not replace the file");
-        fileId = replaceId;
-      } else {
-        const createRes = await fetch("/api/lumen/dataset-files", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            datasetId: selectedDatasetId,
-            fileType: save.fileType,
-            displayName: save.displayName,
-            sourceFile: pending.file.name,
-            columnMapping: save.mapping,
-            joinKeys: save.joinKeys,
-          }),
-        });
-        const createJson = await createRes.json();
-        if (!createRes.ok) throw new Error(createJson.error || "Could not create the linked file");
-        fileId = createJson.file.id;
-      }
-
-      const batches = [];
-      for (let i = 0; i < rows.length; i += UPLOAD_BATCH_SIZE) {
-        batches.push(rows.slice(i, i + UPLOAD_BATCH_SIZE));
-      }
-
-      let inserted = 0;
-      for (let i = 0; i < batches.length; i++) {
-        setUploadProgress(`Uploading batch ${i + 1} of ${batches.length}…`);
-        const res = await fetch(`/api/lumen/dataset-files/${fileId}/records`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            datasetId: selectedDatasetId,
-            year,
-            rows: batches[i],
-            ...(i === 0 && duplicatesRemoved.count > 0 ? { duplicatesRemoved } : {}),
-          }),
-        });
-        const json = await res.json();
-        if (!res.ok) throw new Error(json.error || "Upload failed");
-        inserted += json.inserted;
-      }
-
-      setUploadMessage(
-        duplicatesRemoved.count > 0
-          ? `${t.linkedFiles.uploadSuccess(inserted)} Removed ${duplicatesRemoved.count} duplicate row(s) repeated within this file — logged in the Correction log.`
-          : t.linkedFiles.uploadSuccess(inserted),
-      );
-      await fetchLinkedFiles(selectedDatasetId);
-      await fetchLinkedRecords(selectedDatasetId, year);
-      await fetchDataEdits(selectedDatasetId);
-    } catch (err) {
-      setUploadError(err instanceof Error ? err.message : "Upload failed");
-    } finally {
-      setUploading(false);
-      setUploadProgress(null);
-    }
-  }
-
-  async function handleDeleteLinkedFile(file: LinkedFile) {
-    const proceed = window.confirm(t.linkedFiles.deleteConfirm(file.displayName));
-    if (!proceed || !selectedDatasetId) return;
-
-    try {
-      const res = await fetch(`/api/lumen/dataset-files/${file.id}`, { method: "DELETE" });
-      const json = await res.json();
-      if (!res.ok) throw new Error(json.error || "Could not delete the file");
-      await fetchLinkedFiles(selectedDatasetId);
-      await fetchLinkedRecords(selectedDatasetId, year);
-    } catch (err) {
-      setUploadError(err instanceof Error ? err.message : "Could not delete the file");
-    }
-  }
-
-  async function handleEditJoinKeys(fileId: string, joinKeys: JoinKey[]) {
-    if (!selectedDatasetId) return;
-    try {
-      const res = await fetch(`/api/lumen/dataset-files/${fileId}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ joinKeys }),
-      });
-      const json = await res.json();
-      if (!res.ok) throw new Error(json.error || "Could not update the link");
-      await fetchLinkedFiles(selectedDatasetId);
-    } catch (err) {
-      setUploadError(err instanceof Error ? err.message : "Could not update the link");
-    }
-  }
-
-  async function handleAddImsFile(file: File) {
-    setUploadError(null);
-    setUploadMessage(null);
-    // PDF is IMS-only — the sales/linked-file paths never see this
-    // branch. The PDF itself isn't parsed here; AddImsFileModal sends the
-    // raw file to /api/lumen/ims-pdf-extract and works from its response.
-    if (file.name.toLowerCase().endsWith(".pdf")) {
-      setPendingImsFile({ file, sheet: null });
-      return;
-    }
-    try {
-      const { readWorkbookSheet } = await import("@/lib/lumen/readWorkbookSheet");
-      const sheet = await readWorkbookSheet(file);
-      setPendingImsFile({ file, sheet });
-    } catch (err) {
-      setUploadError(err instanceof Error ? err.message : "Could not read that file.");
-    }
-  }
-
-  // Imports a single mapped table into a new IMS file. Doesn't close the
-  // upload modal itself — AddImsFileModal owns that decision, since one PDF
-  // upload can queue up several selected tables to import one after
-  // another, and the modal only closes once the whole queue is done.
-  async function handleImsFileConfirm(save: ImsFileSave) {
-    const pending = pendingImsFile;
-    if (!pending || !selectedDatasetId) return;
-
-    setUploading(true);
-    setUploadError(null);
-    setUploadMessage(null);
-
-    try {
-      const { rows: parsedRows, skipped } = applyImsMapping(save.sheet, save.mapping);
-      const { kept: rows, removed: duplicatesRemoved } = dedupeExactDuplicates(
-        parsedRows,
-        (r) => `${r.month}|${r.area ?? ""}|${r.product ?? ""}|${r.company ?? ""}|${r.marketShare}`,
-        (r) => `${r.area ?? "—"} / ${r.product ?? "—"} / month ${r.month}`,
-      );
-
-      const createRes = await fetch("/api/lumen/ims-files", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          datasetId: selectedDatasetId,
-          displayName: save.displayName,
-          sourceFile: pending.file.name,
-          columnMapping: save.mapping,
-          ownCompany: save.ownCompany,
-        }),
-      });
-      const createJson = await createRes.json();
-      if (!createRes.ok) throw new Error(createJson.error || "Could not create the IMS file");
-      const fileId = createJson.file.id;
-
-      const batches = [];
-      for (let i = 0; i < rows.length; i += UPLOAD_BATCH_SIZE) {
-        batches.push(rows.slice(i, i + UPLOAD_BATCH_SIZE));
-      }
-
-      let inserted = 0;
-      for (let i = 0; i < batches.length; i++) {
-        setUploadProgress(`Uploading batch ${i + 1} of ${batches.length}…`);
-        const res = await fetch(`/api/lumen/ims-files/${fileId}/records`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            datasetId: selectedDatasetId,
-            year,
-            rows: batches[i].map((r) => ({
-              area: r.area,
-              product: r.product,
-              company: r.company,
-              marketShare: r.marketShare,
-              month: r.month,
-              growthRate: r.growthRate,
-            })),
-            ...(i === 0 && duplicatesRemoved.count > 0 ? { duplicatesRemoved } : {}),
-          }),
-        });
-        const json = await res.json();
-        if (!res.ok) throw new Error(json.error || "Upload failed");
-        inserted += json.inserted;
-      }
-
-      const notes: string[] = [];
-      if (skipped.count > 0) notes.push(`Skipped ${skipped.count} row(s) (${skipped.examples.join("; ") || "invalid values"}).`);
-      if (duplicatesRemoved.count > 0) {
-        notes.push(`Removed ${duplicatesRemoved.count} duplicate row(s) repeated within this file — logged in the Correction log.`);
-      }
-      setUploadMessage(notes.length > 0 ? `${t.ims.uploadSuccess(inserted)} ${notes.join(" ")}` : t.ims.uploadSuccess(inserted));
-      await loadImsData(selectedDatasetId, year);
-      await fetchDataEdits(selectedDatasetId);
-    } catch (err) {
-      setUploadError(err instanceof Error ? err.message : "Upload failed");
-    } finally {
-      setUploading(false);
-      setUploadProgress(null);
-    }
-  }
-
-  async function handleDeleteImsFile(file: ImsFile) {
-    const proceed = window.confirm(t.ims.deleteConfirm(file.displayName));
-    if (!proceed || !selectedDatasetId) return;
-
-    try {
-      const res = await fetch(`/api/lumen/ims-files/${file.id}`, { method: "DELETE" });
-      const json = await res.json();
-      if (!res.ok) throw new Error(json.error || "Could not delete the file");
-      await loadImsData(selectedDatasetId, year);
-    } catch (err) {
-      setUploadError(err instanceof Error ? err.message : "Could not delete the file");
-    }
-  }
-
   async function handleSaveSalesMapping(mapping: ColumnMapping) {
     if (!selectedDatasetId) return;
     try {
@@ -950,29 +735,6 @@ export default function LumenClient({
 
   // Same idea for the IMS side (Market Insights) — renames an area,
   // product, or company name across every IMS file in the dataset.
-  async function handleRenameImsField(
-    field: "area" | "product" | "company",
-    oldValue: string,
-    newValue: string,
-    isUndo = false,
-  ) {
-    if (!selectedDatasetId || oldValue === newValue) return;
-    try {
-      const res = await fetch("/api/lumen/ims-files/rename", {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ datasetId: selectedDatasetId, field, oldValue, newValue, isUndo }),
-      });
-      const json = await res.json();
-      if (!res.ok) throw new Error(json.error || t.inlineEdit.saveFailed);
-      await loadImsData(selectedDatasetId, year);
-      await fetchDataEdits(selectedDatasetId);
-      if (!isUndo) armUndo({ kind: "imsRename", field, oldValue, newValue });
-    } catch (err) {
-      setUploadError(err instanceof Error ? err.message : t.inlineEdit.saveFailed);
-    }
-  }
-
   async function handleUndo() {
     if (!lastEdit) return;
     const edit = lastEdit;
