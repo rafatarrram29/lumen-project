@@ -413,6 +413,54 @@ describe("items that start or stop selling stay visible", () => {
   });
 });
 
+describe("units vs money", () => {
+  // Item charts plot units when the file has them. Getting this flag wrong
+  // means a chart labelled one way showing the other.
+  test("a file with quantities reports that it has them", () => {
+    const records = [
+      rec({ area: "A", family: "X", month: 1, salesValue: 1000, salesQty: 40 }),
+      rec({ area: "A", family: "X", month: 2, salesValue: 900, salesQty: 36 }),
+    ];
+    assert.equal(ok(buildReport(records, YEAR)).hasQuantity, true);
+  });
+
+  test("a file with no quantity column reports that it has none", () => {
+    assert.equal(ok(buildReport(areaSeries({ A: [1000, 900] }), YEAR)).hasQuantity, false);
+  });
+
+  test("one real quantity anywhere is enough", () => {
+    // A partially-filled column is still a quantity column; falling back to
+    // money for the whole dataset would hide the figures that do exist.
+    const records = [
+      rec({ area: "A", family: "X", month: 1, salesValue: 1000, salesQty: null }),
+      rec({ area: "A", family: "X", month: 2, salesValue: 900, salesQty: 36 }),
+    ];
+    assert.equal(ok(buildReport(records, YEAR)).hasQuantity, true);
+  });
+
+  test("a quantity of zero still counts as a quantity", () => {
+    // 0 units sold is a fact; null is an absent column.
+    const records = [
+      rec({ area: "A", family: "X", month: 1, salesValue: 1000, salesQty: 0 }),
+      rec({ area: "A", family: "X", month: 2, salesValue: 900, salesQty: 0 }),
+    ];
+    assert.equal(ok(buildReport(records, YEAR)).hasQuantity, true);
+  });
+
+  test("item series carry the quantities the charts plot", () => {
+    const records = [
+      rec({ area: "A", family: "X", month: 1, salesValue: 1000, salesQty: 40 }),
+      rec({ area: "B", family: "X", month: 1, salesValue: 500, salesQty: 20 }),
+      rec({ area: "A", family: "X", month: 2, salesValue: 900, salesQty: 36 }),
+    ];
+    const report = ok(buildReport(records, YEAR));
+    assert.deepEqual(report.itemMonthlySeries.X, [
+      { month: 1, value: 1500, qty: 60 },
+      { month: 2, value: 900, qty: 36 },
+    ]);
+  });
+});
+
 describe("reps", () => {
   test("a dataset with no rep column reports no rep data at all", () => {
     const report = ok(buildReport(areaSeries({ A: [1000, 900] }), YEAR));

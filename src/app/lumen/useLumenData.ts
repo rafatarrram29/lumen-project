@@ -20,6 +20,7 @@ import type { LinkedFile, LinkedRecord } from "@/lib/lumen/linkedFiles";
 import type { DataEdit } from "@/lib/lumen/corrections";
 import type { ImsFile } from "./ImsPanel";
 import type { ImsReport } from "@/lib/lumen/imsEngine";
+import type { ManagerLink } from "@/lib/lumen/orgStructure";
 
 export function editedCellMap(cells: EditedCell[]) {
   return new Map(cells.map((c) => [c.key, { editedBy: c.editedBy, editedAt: c.editedAt }]));
@@ -48,6 +49,7 @@ export function useLumenData({
   const [report, setReport] = useState<Report | null>(initialReport);
   const [loadingReport, setLoadingReport] = useState(false);
   const [assignments, setAssignments] = useState<RepAssignment[]>([]);
+  const [managerLinks, setManagerLinks] = useState<ManagerLink[]>([]);
   const [linkedFiles, setLinkedFiles] = useState<LinkedFile[]>([]);
   const [linkedRecords, setLinkedRecords] = useState<LinkedRecord[]>([]);
   const [dataEdits, setDataEdits] = useState<DataEdit[]>([]);
@@ -67,12 +69,24 @@ export function useLumenData({
   useEffect(() => {
     if (initialDatasetId) {
       fetchAssignments(initialDatasetId, initialYear);
+      fetchManagerLinks(initialDatasetId, initialYear);
       loadLinkedData(initialDatasetId, initialYear);
       fetchDataEdits(initialDatasetId);
     }
     // Only on mount — subsequent dataset/year changes go through fetchReport.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+  /** Who reports to whom — see lumen_org_structure_migration.sql. */
+  async function fetchManagerLinks(datasetId: string, y: number) {
+    try {
+      const res = await fetch(`/api/lumen/district-managers?year=${y}&datasetId=${datasetId}`);
+      const json = await res.json();
+      setManagerLinks(res.ok ? (json.links ?? []) : []);
+    } catch {
+      setManagerLinks([]);
+    }
+  }
+
   async function fetchAssignments(datasetId: string, y: number) {
     try {
       const res = await fetch(`/api/lumen/rep-assignments?year=${y}&datasetId=${datasetId}`);
@@ -184,6 +198,7 @@ export function useLumenData({
       setLoadingReport(false);
     }
     fetchAssignments(datasetId, y);
+    fetchManagerLinks(datasetId, y);
     loadLinkedData(datasetId, y);
     fetchDataEdits(datasetId);
     // Market Insights is deliberately NOT loaded here.
@@ -203,6 +218,8 @@ export function useLumenData({
     loadingReport,
     editedCells,
     assignments,
+    managerLinks,
+    fetchManagerLinks,
     linkedFiles,
     linkedRecords,
     dataEdits,
