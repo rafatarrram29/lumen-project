@@ -119,6 +119,11 @@ export type Report =
       areaFamilyChanges: Record<string, Record<string, FamilyChange>>;
       itemMonthlySeries: Record<string, MonthPoint[]>;
       findings: Finding[];
+      // Whether the uploaded file actually carried a quantity column with
+      // real numbers in it. Item charts plot UNITS when it did and fall
+      // back to money when it didn't — the reader has to be told which,
+      // because the two are not remotely interchangeable.
+      hasQuantity: boolean;
       hasReps: boolean;
       repChanges: Record<string, FamilyChange>;
       repMonthlySeries: Record<string, MonthPoint[]>;
@@ -518,6 +523,10 @@ export function buildReport(records: SalesRecord[], year: number, targets: Targe
   // above): per-rep trend + an all-reps average series so the UI can show
   // each rep against their peers the same way areas are shown against
   // their line. ---
+  // A dataset with no quantity column parses every row's salesQty as null;
+  // one row with a real number anywhere is enough to plot units.
+  const hasQuantity = records.some((r) => r.salesQty !== null && r.salesQty !== undefined);
+
   const repTotals = groupRepMonthTotals(records);
   const hasReps = repTotals.size > 0;
   const repChanges: Record<string, FamilyChange> = {};
@@ -594,6 +603,7 @@ export function buildReport(records: SalesRecord[], year: number, targets: Targe
     areaFamilyChanges,
     itemMonthlySeries,
     findings,
+    hasQuantity,
     hasReps,
     repChanges,
     repMonthlySeries,

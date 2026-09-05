@@ -331,6 +331,52 @@ export type Translations = {
     transferSummary: (family: string, pct: number, area: string) => string;
     transferDecision: (family: string, area: string) => string;
   };
+  org: {
+    assignAreasButton: string;
+    assignManagersButton: string;
+    assignAreasTitle: string;
+    assignManagersTitle: string;
+    repLabel: string;
+    managerLabel: string;
+    existingName: string;
+    newName: string;
+    newNamePlaceholder: string;
+    areasLabel: string;
+    repsLabel: string;
+    selectedCount: (n: number) => string;
+    selectAll: string;
+    clearAll: string;
+    monthsLabel: string;
+    save: string;
+    saving: string;
+    cancel: string;
+    noAreas: string;
+    noReps: string;
+    pickRep: string;
+    pickManager: string;
+    pickAtLeastOneArea: string;
+    pickAtLeastOneRep: string;
+    assignedAreas: (n: number, rep: string) => string;
+    assignedReps: (n: number, manager: string) => string;
+    managersTitle: string;
+    managersSubtitle: string;
+    repCount: (n: number) => string;
+    teamTotal: string;
+    noManagers: string;
+    coversMonths: (months: string) => string;
+    noAreasForRep: string;
+    itemsUnderManager: string;
+    managerOf: (manager: string) => string;
+    reassignWarning: (rep: string, manager: string) => string;
+    remove: string;
+    pastCoverage: string;
+  };
+  units: {
+    units: string;
+    value: string;
+    unitsNote: string;
+    valueNote: string;
+  };
   search: {
     placeholder: string;
     areasGroup: string;
@@ -710,6 +756,52 @@ const en: Translations = {
     transferDecision: (family, area) =>
       `Review what worked for ${family} in ${area} and check whether the same approach applies to similar customers in other areas.`,
   },
+  org: {
+    assignAreasButton: "Assign areas to reps",
+    assignManagersButton: "Assign reps to managers",
+    assignAreasTitle: "Assign areas to a rep",
+    assignManagersTitle: "Assign reps to a district manager",
+    repLabel: "Rep",
+    managerLabel: "District manager",
+    existingName: "Existing",
+    newName: "Add new",
+    newNamePlaceholder: "Type a name",
+    areasLabel: "Areas",
+    repsLabel: "Reps",
+    selectedCount: (n) => `${n} selected`,
+    selectAll: "Select all",
+    clearAll: "Clear",
+    monthsLabel: "Months covered",
+    save: "Save",
+    saving: "Saving…",
+    cancel: "Cancel",
+    noAreas: "No areas in this dataset yet.",
+    noReps: "No reps yet — assign areas to a rep first.",
+    pickRep: "Choose or type a rep name.",
+    pickManager: "Choose or type a manager name.",
+    pickAtLeastOneArea: "Pick at least one area.",
+    pickAtLeastOneRep: "Pick at least one rep.",
+    assignedAreas: (n, rep) => `Assigned ${n} area(s) to ${rep}.`,
+    assignedReps: (n, manager) => `${n} rep(s) now report to ${manager}.`,
+    managersTitle: "District managers",
+    managersSubtitle: "Tap a manager to see their whole team.",
+    repCount: (n) => `${n} rep${n === 1 ? "" : "s"}`,
+    teamTotal: "Team total, latest month",
+    noManagers: "No district managers yet. Use \"Assign reps to managers\" to build the structure.",
+    coversMonths: (months) => `Months ${months}`,
+    noAreasForRep: "No areas assigned yet.",
+    itemsUnderManager: "Items across this team",
+    managerOf: (manager) => `Manager: ${manager}`,
+    reassignWarning: (rep, manager) => `${rep} currently reports to ${manager} and will be moved.`,
+    remove: "Remove",
+    pastCoverage: "no longer held",
+  },
+  units: {
+    units: "Units",
+    value: "Value",
+    unitsNote: "Item charts show units sold.",
+    valueNote: "This dataset has no quantity column, so item charts show value, not units.",
+  },
   search: {
     placeholder: "Search areas, items, reps, market groups...",
     areasGroup: "Areas",
@@ -1086,6 +1178,52 @@ const ar: Translations = {
     transferSummary: (family, pct, area) => `${family} زاد ${pct}% في ${area} في حين إن الخط ككل نزل.`,
     transferDecision: (family, area) =>
       `راجع إيه اللي نجح مع ${family} في ${area} وشوف لو نفس الأسلوب ينفع مع عملاء مشابهين في مناطق تانية.`,
+  },
+  org: {
+    assignAreasButton: "ربط المناطق بالمناديب",
+    assignManagersButton: "ربط المناديب بالمديرين",
+    assignAreasTitle: "ربط مناطق بمندوب",
+    assignManagersTitle: "ربط مناديب بمدير منطقة",
+    repLabel: "المندوب",
+    managerLabel: "مدير المنطقة",
+    existingName: "موجود",
+    newName: "إضافة جديد",
+    newNamePlaceholder: "اكتب الاسم",
+    areasLabel: "المناطق",
+    repsLabel: "المناديب",
+    selectedCount: (n) => `${n} مختارة`,
+    selectAll: "اختيار الكل",
+    clearAll: "مسح",
+    monthsLabel: "الشهور المغطاة",
+    save: "حفظ",
+    saving: "جاري الحفظ…",
+    cancel: "إلغاء",
+    noAreas: "مفيش مناطق في مجموعة البيانات دي لسه.",
+    noReps: "مفيش مناديب لسه — اربط مناطق بمندوب الأول.",
+    pickRep: "اختار أو اكتب اسم مندوب.",
+    pickManager: "اختار أو اكتب اسم مدير.",
+    pickAtLeastOneArea: "اختار منطقة واحدة على الأقل.",
+    pickAtLeastOneRep: "اختار مندوب واحد على الأقل.",
+    assignedAreas: (n, rep) => `تم ربط ${n} منطقة بـ${rep}.`,
+    assignedReps: (n, manager) => `${n} مندوب بقوا تحت ${manager}.`,
+    managersTitle: "مديرو المناطق",
+    managersSubtitle: "اضغط على مدير عشان تشوف فريقه كامل.",
+    repCount: (n) => `${n} مندوب`,
+    teamTotal: "إجمالي الفريق، آخر شهر",
+    noManagers: "مفيش مديرين لسه. استخدم \"ربط المناديب بالمديرين\" عشان تبني الهيكل.",
+    coversMonths: (months) => `شهور ${months}`,
+    noAreasForRep: "مفيش مناطق مربوطة لسه.",
+    itemsUnderManager: "الأصناف عبر الفريق ده",
+    managerOf: (manager) => `المدير: ${manager}`,
+    reassignWarning: (rep, manager) => `${rep} تابع حالياً لـ${manager} وهيتنقل.`,
+    remove: "إزالة",
+    pastCoverage: "مش تابعة له حالياً",
+  },
+  units: {
+    units: "وحدات",
+    value: "قيمة",
+    unitsNote: "شارتس الأصناف بتعرض عدد الوحدات المباعة.",
+    valueNote: "مجموعة البيانات دي مفيهاش عمود كمية، فشارتس الأصناف بتعرض القيمة المالية مش الوحدات.",
   },
   search: {
     placeholder: "دوّر على منطقة، صنف، مندوب، مجموعة سوق...",

@@ -28,13 +28,35 @@ function CustomTooltip({ active, payload, label }: TooltipContentProps<ValueType
   );
 }
 
-export function ItemTrendChart({ label, series }: { label: string; series: MonthPoint[] }) {
+/**
+ * An item's trend, in UNITS where the uploaded file has a quantity column
+ * and in money where it doesn't.
+ *
+ * The two are not interchangeable and a chart that quietly switched between
+ * them would be worse than one that only ever showed money — so the unit is
+ * named on the chart itself, every time, rather than being left for the
+ * reader to infer from the size of the numbers.
+ */
+export function ItemTrendChart({
+  label,
+  series,
+  showUnits,
+  unitLabel,
+}: {
+  label: string;
+  series: MonthPoint[];
+  /** True when the dataset has real quantities — see Report.hasQuantity. */
+  showUnits?: boolean;
+  /** "Units" or "Value", already translated. */
+  unitLabel?: string;
+}) {
   const R = useRecharts();
   if (series.length < 2) return null;
   if (!R) return <ChartLoading height="h-40" />;
   const { CartesianGrid, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis } = R;
 
-  const data = series.map((pt) => ({ month: `Month ${pt.month}`, value: pt.value }));
+  const data = series.map((pt) => ({ month: `Month ${pt.month}`, value: showUnits ? pt.qty : pt.value }));
+  const seriesName = unitLabel ? `${label} (${unitLabel})` : label;
 
   return (
     <div className="h-40 w-full">
@@ -56,12 +78,17 @@ export function ItemTrendChart({ label, series }: { label: string; series: Month
             axisLine={false}
             width={44}
             tickFormatter={formatCompact}
+            label={
+              unitLabel
+                ? { value: unitLabel, angle: -90, position: "insideLeft", fontSize: 10, fill: "var(--muted)" }
+                : undefined
+            }
           />
           <Tooltip content={CustomTooltip} />
           <Line
             type="monotone"
             dataKey="value"
-            name={label}
+            name={seriesName}
             stroke="var(--amber)"
             strokeWidth={2}
             dot={{ r: 3, fill: "var(--amber)" }}

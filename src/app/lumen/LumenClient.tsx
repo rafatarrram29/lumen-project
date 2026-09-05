@@ -19,6 +19,10 @@ import { UploadWizardModal, type WizardChoice } from "./UploadWizardModal";
 import { UploadTargetsModal } from "./UploadTargetsModal";
 import { RepHistoryPanel } from "./RepHistoryPanel";
 import { repResponsibleInMonth } from "@/lib/lumen/repAssignments";
+import { buildOrgChart, knownReps, managerForRep } from "@/lib/lumen/orgStructure";
+import { AssignAreasModal } from "./AssignAreasModal";
+import { AssignManagersModal } from "./AssignManagersModal";
+import { ManagerCards } from "./ManagerCards";
 import { LinkedFilesPanel } from "./LinkedFilesPanel";
 import { AddLinkedFileModal } from "./AddLinkedFileModal";
 import { recordsForAreaMonth } from "@/lib/lumen/linkedFiles";
@@ -151,6 +155,9 @@ export default function LumenClient({
   const [pendingTargetsSheet, setPendingTargetsSheet] = useState<RawSheet | null>(null);
   const [targetThreshold, setTargetThreshold] = useState(70);
   const [activeTab, setActiveTab] = useState<"sales" | "ims">("sales");
+  const [showAssignAreas, setShowAssignAreas] = useState(false);
+  const [showAssignManagers, setShowAssignManagers] = useState(false);
+  const [savingOrg, setSavingOrg] = useState(false);
   // Set when global search jumps to a Market Insights group; used as the
   // panel's key so it opens on that group.
   const [imsFocusGroup, setImsFocusGroup] = useState<string | null>(null);
@@ -172,6 +179,8 @@ export default function LumenClient({
     loadingReport,
     editedCells,
     assignments,
+    managerLinks,
+    fetchManagerLinks,
     linkedFiles,
     linkedRecords,
     dataEdits,
@@ -260,6 +269,50 @@ export default function LumenClient({
     };
   }, []);
 
+
+  async function handleAssignAreas(rep: string, areasToAssign: string[], startMonth: number, endMonth: number) {
+    if (!selectedDatasetId) return;
+    setSavingOrg(true);
+    setUploadError(null);
+    try {
+      const res = await fetch("/api/lumen/rep-assignments/bulk", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ datasetId: selectedDatasetId, year, rep, areas: areasToAssign, startMonth, endMonth }),
+      });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error || "Could not assign the areas");
+      setUploadMessage(t.org.assignedAreas(areasToAssign.length, rep));
+      setShowAssignAreas(false);
+      await fetchAssignments(selectedDatasetId, year);
+    } catch (err) {
+      setUploadError(err instanceof Error ? err.message : "Could not assign the areas");
+    } finally {
+      setSavingOrg(false);
+    }
+  }
+
+  async function handleAssignManager(manager: string, repsToAssign: string[]) {
+    if (!selectedDatasetId) return;
+    setSavingOrg(true);
+    setUploadError(null);
+    try {
+      const res = await fetch("/api/lumen/district-managers", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ datasetId: selectedDatasetId, year, manager, reps: repsToAssign }),
+      });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error || "Could not assign the reps");
+      setUploadMessage(t.org.assignedReps(repsToAssign.length, manager));
+      setShowAssignManagers(false);
+      await fetchManagerLinks(selectedDatasetId, year);
+    } catch (err) {
+      setUploadError(err instanceof Error ? err.message : "Could not assign the reps");
+    } finally {
+      setSavingOrg(false);
+    }
+  }
 
   function selectDataset(datasetId: string) {
     setSelectedDatasetId(datasetId);
@@ -874,8 +927,21 @@ export default function LumenClient({
       <div className="ms-4 mt-2 space-y-3 rounded-lg bg-surf2/60 p-3">
         {itemSeries.length >= 2 && (
           <div>
-            <div className="mb-1 text-[11px] font-semibold text-white">{t.dashboard.trendLastMonths(itemSeries.length)}</div>
-            <ItemTrendChart label={item} series={itemSeries} />
+            <div className="mb-1 text-[11px] font-semibold text-white">
+              {t.dashboard.trendLastMonths(itemSeries.length)} —{" "}
+              <span className="text-amber">{unitLabel}</span>
+            </div>
+            {/* Units where the file has a quantity column, money where it
+                doesn't — named either way, because a chart that silently
+                switched between the two would be worse than one that only
+                ever showed money. */}
+            <ItemTrendChart
+              label={item}
+              series={itemSeries}
+              showUnits={showsUnits}
+              unitLabel={unitLabel}
+            />
+            {!showsUnits && <div className="mt-1 text-[10px] text-muted">{t.units.valueNote}</div>}
           </div>
         )}
 
@@ -943,6 +1009,33 @@ export default function LumenClient({
       ? report.findings.filter((f): f is Extract<Finding, { type: "systemic_drop" }> => f.type === "systemic_drop")
       : [];
 
+  // Item charts plot units where the dataset has a quantity column. Named
+  // on every chart rather than inferred from the size of the numbers.
+  const showsUnits = Boolean(report && !hasError && report.hasQuantity);
+  const unitLabel = showsUnits ? t.units.units : t.units.value;
+
+  // --- Org structure ---------------------------------------------------
+  // Every area in the dataset, whether or not it has been assigned to
+  // anyone yet, so the assign screen can offer the ones still uncovered.
+  const allAreaNames = areas.map(([area]) => area);
+  // Rep names from the sales data, the assignments and the manager links
+  // alike — a rep can exist in any of the three and not the others.
+  const repNames = knownReps(
+    assignments,
+    managerLinks,
+    report && !hasError && report.hasReps ? Object.keys(report.repChanges) : [],
+  );
+  const orgChart = buildOrgChart(
+    managerLinks,
+    assignments,
+    report && !hasError
+      ? Object.fromEntries(
+          Object.entries(report.areas).map(([area, d]) => [area, { currValue: d.currValue, pctChange: d.pctChange }]),
+        )
+      : {},
+    report && !hasError ? report.latestMonth : null,
+  );
+
   return (
     <div className="flex min-h-screen flex-col bg-bg sm:flex-row">
       <Sidebar userEmail={userEmail}>
@@ -987,6 +1080,22 @@ export default function LumenClient({
               className="mb-2 w-full rounded-lg border border-dashed border-bdr px-3 py-2.5 text-sm text-muted transition-colors hover:border-amber hover:text-white disabled:opacity-60"
             >
               {t.sidebar.uploadTargets}
+            </button>
+            <button
+              type="button"
+              onClick={() => setShowAssignAreas(true)}
+              disabled={uploading}
+              className="mb-2 w-full rounded-lg border border-dashed border-bdr px-3 py-2.5 text-sm text-muted transition-colors hover:border-amber hover:text-white disabled:opacity-60"
+            >
+              {t.org.assignAreasButton}
+            </button>
+            <button
+              type="button"
+              onClick={() => setShowAssignManagers(true)}
+              disabled={uploading}
+              className="mb-2 w-full rounded-lg border border-dashed border-bdr px-3 py-2.5 text-sm text-muted transition-colors hover:border-amber hover:text-white disabled:opacity-60"
+            >
+              {t.org.assignManagersButton}
             </button>
           </>
         )}
@@ -1149,6 +1258,26 @@ export default function LumenClient({
         />
       )}
 
+      {showAssignAreas && selectedDatasetId && (
+        <AssignAreasModal
+          areas={allAreaNames}
+          existingReps={repNames}
+          saving={savingOrg}
+          onCancel={() => setShowAssignAreas(false)}
+          onSave={handleAssignAreas}
+        />
+      )}
+
+      {showAssignManagers && selectedDatasetId && (
+        <AssignManagersModal
+          reps={repNames}
+          links={managerLinks}
+          saving={savingOrg}
+          onCancel={() => setShowAssignManagers(false)}
+          onSave={handleAssignManager}
+        />
+      )}
+
       {showExportModal && report && !("error" in report) && (
         <ExportModal
           groups={buildExportItems(report, t, imsReport)}
@@ -1297,6 +1426,15 @@ export default function LumenClient({
               </label>
             )}
           </div>
+
+          {selectedDatasetId && managerLinks.length > 0 && (
+            <ManagerCards
+              managers={orgChart}
+              datasetId={selectedDatasetId}
+              year={year}
+              hasQuantity={report.hasQuantity}
+            />
+          )}
 
           {report.targetMonthMismatch && (
             <div className="mb-4 rounded-xl border border-amber/40 bg-amber/10 px-4 py-3 text-sm text-amber">
@@ -1546,6 +1684,14 @@ export default function LumenClient({
                             {t.repHistory.responsibleInMonth(
                               t.common.month(report.latestMonth),
                               responsibleInLatest.rep ?? t.repHistory.vacant,
+                            )}
+                            {/* The manager above them, but only when an org
+                                structure has actually been defined — with
+                                none, this line reads exactly as before. */}
+                            {managerForRep(managerLinks, responsibleInLatest.rep) && (
+                              <span className="ms-2 text-amber">
+                                {t.org.managerOf(managerForRep(managerLinks, responsibleInLatest.rep)!)}
+                              </span>
                             )}
                           </p>
                         )}

@@ -120,9 +120,13 @@ design reference only — it is not part of the running app.
     twice. The app works without it (it falls back to reading the raw
     rows), it is just slower, and the gap widens as the data grows. See
     **Why the aggregate matters** below.
-20. Open **Settings -> API** and copy the **Project URL** and the **anon
+20. Then run `supabase/lumen_org_structure_migration.sql` if you want the
+    **District managers** layer. Purely additive — it creates one table
+    holding which manager each rep reports to, and nothing else. Until you
+    assign anyone, the app behaves exactly as it does without it.
+21. Open **Settings -> API** and copy the **Project URL** and the **anon
    public** key.
-21. Open **Authentication -> Sign In / Providers** and make sure **Email**
+22. Open **Authentication -> Sign In / Providers** and make sure **Email**
    is enabled (it is by default). For local development, under
    **Authentication -> URL Configuration**, you can leave the defaults —
    we'll add your real domain there once deployed.
@@ -436,6 +440,65 @@ per browser and applied instantly on the next visit, before the page even
 paints (no flash of the wrong theme). Every interactive element — charts,
 tables, badges, the Export/Undo buttons — reads from the same theme tokens,
 so both modes stay fully legible everywhere, in either language.
+
+## Org structure: areas, reps and district managers
+
+Three levels, each optional. Skip all of them and the dashboard works
+exactly as it did before any of this existed.
+
+**Areas -> reps.** "Assign areas to reps" in the sidebar takes one rep and
+as many areas as you like, in one go. A rep covering eight governorates is
+one trip through the dialog rather than eight.
+
+This writes the *same* records the per-area "+ Add period" control has
+always written — it is a faster way into the existing rep history, not a
+second place the same fact is stored. Anything assigned here shows up in
+the area's own timeline, and vice versa.
+
+**Reps -> district managers.** "Assign reps to managers" puts a team under
+one manager. A manager can have as many reps as they like; a rep reports to
+exactly one manager at a time, which the database enforces rather than
+trusting the app to remember. Picking a rep who already has a manager moves
+them, and the dialog says so before you save.
+
+Both are recorded per dataset and per year, so a reorganisation between
+years doesn't rewrite last year's history.
+
+**Manager cards.** Once managers exist, a card appears for each one with
+their name, team size and the team's latest-month total. Tapping it opens
+the whole team:
+
+    manager
+      +- rep, with their total
+      |    +- each area they cover, the months they cover it, and its figures
+      +- the items sold across the whole team, charted
+
+An area handed over mid-year still appears in the rep's list, marked "no
+longer held", but its latest-month figure is *not* added to that rep's
+total — in that month somebody else was selling it.
+
+The item charts under a card are scoped to that manager's areas, and are
+fetched when the card is opened rather than shipped with every page load,
+for the same reason the sales totals are aggregated in the database.
+
+**Where it shows up elsewhere.** An area card that names the rep
+responsible in a month now also names their manager, when one is defined.
+Nothing else changes: the five decision rules never see the org chart, so
+the analysis is identical whether or not anyone has drawn one.
+
+## Item charts show units, not money
+
+An item's trend chart plots the **quantity sold** where the uploaded file
+has a quantity column mapped, because "how many did we sell" is the
+question an item-level chart is usually being asked.
+
+Money and units are not interchangeable, and a chart that quietly switched
+between them would be worse than one that only ever showed money — so the
+unit is named on the chart itself every time: in the heading, in the series
+name, and down the y-axis.
+
+Where a dataset has no quantity column, the charts fall back to value and
+say so, rather than disappearing or showing an empty axis.
 
 ## Why the aggregate matters
 
