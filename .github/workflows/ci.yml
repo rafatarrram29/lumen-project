@@ -1,0 +1,24 @@
+# Runs on every push and pull request. The engine tests are the point of
+# this workflow — they guard the numbers the whole dashboard is built on,
+# so a change that quietly alters a decision rule fails here rather than
+# in front of a user.
+name: CI
+
+on:
+  push:
+    branches: ["**"]
+  pull_request:
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+      - run: npm ci
+      - run: npm test
+      - run: npm run lint
+      - run: npx tsc --noEmit
