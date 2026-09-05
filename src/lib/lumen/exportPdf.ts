@@ -1,3 +1,5 @@
+import type { ImsAreaProduct, ImsReport } from "./imsEngine";
+import { imsGroupLabel } from "./imsLabels";
 import jsPDF from "jspdf";
 import html2canvas from "html2canvas";
 import { sanitizeFileName, findingsForArea, findingsForItem, areaRankingForItem, rootCauseText, type SuccessReport } from "./exportItems";
@@ -29,6 +31,8 @@ export type ExportContext = {
   lang: Lang;
   datasetName: string;
   selectedIds: Set<string>;
+  /** Null when Market Insights has no data for this dataset. */
+  imsReport?: ImsReport | null;
 };
 
 function isSelected(ctx: ExportContext, id: string): boolean {
@@ -468,6 +472,58 @@ async function paginateAndCapture(blocks: HTMLDivElement[], rtl: boolean): Promi
   return canvases;
 }
 
+/**
+ * One Market Insights group: the same four figures the dashboard shows on
+ * its tiles, plus the leading competitor. Market Insights was the one
+ * section of the dashboard a reader of the exported report could not get.
+ */
+function buildImsBlock(ap: ImsAreaProduct, ctx: ExportContext, rtl: boolean): HTMLDivElement {
+  const { t } = ctx;
+  const b = makeBlock(rtl);
+
+  const header = div({ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "10px" });
+  header.appendChild(div({ fontSize: "18px", fontWeight: "700", color: COLORS.white }, [imsGroupLabel(ap)]));
+  header.appendChild(
+    div({ fontSize: "16px", fontWeight: "700", color: COLORS.amber }, [
+      ltrSpan(ap.latestShare !== null ? `${ap.latestShare.toFixed(1)}%` : "n/a"),
+    ]),
+  );
+  b.appendChild(header);
+
+  const metric = (label: string, value: string, color: string) => {
+    const row = div({ display: "flex", justifyContent: "space-between", marginBottom: "6px", fontSize: "13px" });
+    row.appendChild(div({ color: COLORS.muted }, [label]));
+    row.appendChild(div({ color, fontWeight: "700" }, [ltrSpan(value)]));
+    return row;
+  };
+  const signed = (n: number | null) => (n === null ? "n/a" : `${n > 0 ? "+" : ""}${n.toFixed(1)}%`);
+  const points = (n: number | null) => (n === null ? "n/a" : `${n > 0 ? "+" : ""}${n.toFixed(1)} pp`);
+  const toneOf = (n: number | null) => (n === null ? COLORS.muted : n < 0 ? COLORS.red : COLORS.green);
+
+  b.appendChild(
+    metric(
+      t.ims.ytdMarketShare,
+      ap.rank !== null ? `${ap.latestShare?.toFixed(1) ?? "n/a"}%  (#${ap.rank}/${ap.totalInGroup})` : `${ap.latestShare?.toFixed(1) ?? "n/a"}%`,
+      COLORS.white,
+    ),
+  );
+  b.appendChild(metric(t.ims.ourGrowth, signed(ap.ourGrowthRate), toneOf(ap.ourGrowthRate)));
+  b.appendChild(metric(t.ims.marketGrowthLabel, signed(ap.marketGrowthRate), toneOf(ap.marketGrowthRate)));
+  b.appendChild(metric(t.ims.shareGainLossLabel, points(ap.pctPointChange), toneOf(ap.pctPointChange)));
+
+  if (ap.topCompetitor) {
+    b.appendChild(
+      metric(
+        t.ims.topCompetitor,
+        `${ap.topCompetitor.company} — ${ap.topCompetitor.share.toFixed(1)}%`,
+        COLORS.muted,
+      ),
+    );
+  }
+
+  return b;
+}
+
 export async function exportToPdf(ctx: ExportContext): Promise<void> {
   const { report, t, lang } = ctx;
   const rtl = lang === "ar";
@@ -488,6 +544,10 @@ export async function exportToPdf(ctx: ExportContext): Promise<void> {
   for (const family of Object.keys(report.familyChanges)) {
     if (isSelected(ctx, `item:${family}`)) blocks.push(...buildItemBlock(family, ctx, rtl));
   }
+
+  (ctx.imsReport?.areaProducts ?? []).forEach((ap, i) => {
+    if (isSelected(ctx, `ims:${i}`)) blocks.push(buildImsBlock(ap, ctx, rtl));
+  });
 
   if (isSelected(ctx, "chart:biggest-movers")) {
     const rows = Object.entries(report.areas)

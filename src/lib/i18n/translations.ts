@@ -86,6 +86,7 @@ export type Translations = {
     groupSummary: string;
     groupAreas: string;
     groupItems: string;
+    groupMarket: string;
     groupDecisions: string;
     groupCharts: string;
     groupSections: string;
@@ -334,6 +335,7 @@ export type Translations = {
     areasGroup: string;
     itemsGroup: string;
     repsGroup: string;
+    marketGroup: string;
     noResults: (query: string) => string;
   };
   install: {
@@ -445,6 +447,7 @@ const en: Translations = {
     groupSummary: "Summary",
     groupAreas: "Areas",
     groupItems: "Items",
+    groupMarket: "Market Insights",
     groupDecisions: "Decisions",
     groupCharts: "Charts",
     groupSections: "Other sections",
@@ -706,10 +709,11 @@ const en: Translations = {
       `Review what worked for ${family} in ${area} and check whether the same approach applies to similar customers in other areas.`,
   },
   search: {
-    placeholder: "Search areas, items, reps...",
+    placeholder: "Search areas, items, reps, market groups...",
     areasGroup: "Areas",
     itemsGroup: "Items / Drugs",
     repsGroup: "Reps",
+    marketGroup: "Market Insights",
     noResults: (query) => `No results for "${query}"`,
   },
   install: {
@@ -819,6 +823,7 @@ const ar: Translations = {
     groupSummary: "الملخص",
     groupAreas: "المناطق",
     groupItems: "الأصناف",
+    groupMarket: "رؤى السوق",
     groupDecisions: "القرارات",
     groupCharts: "الرسوم البيانية",
     groupSections: "أقسام تانية",
@@ -1080,10 +1085,11 @@ const ar: Translations = {
       `راجع إيه اللي نجح مع ${family} في ${area} وشوف لو نفس الأسلوب ينفع مع عملاء مشابهين في مناطق تانية.`,
   },
   search: {
-    placeholder: "دوّر على منطقة، صنف، مندوب...",
+    placeholder: "دوّر على منطقة، صنف، مندوب، مجموعة سوق...",
     areasGroup: "مناطق",
     itemsGroup: "أصناف / أدوية",
     repsGroup: "مناديب",
+    marketGroup: "رؤى السوق",
     noResults: (query) => `مفيش نتائج لـ "${query}"`,
   },
   install: {

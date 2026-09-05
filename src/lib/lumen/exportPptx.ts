@@ -3,6 +3,8 @@ import { sanitizeFileName, findingsForArea, findingsForItem, areaRankingForItem,
 import type { Translations } from "@/lib/i18n/translations";
 import type { Lang } from "@/lib/i18n/translations";
 import { findingSummary, findingDecision } from "@/lib/i18n/findingText";
+import type { ImsReport } from "./imsEngine";
+import { imsGroupLabel } from "./imsLabels";
 
 const BG = "0B1229";
 const SURFACE = "121A38";
@@ -18,6 +20,8 @@ export type ExportContext = {
   lang: Lang;
   datasetName: string;
   selectedIds: Set<string>;
+  /** Null when Market Insights has no data for this dataset. */
+  imsReport?: ImsReport | null;
 };
 
 function isSelected(ctx: ExportContext, id: string): boolean {
@@ -232,6 +236,43 @@ export async function exportToPptx(ctx: ExportContext): Promise<void> {
       );
     }
   }
+
+  // --- Market Insights slides ---
+  // One slide per group, carrying the same four figures its dashboard
+  // tiles show plus the leading competitor. This section used to be
+  // missing from the deck entirely.
+  (ctx.imsReport?.areaProducts ?? []).forEach((ap, i) => {
+    if (!isSelected(ctx, `ims:${i}`)) return;
+    const slide = pptx.addSlide();
+    addBackground(slide);
+    slide.addText(imsGroupLabel(ap), { x: 0.5, y: 0.3, w: 9, h: 0.5, fontSize: 22, bold: true, color: WHITE, align });
+    slide.addText(ap.latestShare !== null ? `${ap.latestShare.toFixed(1)}%` : "n/a", {
+      x: 0.5, y: 0.9, w: 9, h: 0.6, fontSize: 28, bold: true, color: AMBER, align,
+    });
+    if (ap.rank !== null) {
+      slide.addText(t.ims.rankInCategory(ap.rank, ap.totalInGroup), {
+        x: 0.5, y: 1.5, w: 9, h: 0.35, fontSize: 13, color: MUTED, align,
+      });
+    }
+
+    const signed = (n: number | null) => (n === null ? "n/a" : `${n > 0 ? "+" : ""}${n.toFixed(1)}%`);
+    const points = (n: number | null) => (n === null ? "n/a" : `${n > 0 ? "+" : ""}${n.toFixed(1)} pp`);
+    const toneOf = (n: number | null) => (n === null ? MUTED : n < 0 ? RED : GREEN);
+
+    const rows: [string, string, string][] = [
+      [t.ims.ourGrowth, signed(ap.ourGrowthRate), toneOf(ap.ourGrowthRate)],
+      [t.ims.marketGrowthLabel, signed(ap.marketGrowthRate), toneOf(ap.marketGrowthRate)],
+      [t.ims.shareGainLossLabel, points(ap.pctPointChange), toneOf(ap.pctPointChange)],
+    ];
+    if (ap.topCompetitor) {
+      rows.push([t.ims.topCompetitor, `${ap.topCompetitor.company} — ${ap.topCompetitor.share.toFixed(1)}%`, MUTED]);
+    }
+    rows.forEach(([label, value, color], r) => {
+      const y = 2.05 + r * 0.55;
+      slide.addText(label, { x: 0.5, y, w: 4.5, h: 0.4, fontSize: 14, color: MUTED, align });
+      slide.addText(value, { x: 5.0, y, w: 4.5, h: 0.4, fontSize: 14, bold: true, color, align: rtl ? "left" : "right" });
+    });
+  });
 
   // --- Chart slides (native pptx charts) ---
   if (isSelected(ctx, "chart:biggest-movers")) {

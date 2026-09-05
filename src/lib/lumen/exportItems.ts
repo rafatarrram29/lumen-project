@@ -1,9 +1,11 @@
 import type { Finding, Report } from "./engine";
+import type { ImsReport } from "./imsEngine";
+import { imsGroupLabel } from "./imsLabels";
 import type { Translations } from "@/lib/i18n/translations";
 
 export type SuccessReport = Extract<Report, { findings: Finding[] }>;
 
-export type ExportItemGroup = "summary" | "areas" | "items" | "decisions" | "charts" | "sections";
+export type ExportItemGroup = "summary" | "areas" | "items" | "market" | "decisions" | "charts" | "sections";
 
 export type ExportItem = {
   id: string;
@@ -21,7 +23,11 @@ export type ExportItemGroups = {
 // dashboard for this report — nothing here can be selected that wouldn't
 // otherwise exist, so an export can never show something the user never
 // saw on screen.
-export function buildExportItems(report: SuccessReport, t: Translations): ExportItemGroups {
+export function buildExportItems(
+  report: SuccessReport,
+  t: Translations,
+  imsReport?: ImsReport | null,
+): ExportItemGroups {
   const areaItems: ExportItem[] = Object.keys(report.areas).map((area) => ({
     id: `area:${area}`,
     group: "areas",
@@ -60,10 +66,21 @@ export function buildExportItems(report: SuccessReport, t: Translations): Export
     sectionItems.push({ id: "section:targets", group: "sections", label: t.export.itemTargets });
   }
 
+  // Market Insights was missing from the export entirely — the one section
+  // of the dashboard a reader of the PDF could not get. Indexed rather than
+  // named because a group's identity is an (area, product) pair, either
+  // half of which can be blank.
+  const marketItems: ExportItem[] = (imsReport?.areaProducts ?? []).map((ap, i) => ({
+    id: `ims:${i}`,
+    group: "market",
+    label: imsGroupLabel(ap),
+  }));
+
   const groups: ExportItemGroups = [
     { group: "summary", title: t.export.groupSummary, items: [{ id: "summary", group: "summary", label: t.export.itemSummary }] },
     { group: "areas", title: t.export.groupAreas, items: areaItems },
     { group: "items", title: t.export.groupItems, items: itemItems },
+    { group: "market", title: t.export.groupMarket, items: marketItems },
     { group: "decisions", title: t.export.groupDecisions, items: decisionItems },
     { group: "charts", title: t.export.groupCharts, items: chartItems },
   ];
