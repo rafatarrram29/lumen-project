@@ -384,12 +384,15 @@ file — use "Replace" on it, which shows the same editable mapping.
 - **Re-uploading a month fails silently.** This means the ownership-scoped
   DELETE policy is missing. Run
   `supabase/lumen_security_hardening_migration.sql` (setup step 18), which
-  puts it in place. Earlier versions of this README pointed at
-  `lumen_add_delete_policy.sql` here, which fixed the symptom with a policy
-  that let **any** signed-in account wipe **every** user's sales rows in one
-  unfiltered delete — that file now removes the unsafe policy instead of
-  creating it, so running it is harmless, but the hardening migration is the
-  one to use.
+  puts it in place. That scoped policy is all the re-upload path needs —
+  deleting rows inside a dataset you own passes it, and that is the only
+  delete the app ever performs. Do **not** add a broader
+  `using (true)` delete policy: because RLS policies are OR-ed together,
+  one of those overrides every scoped policy beside it and lets any
+  signed-in account wipe every other user's sales rows with a single
+  unfiltered delete. An earlier version of this README recommended exactly
+  that, in a file (`lumen_add_delete_policy.sql`) which has since been
+  deleted from the repo so nobody can run it by accident.
 - **"This file doesn't match this dataset's saved column mapping"** means
   the file you're adding doesn't have the same column names as the ones
   originally mapped for that dataset. Either pick the dataset that actually
