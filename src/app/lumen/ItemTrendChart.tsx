@@ -1,15 +1,8 @@
 "use client";
 
-import {
-  CartesianGrid,
-  Line,
-  LineChart,
-  ResponsiveContainer,
-  Tooltip,
-  XAxis,
-  YAxis,
-  type TooltipContentProps,
-} from "recharts";
+// Type-only — see useRecharts.tsx.
+import type { TooltipContentProps } from "recharts";
+import { useRecharts, ChartLoading } from "./useRecharts";
 import type { NameType, ValueType } from "recharts/types/component/DefaultTooltipContent";
 import type { MonthPoint } from "@/lib/lumen/engine";
 
@@ -36,7 +29,10 @@ function CustomTooltip({ active, payload, label }: TooltipContentProps<ValueType
 }
 
 export function ItemTrendChart({ label, series }: { label: string; series: MonthPoint[] }) {
+  const R = useRecharts();
   if (series.length < 2) return null;
+  if (!R) return <ChartLoading height="h-40" />;
+  const { CartesianGrid, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis } = R;
 
   const data = series.map((pt) => ({ month: `Month ${pt.month}`, value: pt.value }));
 

@@ -32,7 +32,7 @@ import { buildExportItems } from "@/lib/lumen/exportItems";
 import { useLanguage } from "@/lib/i18n/LanguageProvider";
 import { findingSummary, findingDecision } from "@/lib/i18n/findingText";
 import type { Translations } from "@/lib/i18n/translations";
-import { ImsPanel, type ImsFile } from "./ImsPanel";
+import type { ImsFile } from "./ImsPanel";
 import { AddImsFileModal, type ImsFileSave } from "./AddImsFileModal";
 import { applyImsMapping } from "@/lib/lumen/imsMapping";
 import type { ImsReport } from "@/lib/lumen/imsEngine";
@@ -40,12 +40,14 @@ import { dedupeExactDuplicates } from "@/lib/lumen/duplicateCheck";
 import { GlobalSearch } from "./GlobalSearch";
 
 // recharts is a heavy dependency only ever needed once a trend chart is
-// actually shown (an area or item card expanded) — loading it eagerly
-// added real weight to every /lumen page load whether or not anyone ever
-// expanded a chart. Dynamic import splits it into its own chunk, fetched
-// only the first time one of these renders.
+// actually shown (an area or item card expanded, or the Market Insights
+// tab). Dynamic import keeps it out of the module graph the page evaluates
+// on load.
 const TrendChart = dynamic(() => import("./TrendChart").then((m) => m.TrendChart), { ssr: false });
 const ItemTrendChart = dynamic(() => import("./ItemTrendChart").then((m) => m.ItemTrendChart), { ssr: false });
+// ImsPanel was imported statically, which dragged ImsTrendChart and with it
+// recharts into the eager bundle — quietly cancelling the two splits above.
+const ImsPanel = dynamic(() => import("./ImsPanel").then((m) => m.ImsPanel), { ssr: false });
 
 function areaCardId(area: string): string {
   return `area-card-${encodeURIComponent(area)}`;
@@ -165,6 +167,11 @@ export default function LumenClient({
   // which made them look intermittent.
   const [editedCells, setEditedCells] = useState(() => editedCellMap(initialEditedCells));
   const [activeTab, setActiveTab] = useState<"sales" | "ims">("sales");
+  // Which (dataset, year) the Market Insights data currently in state
+  // belongs to; null means "not loaded, or no longer valid". A ref rather
+  // than state because nothing renders from it — it only decides whether
+  // opening the tab needs to fetch.
+  const imsLoadedKeyRef = useRef<string | null>(null);
   const [imsFiles, setImsFiles] = useState<ImsFile[]>([]);
   const [imsReport, setImsReport] = useState<ImsReport | null>(null);
   const [imsLoading, setImsLoading] = useState(false);
@@ -213,11 +220,8 @@ export default function LumenClient({
   useEffect(() => {
     if (initialDatasetId) {
       fetchAssignments(initialDatasetId, initialYear);
-      fetchLinkedFiles(initialDatasetId);
-      fetchLinkedRecords(initialDatasetId, initialYear);
+      loadLinkedData(initialDatasetId, initialYear);
       fetchDataEdits(initialDatasetId);
-      fetchImsFiles(initialDatasetId);
-      fetchImsReport(initialDatasetId, initialYear);
     }
     // Only on mount — subsequent dataset/year changes go through fetchReport.
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -233,14 +237,34 @@ export default function LumenClient({
     }
   }
 
-  async function fetchLinkedFiles(datasetId: string) {
+  async function fetchLinkedFiles(datasetId: string): Promise<LinkedFile[]> {
     try {
       const res = await fetch(`/api/lumen/dataset-files?datasetId=${datasetId}`);
       const json = await res.json();
-      setLinkedFiles(res.ok ? (json.files ?? []) : []);
+      const files: LinkedFile[] = res.ok ? (json.files ?? []) : [];
+      setLinkedFiles(files);
+      return files;
     } catch {
       setLinkedFiles([]);
+      return [];
     }
+  }
+
+  /**
+   * Linked-file records are worth fetching only if there are linked files.
+   * /api/lumen/dataset-records pages through the whole lumen_dataset_records
+   * table for the dataset — and for a dataset with no linked files (most of
+   * them) every one of those rows was guaranteed to come back empty. Asking
+   * for the file list first costs one small query and skips a potentially
+   * large one.
+   */
+  async function loadLinkedData(datasetId: string, y: number) {
+    const files = await fetchLinkedFiles(datasetId);
+    if (files.length === 0) {
+      setLinkedRecords([]);
+      return;
+    }
+    await fetchLinkedRecords(datasetId, y);
   }
 
   async function fetchLinkedRecords(datasetId: string, y: number) {
@@ -276,6 +300,21 @@ export default function LumenClient({
     }
   }
 
+  /** Loads everything the Market Insights tab needs, for one dataset/year. */
+  async function loadImsData(datasetId: string, y: number) {
+    // Claim the key before awaiting, so a second click while the first
+    // request is still in flight doesn't fire an identical one.
+    imsLoadedKeyRef.current = `${datasetId}:${y}`;
+    await Promise.all([fetchImsFiles(datasetId), fetchImsReport(datasetId, y)]);
+  }
+
+  /** Fetches the Market Insights data if what's in state isn't current. */
+  function ensureImsLoaded() {
+    if (!selectedDatasetId) return;
+    if (imsLoadedKeyRef.current === `${selectedDatasetId}:${year}`) return;
+    loadImsData(selectedDatasetId, year);
+  }
+
   async function fetchDataEdits(datasetId: string) {
     try {
       const res = await fetch(`/api/lumen/data-edits?datasetId=${datasetId}`);
@@ -299,11 +338,17 @@ export default function LumenClient({
       setLoadingReport(false);
     }
     fetchAssignments(datasetId, y);
-    fetchLinkedFiles(datasetId);
-    fetchLinkedRecords(datasetId, y);
+    loadLinkedData(datasetId, y);
     fetchDataEdits(datasetId);
-    fetchImsFiles(datasetId);
-    fetchImsReport(datasetId, y);
+    // Market Insights is deliberately NOT loaded here.
+    // /api/lumen/ims-analyze reads the whole sales table as well as the IMS
+    // table, so calling it alongside the sales report meant every page load
+    // read the sales table TWICE — the larger of the two reads, duplicated,
+    // for a tab most visits never open. Invalidate instead, and let opening
+    // the tab pay for its own data. If the tab is already open, that's now,
+    // since a sales edit changes the IMS comparison too.
+    imsLoadedKeyRef.current = null;
+    if (activeTab === "ims") ensureImsLoaded();
   }
 
   function selectDataset(datasetId: string) {
@@ -933,8 +978,7 @@ export default function LumenClient({
         notes.push(`Removed ${duplicatesRemoved.count} duplicate row(s) repeated within this file — logged in the Correction log.`);
       }
       setUploadMessage(notes.length > 0 ? `${t.ims.uploadSuccess(inserted)} ${notes.join(" ")}` : t.ims.uploadSuccess(inserted));
-      await fetchImsFiles(selectedDatasetId);
-      await fetchImsReport(selectedDatasetId, year);
+      await loadImsData(selectedDatasetId, year);
       await fetchDataEdits(selectedDatasetId);
     } catch (err) {
       setUploadError(err instanceof Error ? err.message : "Upload failed");
@@ -952,8 +996,7 @@ export default function LumenClient({
       const res = await fetch(`/api/lumen/ims-files/${file.id}`, { method: "DELETE" });
       const json = await res.json();
       if (!res.ok) throw new Error(json.error || "Could not delete the file");
-      await fetchImsFiles(selectedDatasetId);
-      await fetchImsReport(selectedDatasetId, year);
+      await loadImsData(selectedDatasetId, year);
     } catch (err) {
       setUploadError(err instanceof Error ? err.message : "Could not delete the file");
     }
@@ -1054,7 +1097,7 @@ export default function LumenClient({
       });
       const json = await res.json();
       if (!res.ok) throw new Error(json.error || t.inlineEdit.saveFailed);
-      await fetchImsReport(selectedDatasetId, year);
+      await loadImsData(selectedDatasetId, year);
       await fetchDataEdits(selectedDatasetId);
       if (!isUndo) armUndo({ kind: "imsRename", field, oldValue, newValue });
     } catch (err) {
@@ -1493,7 +1536,10 @@ export default function LumenClient({
           </button>
           <button
             type="button"
-            onClick={() => setActiveTab("ims")}
+            onClick={() => {
+              setActiveTab("ims");
+              ensureImsLoaded();
+            }}
             className={`border-b-2 px-3 py-2 text-sm transition-colors ${
               activeTab === "ims" ? "border-amber text-white" : "border-transparent text-muted hover:text-white"
             }`}

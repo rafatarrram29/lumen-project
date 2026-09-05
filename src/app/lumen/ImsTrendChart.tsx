@@ -1,6 +1,7 @@
 "use client";
 
-import { CartesianGrid, Legend, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
+// Loaded at runtime — see useRecharts.tsx.
+import { useRecharts, ChartLoading } from "./useRecharts";
 import { colorForFamily } from "@/lib/lumen/familyColors";
 import type { ImsSharePoint } from "@/lib/lumen/imsEngine";
 
@@ -12,6 +13,10 @@ const MAX_COMPETITOR_LINES = 3;
 // of what the data actually has, not a fabricated line between two points
 // that don't exist.
 export function ImsTrendChart({ series, ownLabel }: { series: ImsSharePoint[]; ownLabel: string }) {
+  const R = useRecharts();
+  if (!R) return <ChartLoading height="h-56" />;
+  const { CartesianGrid, Legend, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis } = R;
+
   const latest = series[series.length - 1];
   const topCompetitorNames = [...latest.competitorShares]
     .sort((a, b) => b.share - a.share)

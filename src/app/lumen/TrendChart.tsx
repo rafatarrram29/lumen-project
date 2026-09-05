@@ -1,16 +1,10 @@
 "use client";
 
-import {
-  CartesianGrid,
-  Legend,
-  Line,
-  LineChart,
-  ResponsiveContainer,
-  Tooltip,
-  XAxis,
-  YAxis,
-  type TooltipContentProps,
-} from "recharts";
+// Type-only: erased before bundling, so this does not pull recharts into
+// the page's import graph. The components themselves arrive at runtime —
+// see useRecharts.tsx.
+import type { TooltipContentProps } from "recharts";
+import { useRecharts, ChartLoading } from "./useRecharts";
 import type { NameType, ValueType } from "recharts/types/component/DefaultTooltipContent";
 import { useLanguage } from "@/lib/i18n/LanguageProvider";
 import type { Translations } from "@/lib/i18n/translations";
@@ -78,7 +72,10 @@ export function TrendChart({
   compareLabel?: string;
 }) {
   const { t } = useLanguage();
+  const R = useRecharts();
   if (areaSeries.length < 2) return null;
+  if (!R) return <ChartLoading height="h-56" />;
+  const { CartesianGrid, Legend, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis } = R;
 
   const thisShortLabel = t.chart.thisArea;
   const resolvedCompareShort = compareShortLabel ?? t.chart.lineAvg;
