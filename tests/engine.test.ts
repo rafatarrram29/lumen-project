@@ -518,37 +518,127 @@ describe("targets vs actual", () => {
 });
 
 describe("the same rows in a different order give the same answer", () => {
-  // The rows come back from Postgres in whatever order it feels like, in
-  // pages fetched in parallel. Nothing the engine reports may depend on
-  // which order they arrive in.
+  // Rows come back from Postgres in pages fetched in parallel, so their
+  // order is arbitrary. Nothing the engine reports may depend on it.
+  //
+  // This dataset is deliberately built to make order MATTER if the engine
+  // lets it: three lines that each take a different branch, several
+  // findings of every type so the array has an order to get wrong, and a
+  // deliberate tie for "worst item" that has to break the same way twice.
+  const twoMonths = <T,>(f: (m: number) => T[]) => [1, 2].flatMap(f);
+
   const records = [
-    ...areaSeries(
-      { A: [1000, 900, 700], B: [1000, 950, 800], C: [1000, 1000, 1200], D: [900, 950, 1000] },
-      { line: (a) => (a === "A" || a === "B" ? "Line 1" : "Line 2"), rep: (a) => `Rep ${a}` },
-    ),
-    ...[1, 2, 3].flatMap((m) => [
-      rec({ area: "A", family: "Second", month: m, salesValue: 300 * m, line: "Line 1", rep: "Rep A" }),
-      rec({ area: "C", family: "Second", month: m, salesValue: 500, line: "Line 2", rep: "Rep C" }),
+    // Line Alpha — every area collapses, so the whole line reads systemic.
+    ...twoMonths((m) => [
+      rec({ area: "A1", family: "Pill", month: m, salesValue: m === 1 ? 600 : 400, line: "Alpha", rep: "Nour" }),
+      rec({ area: "A1", family: "Syrup", month: m, salesValue: m === 1 ? 400 : 300, line: "Alpha", rep: "Nour" }),
+      rec({ area: "A2", family: "Pill", month: m, salesValue: m === 1 ? 800 : 500, line: "Alpha", rep: "Nour" }),
+      rec({ area: "A2", family: "Syrup", month: m, salesValue: m === 1 ? 200 : 150, line: "Alpha", rep: "Nour" }),
+      rec({ area: "A3", family: "Pill", month: m, salesValue: m === 1 ? 500 : 350, line: "Alpha", rep: "Hala" }),
+      // A3's Syrup is sized so that line-wide, Pill and Syrup lose exactly
+      // the same 650 — a tie in the systemic branch as well as the local one.
+      rec({ area: "A3", family: "Syrup", month: m, salesValue: m === 1 ? 800 : 300, line: "Alpha", rep: "Hala" }),
+    ]),
+    // Line Beta — only 2 of 5 areas drop, so they are reported one by one.
+    // B1's two items lose the exact same amount: a tie to break.
+    ...twoMonths((m) => [
+      rec({ area: "B1", family: "Xray", month: m, salesValue: m === 1 ? 500 : 200, line: "Beta", rep: "Hala" }),
+      rec({ area: "B1", family: "Alkane", month: m, salesValue: m === 1 ? 500 : 200, line: "Beta", rep: "Hala" }),
+      rec({ area: "B2", family: "Delta", month: m, salesValue: m === 1 ? 700 : 400, line: "Beta", rep: "Omar" }),
+      rec({ area: "B2", family: "Echo", month: m, salesValue: 300, line: "Beta", rep: "Omar" }),
+      rec({ area: "B3", family: "Delta", month: m, salesValue: 1000, line: "Beta", rep: "Omar" }),
+      rec({ area: "B4", family: "Delta", month: m, salesValue: 1000, line: "Beta", rep: "Sara" }),
+      rec({ area: "B5", family: "Echo", month: m, salesValue: 1000, line: "Beta", rep: "Sara" }),
+    ]),
+    // Line Gamma — three growing areas, each with two items worth copying.
+    ...twoMonths((m) => [
+      rec({ area: "G1", family: "Grow", month: m, salesValue: m === 1 ? 500 : 700, line: "Gamma", rep: "Sara" }),
+      rec({ area: "G1", family: "Climb", month: m, salesValue: m === 1 ? 500 : 600, line: "Gamma", rep: "Sara" }),
+      rec({ area: "G2", family: "Grow", month: m, salesValue: m === 1 ? 400 : 600, line: "Gamma", rep: "Nour" }),
+      rec({ area: "G2", family: "Climb", month: m, salesValue: m === 1 ? 600 : 750, line: "Gamma", rep: "Nour" }),
+      rec({ area: "G3", family: "Grow", month: m, salesValue: m === 1 ? 300 : 500, line: "Gamma", rep: "Omar" }),
+      rec({ area: "G3", family: "Climb", month: m, salesValue: m === 1 ? 700 : 900, line: "Gamma", rep: "Omar" }),
     ]),
   ];
   const targets = [
-    target({ month: 3, area: "A", targetValue: 1500 }),
-    target({ month: 3, rep: "Rep C", targetValue: 900 }),
+    target({ month: 2, area: "A1", targetValue: 1500 }),
+    target({ month: 2, rep: "Sara", targetValue: 2200 }),
+    target({ month: 2, area: "G2", rep: "Nour", targetValue: 1000 }),
   ];
 
-  // Findings are collected by walking Maps, whose iteration order follows
-  // the input, so the array's ORDER is not stable today — only its
-  // contents are. Sorting before comparing pins down what actually has to
-  // hold; making the order itself deterministic is a separate fix.
-  const sortFindings = (fs: Finding[]) =>
-    fs.slice().sort((a, b) => JSON.stringify(a).localeCompare(JSON.stringify(b)));
+  test("the dataset really does exercise all three rules at once", () => {
+    // Guards the tests below: if this dataset ever stops producing a rich,
+    // multi-finding report, shuffling it proves nothing.
+    const report = ok(buildReport(records, YEAR, targets));
+    assert.ok(report.findings.length >= 8, `only ${report.findings.length} findings`);
+    assert.equal(findingsOfType(report.findings, "systemic_drop").length, 1);
+    assert.equal(findingsOfType(report.findings, "local_drop").length, 2);
+    assert.equal(findingsOfType(report.findings, "transfer_opportunity").length, 6);
+    assert.deepEqual(Object.keys(report.lines).sort(), ["Alpha", "Beta", "Gamma"]);
+  });
 
-  for (const seed of [1, 7, 99, 12345]) {
+  for (const seed of [1, 7, 99, 12345, 424242, 777]) {
     test(`shuffled with seed ${seed}`, () => {
       const base = ok(buildReport(records, YEAR, targets));
       const shuffled = ok(buildReport(shuffle(records, seed), YEAR, shuffle(targets, seed)));
-      assert.deepEqual(sortFindings(shuffled.findings), sortFindings(base.findings));
-      assert.deepEqual({ ...shuffled, findings: [] }, { ...base, findings: [] });
+      // Compared whole, findings array included and IN ORDER — not sorted
+      // first. A report that reorders itself between two runs of the same
+      // data cannot be diffed, cached, or trusted.
+      assert.deepEqual(shuffled, base);
     });
   }
+
+  test("a tie for worst item breaks the same way every time", () => {
+    // Two ties on purpose: B1 loses exactly 300 on each of its two items
+    // (the local branch), and line Alpha loses exactly 650 on each of its
+    // two items (the systemic branch). Whichever row was read first used to
+    // win in both.
+    const local = new Set<string>();
+    const systemic = new Set<string>();
+    for (const seed of [1, 2, 3, 4, 5, 6]) {
+      const report = ok(buildReport(shuffle(records, seed), YEAR));
+      local.add(
+        findingsOfType(report.findings, "local_drop").find((f) => f.area === "B1")!.rootCauseFamily,
+      );
+      const alpha = findingsOfType(report.findings, "systemic_drop").find((f) => f.line === "Alpha")!;
+      assert.equal(alpha.allFamilies.Pill.absDrop, alpha.allFamilies.Syrup.absDrop, "the tie was lost");
+      systemic.add(alpha.rootCauseFamily);
+    }
+    assert.deepEqual([...local], ["Alkane"]);
+    assert.deepEqual([...systemic], ["Pill"]);
+  });
+
+  test("an area whose rows disagree about their line takes the majority label, not the first row", () => {
+    // A mis-keyed file: three rows say "Zebra line", one says "Apex line".
+    // The majority is deliberately the alphabetically LATER label, so a
+    // tie-break that ignored the vote count would pick the wrong one.
+    const conflicted = [
+      rec({ area: "A", family: "X", month: 1, salesValue: 100, line: "Apex line" }),
+      rec({ area: "A", family: "Y", month: 1, salesValue: 100, line: "Zebra line" }),
+      rec({ area: "A", family: "Z", month: 1, salesValue: 100, line: "Zebra line" }),
+      rec({ area: "A", family: "W", month: 2, salesValue: 100, line: "Zebra line" }),
+    ];
+    for (const seed of [1, 2, 3, 4, 5]) {
+      const report = ok(buildReport(shuffle(conflicted, seed), YEAR));
+      assert.equal(report.areas.A.line, "Zebra line");
+    }
+  });
+
+  test("a blank line on some rows never outvotes a real label", () => {
+    const mixed = [
+      rec({ area: "A", family: "X", month: 1, salesValue: 100, line: null }),
+      rec({ area: "A", family: "Y", month: 1, salesValue: 100, line: null }),
+      rec({ area: "A", family: "Z", month: 1, salesValue: 100, line: "  " }),
+      rec({ area: "A", family: "W", month: 2, salesValue: 100, line: "Line 1" }),
+    ];
+    for (const seed of [1, 2, 3]) {
+      const report = ok(buildReport(shuffle(mixed, seed), YEAR));
+      assert.equal(report.areas.A.line, "Line 1");
+    }
+  });
+
+  test("an area with no line at all still lands in the default line", () => {
+    const report = ok(buildReport(areaSeries({ A: [100, 200] }), YEAR));
+    assert.equal(report.areas.A.line, DEFAULT_LINE);
+  });
 });

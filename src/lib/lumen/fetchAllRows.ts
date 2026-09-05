@@ -12,10 +12,51 @@
 // measurable chunk of the multi-second delay loading /lumen. Firing every
 // page's request at once instead means total latency is close to a single
 // round trip regardless of row count.
+//
+// ORDERING IS NOT OPTIONAL. `.range(from, to)` is only meaningful against a
+// defined order: SQL makes no promise about the order of an unordered
+// query, and Postgres genuinely does return rows differently between runs
+// (a sequential scan racing an index scan, a plan change after ANALYZE,
+// concurrent updates moving a row). Two pages fetched against two different
+// orderings can hand back the same row twice and skip another entirely —
+// silently, since the total row count still looks right. That is why this
+// module applies the ordering itself rather than trusting each call site to
+// remember: callers hand over a query BUILDER, and both .order() and
+// .range() are added here, on every page, from the same source.
+//
+// The ordering column must be UNIQUE. Ordering by something non-unique
+// (month, area, uploaded_at) leaves ties free to come back in any order,
+// which reopens the exact same hole for the rows inside a tie. Every table
+// paged through here has a uuid primary key, so `id` is the default.
+
+/**
+ * The slice of Supabase's query builder this module needs. Declared
+ * structurally rather than imported so this file stays free of Supabase
+ * types — anything with .order() and .range() satisfies it, which also
+ * makes it trivial to fake in a test.
+ */
+export type PageableQuery<T> = {
+  order(column: string, options: { ascending: boolean }): PageableQuery<T>;
+  range(
+    from: number,
+    to: number,
+  ): PromiseLike<{ data: T[] | null; error: { message: string } | null }>;
+};
+
 export async function fetchAllRows<T>(
-  queryPage: (from: number, to: number) => PromiseLike<{ data: T[] | null; error: { message: string } | null }>,
-  pageSize = 1000,
+  /**
+   * Builds the query WITHOUT .order() or .range() — both are applied here.
+   * Called once per page, so it must return a fresh builder each time
+   * (Supabase builders are single-use once awaited).
+   */
+  buildQuery: () => PageableQuery<T>,
+  options: { orderBy?: string; pageSize?: number } = {},
 ): Promise<{ data: T[]; error: string | null }> {
+  const { orderBy = "id", pageSize = 1000 } = options;
+
+  const queryPage = (from: number, to: number) =>
+    buildQuery().order(orderBy, { ascending: true }).range(from, to);
+
   // First page tells us whether there's more to fetch at all — most
   // datasets fit in one page, so this is the common case and costs
   // nothing extra over the old sequential version.

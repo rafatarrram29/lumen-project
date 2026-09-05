@@ -24,13 +24,12 @@ export async function GET(request: Request) {
     return NextResponse.json({ error: "Missing datasetId" }, { status: 400 });
   }
 
-  const { data, error } = await fetchAllRows((from, to) =>
+  const { data, error } = await fetchAllRows(() =>
     supabase
       .from("lumen_dataset_records")
       .select("id, file_id, area, rep, line, month, data, is_edited, edited_at, edited_by")
       .eq("year", year)
-      .eq("dataset_id", datasetId)
-      .range(from, to),
+      .eq("dataset_id", datasetId),
   );
 
   if (error) {

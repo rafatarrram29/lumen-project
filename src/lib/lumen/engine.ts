@@ -133,10 +133,6 @@ function pctChange(prev: number | null | undefined, curr: number): number | null
   return Math.round(((curr - prev) / prev) * 100 * 10) / 10;
 }
 
-function lineKeyFor(line: string | null | undefined): string {
-  return line && line.trim() !== "" ? line : DEFAULT_LINE;
-}
-
 type MonthTotal = { value: number; qty: number };
 
 function groupAreaMonthTotals(records: SalesRecord[]): Map<string, Map<number, MonthTotal>> {
@@ -274,15 +270,30 @@ export function buildReport(records: SalesRecord[], year: number, targets: Targe
       ? allMonths.slice(allMonths.length - TREND_CHART_MONTHS)
       : allMonths;
 
-  // Each area's line is whatever line label its rows carry (assumed
-  // consistent per area). No line column at all -> everyone shares the
-  // single default line, which reproduces the original ungrouped
-  // behavior exactly.
-  const areaLine = new Map<string, string>();
+  // Each area's line is whatever line label its rows carry. They should all
+  // agree, but a mis-keyed file can disagree — and taking whichever row
+  // happened to arrive first made the entire report depend on row order,
+  // which is not something the caller can guarantee. Take the most common
+  // label instead, ties broken alphabetically, and never let a blank line
+  // outvote a real one. No line column at all -> everyone shares the single
+  // default line, which reproduces the original ungrouped behavior exactly.
+  const lineVotes = new Map<string, Map<string, number>>();
   let hasLines = false;
   for (const r of records) {
-    if (r.line && r.line.trim() !== "") hasLines = true;
-    if (!areaLine.has(r.area)) areaLine.set(r.area, lineKeyFor(r.line));
+    const label = r.line && r.line.trim() !== "" ? r.line : null;
+    if (label) hasLines = true;
+    if (!lineVotes.has(r.area)) lineVotes.set(r.area, new Map());
+    if (label) {
+      const votes = lineVotes.get(r.area)!;
+      votes.set(label, (votes.get(label) ?? 0) + 1);
+    }
+  }
+  const areaLine = new Map<string, string>();
+  for (const [area, votes] of lineVotes) {
+    const winner = Array.from(votes.entries()).sort(
+      (a, b) => b[1] - a[1] || a[0].localeCompare(b[0]),
+    )[0];
+    areaLine.set(area, winner ? winner[0] : DEFAULT_LINE);
   }
 
   // --- Rule 1 + area-level change ---
@@ -319,19 +330,31 @@ export function buildReport(records: SalesRecord[], year: number, targets: Targe
   }
 
   // Areas grouped by line (only areas that made it into areaChanges).
+  // Both the areas inside a line and the lines themselves are sorted, so
+  // findings come out in the same order no matter what order the rows
+  // arrived in — see the comment above `orderedLines`.
   const areasByLine = new Map<string, string[]>();
   for (const [area, d] of Object.entries(areaChanges)) {
     const list = areasByLine.get(d.line) ?? [];
     list.push(area);
     areasByLine.set(d.line, list);
   }
+  for (const list of areasByLine.values()) list.sort((a, b) => a.localeCompare(b));
+
+  // Rows come back from Postgres in pages fetched in parallel, so their
+  // order is arbitrary. Every loop below that appends to `findings` walks
+  // this sorted list rather than a Map's insertion order, so the same data
+  // always produces the same report in the same order — which is what makes
+  // a report reproducible, diffable, and safe to cache.
+  const orderedLines = Array.from(areasByLine.keys()).sort((a, b) => a.localeCompare(b));
 
   // --- Rule 2: systemic check, scoped to each line ---
   const lines: Record<string, LineSummary> = {};
   const droppingAreasByLine = new Map<string, string[]>();
   let anySystemicDrop = false;
 
-  for (const [lineLabel, areasInLine] of areasByLine) {
+  for (const lineLabel of orderedLines) {
+    const areasInLine = areasByLine.get(lineLabel)!;
     const dropping = areasInLine.filter((a) => {
       const p = areaChanges[a].pctChange;
       return p !== null && p <= SYSTEMIC_DROP_THRESHOLD;
@@ -366,7 +389,8 @@ export function buildReport(records: SalesRecord[], year: number, targets: Targe
         d.pctChange >= -SYSTEMIC_DROP_THRESHOLD &&
         d.pctChange > 0,
     )
-    .map(([a]) => a);
+    .map(([a]) => a)
+    .sort((a, b) => a.localeCompare(b));
 
   const findings: Finding[] = [];
 
@@ -389,13 +413,17 @@ export function buildReport(records: SalesRecord[], year: number, targets: Targe
 
   // --- Rule 3: root cause, per line (line-wide if that line is
   // systemic, else per dropping area within it) ---
-  for (const [lineLabel, areasInLine] of areasByLine) {
+  for (const lineLabel of orderedLines) {
+    const areasInLine = areasByLine.get(lineLabel)!;
     const summary = lines[lineLabel];
     const dropping = droppingAreasByLine.get(lineLabel) ?? [];
 
     if (summary.isSystemicDrop) {
       const lineFamilies = familyTotalsFor(areasInLine, familyTotals, prev, latest);
-      const entries = Object.entries(lineFamilies);
+      // Sorted first so that two items losing exactly the same amount
+      // resolve to the same one every time, rather than to whichever was
+      // read first.
+      const entries = Object.entries(lineFamilies).sort((a, b) => a[0].localeCompare(b[0]));
       if (entries.length === 0) continue;
       const worstEntry = entries.reduce((best, entry) =>
         entry[1].absDrop > best[1].absDrop ? entry : best,
@@ -424,9 +452,9 @@ export function buildReport(records: SalesRecord[], year: number, targets: Targe
         const famChanges = areaFamilyChanges[area];
         if (!famChanges || Object.keys(famChanges).length === 0) continue;
 
-        const worst = Object.entries(famChanges).reduce((best, entry) =>
-          entry[1].absDrop > best[1].absDrop ? entry : best,
-        );
+        const worst = Object.entries(famChanges)
+          .sort((a, b) => a[0].localeCompare(b[0]))
+          .reduce((best, entry) => (entry[1].absDrop > best[1].absDrop ? entry : best));
 
         findings.push({
           type: "local_drop",
@@ -461,7 +489,9 @@ export function buildReport(records: SalesRecord[], year: number, targets: Targe
     const famData = familyTotals.get(area);
     if (!famData) continue;
 
-    for (const [fam, months] of famData) {
+    const orderedFamilies = Array.from(famData.keys()).sort((a, b) => a.localeCompare(b));
+    for (const fam of orderedFamilies) {
+      const months = famData.get(fam)!;
       if (months.has(latest) && months.has(prev)) {
         const change = pctChange(months.get(prev)!, months.get(latest)!);
         if (change && change > 10) {

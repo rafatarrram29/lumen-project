@@ -40,21 +40,19 @@ export default async function LumenPage() {
     // concurrently instead of one after another roughly halves this
     // part of the page's server-side latency.
     const [{ data }, { data: targetData }] = await Promise.all([
-      fetchAllRows((from, to) =>
+      fetchAllRows(() =>
         supabase
           .from("lumen_sales_records")
           .select("area, family, sales_value, sales_qty, month, line, rep")
           .eq("year", year)
-          .eq("dataset_id", initialDatasetId)
-          .range(from, to),
+          .eq("dataset_id", initialDatasetId),
       ),
-      fetchAllRows((from, to) =>
+      fetchAllRows(() =>
         supabase
           .from("lumen_targets")
           .select("area, rep, item, month, target_value")
           .eq("year", year)
-          .eq("dataset_id", initialDatasetId)
-          .range(from, to),
+          .eq("dataset_id", initialDatasetId),
       ),
     ]);
 
