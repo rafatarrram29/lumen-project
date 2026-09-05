@@ -17,29 +17,26 @@ import { colorForFamily } from "@/lib/lumen/familyColors";
 import Sidebar from "@/components/Sidebar";
 import { UploadWizardModal, type WizardChoice } from "./UploadWizardModal";
 import { UploadTargetsModal } from "./UploadTargetsModal";
-import { RepHistoryPanel } from "./RepHistoryPanel";
-import { repResponsibleInMonth } from "@/lib/lumen/repAssignments";
-import { buildOrgChart, knownReps, managerForRep } from "@/lib/lumen/orgStructure";
+import { buildOrgChart, knownReps } from "@/lib/lumen/orgStructure";
 import { AssignAreasModal } from "./AssignAreasModal";
 import { AssignManagersModal } from "./AssignManagersModal";
 import { ManagerCards } from "./ManagerCards";
 import { LinkedFilesPanel } from "./LinkedFilesPanel";
 import { AddLinkedFileModal } from "./AddLinkedFileModal";
-import { recordsForAreaMonth } from "@/lib/lumen/linkedFiles";
 import { CorrectionLogModal } from "./CorrectionLogModal";
 import { EditSalesMappingModal } from "./EditSalesMappingModal";
-import { EditableValue, EditableFieldValue } from "./EditableValue";
 import { UndoToast } from "./UndoToast";
 import { ExportModal, type ExportFormat } from "./ExportModal";
 import { buildExportItems } from "@/lib/lumen/exportItems";
 import { useLanguage } from "@/lib/i18n/LanguageProvider";
 import { findingSummary, findingDecision } from "@/lib/i18n/findingText";
-import type { Translations } from "@/lib/i18n/translations";
 import { AddImsFileModal } from "./AddImsFileModal";
 import { dedupeExactDuplicates } from "@/lib/lumen/duplicateCheck";
 import { imsGroupLabel } from "@/lib/lumen/imsLabels";
 import { GlobalSearch } from "./GlobalSearch";
 import { useLumenData } from "./useLumenData";
+import { areaCardId, itemCardId, repCardId, formatNumber, TargetChip } from "./dashboardBits";
+import { AreaDetail } from "./AreaDetail";
 import { UPLOAD_BATCH_SIZE, UNDO_WINDOW_MS, type UploadStatus } from "./uploadShared";
 import { useLinkedFileUploads } from "./useLinkedFileUploads";
 import { useImsFileUploads } from "./useImsFileUploads";
@@ -54,72 +51,11 @@ const ItemTrendChart = dynamic(() => import("./ItemTrendChart").then((m) => m.It
 // recharts into the eager bundle — quietly cancelling the two splits above.
 const ImsPanel = dynamic(() => import("./ImsPanel").then((m) => m.ImsPanel), { ssr: false });
 
-function areaCardId(area: string): string {
-  return `area-card-${encodeURIComponent(area)}`;
-}
-
-function itemCardId(item: string): string {
-  return `item-card-${encodeURIComponent(item)}`;
-}
-
-function repCardId(rep: string): string {
-  return `rep-card-${encodeURIComponent(rep)}`;
-}
-
-
 type LastEdit =
   | { kind: "sales"; area: string; family: string; month: number; oldValue: number; newValue: number }
   | { kind: "linked"; recordId: string; key: string; oldValue: unknown; newValue: unknown }
   | { kind: "rename"; field: "area" | "item"; oldValue: string; newValue: string }
   | { kind: "imsRename"; field: "area" | "product" | "company"; oldValue: string; newValue: string };
-
-function formatNumber(n: number): string {
-  return n.toLocaleString("en-US");
-}
-
-function Badge({ pctChange }: { pctChange: number | null }) {
-  if (pctChange === null) {
-    return (
-      <span className="rounded-full border border-bdr px-2.5 py-1 font-mono text-xs text-muted">
-        n/a
-      </span>
-    );
-  }
-  const positive = pctChange > 0;
-  return (
-    <span
-      className={`rounded-full border px-2.5 py-1 font-mono text-xs font-bold ${
-        positive ? "border-green/40 bg-green/20 text-green" : "border-red/40 bg-red/20 text-red"
-      }`}
-    >
-      {positive ? "+" : ""}
-      {pctChange}%
-    </span>
-  );
-}
-
-function TargetChip({
-  progress,
-  threshold,
-  t,
-}: {
-  progress: { targetValue: number; pctOfTarget: number | null } | undefined;
-  threshold: number;
-  t: Translations;
-}) {
-  if (!progress || progress.pctOfTarget === null) return null;
-  const under = progress.pctOfTarget < threshold;
-  return (
-    <span
-      className={`shrink-0 rounded-full border px-2 py-0.5 font-mono text-[10px] font-semibold ${
-        under ? "border-red/40 bg-red/20 text-red" : "border-green/40 bg-green/20 text-green"
-      }`}
-      title={under ? t.targets.underTarget : undefined}
-    >
-      {t.targets.ofTarget(progress.pctOfTarget)}
-    </span>
-  );
-}
 
 export default function LumenClient({
   userEmail,
@@ -1014,6 +950,45 @@ export default function LumenClient({
   const showsUnits = Boolean(report && !hasError && report.hasQuantity);
   const unitLabel = showsUnits ? t.units.units : t.units.value;
 
+  /**
+   * The full area card. The Sales list maps over this, and a district
+   * manager's drill-down calls it for whichever area was tapped — so the
+   * card a manager opens IS the Sales card, not a lighter copy of it.
+   */
+  function renderAreaDetail(area: string, anchored = false) {
+    if (!report || hasError) return null;
+    const d = report.areas[area];
+    // An area with no figures for this year — assigned to a rep, but
+    // nothing uploaded for it — has no card to show.
+    if (!d) return null;
+    return (
+      <AreaDetail
+        anchored={anchored}
+        area={area}
+        d={d}
+        report={report}
+        areaFindings={findingsByArea.get(area) ?? []}
+        isOpen={expanded.has(area)}
+        toggle={toggle}
+        expandedItems={expandedItems}
+        toggleItem={toggleItem}
+        renderItemDetail={renderItemDetail}
+        assignments={assignments}
+        managerLinks={managerLinks}
+        linkedFiles={linkedFiles}
+        linkedRecords={linkedRecords}
+        editedCells={editedCells}
+        targetThreshold={targetThreshold}
+        selectedDatasetId={selectedDatasetId}
+        year={year}
+        onAssignmentsChanged={() => selectedDatasetId && fetchAssignments(selectedDatasetId, year)}
+        handleRenameSalesField={handleRenameSalesField}
+        handleEditSalesCell={handleEditSalesCell}
+        handleEditLinkedField={handleEditLinkedField}
+      />
+    );
+  }
+
   // --- Org structure ---------------------------------------------------
   // Every area in the dataset, whether or not it has been assigned to
   // anyone yet, so the assign screen can offer the ones still uncovered.
@@ -1433,6 +1408,11 @@ export default function LumenClient({
               datasetId={selectedDatasetId}
               year={year}
               hasQuantity={report.hasQuantity}
+              renderAreaDetail={renderAreaDetail}
+              // Opening an area here expands it in the dashboard's own
+              // state, so the card that appears is the expanded card
+              // rather than its collapsed header row.
+              onAreaOpen={(area) => setExpanded((prev) => new Set(prev).add(area))}
             />
           )}
 
@@ -1587,270 +1567,12 @@ export default function LumenClient({
 
           <h2 className="mb-3 text-sm font-semibold text-white">{t.dashboard.allAreas}</h2>
           <div className="space-y-3">
-            {areas.map(([area, d]) => {
-              const areaFindings = findingsByArea.get(area) ?? [];
-              const isOpen = expanded.has(area);
-              const lineSummary = report.lines[d.line];
-              const areaLineSystemic = lineSummary?.isSystemicDrop ?? false;
-              const causeLine =
-                areaFindings.length > 0
-                  ? findingSummary(areaFindings[0], report, t)
-                  : areaLineSystemic && d.pctChange !== null && d.pctChange <= -15
-                    ? t.dashboard.partOfLineDrop
-                    : t.dashboard.noChangeThisMonth;
-
-              const lineSeries = lineSummary?.monthlySeries ?? [];
-              const lineLast = lineSeries[lineSeries.length - 1];
-              const linePrev = lineSeries[lineSeries.length - 2];
-              const linePct =
-                lineLast && linePrev && linePrev.avgValue !== 0
-                  ? Math.round(((lineLast.avgValue - linePrev.avgValue) / linePrev.avgValue) * 1000) / 10
-                  : null;
-
-              const areaAssignments = assignments.filter((a) => a.area === area);
-              const responsibleInLatest = repResponsibleInMonth(areaAssignments, area, report.latestMonth);
-
-              const linkedContext = linkedFiles
-                .map((f) => ({ file: f, records: recordsForAreaMonth(f, linkedRecords, area, report.latestMonth) }))
-                .filter((entry) => entry.records.length > 0);
-
-              return (
-                <div
-                  key={area}
-                  id={areaCardId(area)}
-                  className="scroll-mt-4 rounded-2xl border border-bdr bg-surf p-5 transition-colors"
-                >
-                  <div
-                    onClick={() => toggle(area)}
-                    role="button"
-                    tabIndex={0}
-                    onKeyDown={(e) => e.key === "Enter" && toggle(area)}
-                    className="flex w-full cursor-pointer items-center justify-between gap-3 text-start"
-                  >
-                    <div className="min-w-0">
-                      <div className="flex items-center gap-2">
-                        <EditableFieldValue
-                          value={area}
-                          className="truncate font-medium"
-                          title={t.inlineEdit.renameHint}
-                          onSave={(v) => handleRenameSalesField("area", area, v.trim())}
-                        />
-                        {report.hasLines && (
-                          <span className="shrink-0 rounded-full border border-bdr px-1.5 py-0.5 text-[10px] text-muted" dir="auto">
-                            {d.line}
-                          </span>
-                        )}
-                      </div>
-                      <div className="truncate text-xs text-muted">{causeLine}</div>
-                    </div>
-                    <div className="flex shrink-0 items-center gap-2">
-                      <TargetChip progress={report.areaTargets[area]} threshold={targetThreshold} t={t} />
-                      <Badge pctChange={d.pctChange} />
-                      <span className="text-xs text-muted">{isOpen ? t.common.hide : t.common.details}</span>
-                    </div>
-                  </div>
-
-                  {isOpen && (
-                    <div className="mt-4 space-y-5 border-t border-bdr pt-4 text-sm">
-                      <div>
-                        <p className="mb-2">
-                          {t.dashboard.valueLabel} {t.common.month(report.comparedToMonth)}:{" "}
-                          <span className="font-mono text-white">{formatNumber(d.prevValue)}</span> →{" "}
-                          {t.common.month(report.latestMonth)}:{" "}
-                          <span className="font-mono text-white">{formatNumber(d.currValue)}</span>.{" "}
-                          {t.dashboard.quantityLabel} {t.common.month(report.comparedToMonth)}:{" "}
-                          <span className="font-mono text-white">{formatNumber(d.prevQty)}</span> →{" "}
-                          {t.common.month(report.latestMonth)}:{" "}
-                          <span className="font-mono text-white">{formatNumber(d.currQty)}</span>.
-                        </p>
-                        {report.areaTargets[area] &&
-                          report.areaTargets[area].pctOfTarget !== null &&
-                          report.areaTargets[area].pctOfTarget! < targetThreshold && (
-                            <p className="mb-2 rounded-lg bg-red/10 px-3 py-2 text-xs font-semibold text-red">
-                              {t.targets.underTargetBy(Math.round((100 - report.areaTargets[area].pctOfTarget!) * 10) / 10)}
-                            </p>
-                          )}
-                        {linePct !== null && (
-                          <p className="mb-2 text-xs text-muted">
-                            {t.dashboard.areaMovedVs(
-                              d.pctChange ?? 0,
-                              report.hasLines ? d.line : t.dashboard.lineWord,
-                              linePct,
-                            )}
-                          </p>
-                        )}
-                        {responsibleInLatest && (
-                          <p className="mb-2 text-xs text-muted" dir="auto">
-                            {t.repHistory.responsibleInMonth(
-                              t.common.month(report.latestMonth),
-                              responsibleInLatest.rep ?? t.repHistory.vacant,
-                            )}
-                            {/* The manager above them, but only when an org
-                                structure has actually been defined — with
-                                none, this line reads exactly as before. */}
-                            {managerForRep(managerLinks, responsibleInLatest.rep) && (
-                              <span className="ms-2 text-amber">
-                                {t.org.managerOf(managerForRep(managerLinks, responsibleInLatest.rep)!)}
-                              </span>
-                            )}
-                          </p>
-                        )}
-                        <table className="w-full text-start">
-                          <tbody>
-                            <tr className="text-muted">
-                              <td className="py-1 pe-4">{t.dashboard.decliningStreak}</td>
-                              <td className="py-1 text-white">{d.decliningStreak ? t.dashboard.yes : t.dashboard.no}</td>
-                            </tr>
-                          </tbody>
-                        </table>
-                      </div>
-
-                      {d.monthlySeries.length >= 2 && (
-                        <div>
-                          <div className="mb-2 text-xs font-semibold text-white">
-                            {t.dashboard.trendLastMonths(d.monthlySeries.length)}
-                          </div>
-                          <TrendChart
-                            areaLabel={area}
-                            areaSeries={d.monthlySeries}
-                            lineSeries={lineSeries}
-                          />
-                        </div>
-                      )}
-
-                      {(() => {
-                        const familyEntries = Object.entries(report.areaFamilyChanges[area] ?? {}).sort(
-                          (a, b) => b[1].absDrop - a[1].absDrop,
-                        );
-                        if (familyEntries.length === 0) return null;
-                        return (
-                        <div>
-                          <div className="mb-2 text-xs font-semibold text-white">{t.dashboard.byItem}</div>
-                          <div className="space-y-2">
-                            {familyEntries.map(([fam, fc]) => {
-                              const itemOpen = expandedItems.has(fam);
-
-                              return (
-                              <div key={fam} className="text-xs">
-                                <div
-                                  onClick={() => toggleItem(fam)}
-                                  role="button"
-                                  tabIndex={0}
-                                  onKeyDown={(e) => e.key === "Enter" && toggleItem(fam)}
-                                  className="flex w-full cursor-pointer items-center gap-2 rounded-lg text-start transition-colors hover:bg-surf2/60"
-                                >
-                                  <span
-                                    className="h-2 w-2 shrink-0 rounded-full"
-                                    style={{ backgroundColor: colorForFamily(fam) }}
-                                  />
-                                  <EditableFieldValue
-                                    value={fam}
-                                    className="min-w-0 flex-1 truncate text-muted"
-                                    title={t.inlineEdit.renameHint}
-                                    onSave={(v) => handleRenameSalesField("item", fam, v.trim())}
-                                  />
-                                  <span
-                                    className={`shrink-0 font-mono ${
-                                      fc.pctChange !== null && fc.pctChange < 0 ? "text-red" : "text-green"
-                                    }`}
-                                  >
-                                    {fc.pctChange !== null && fc.pctChange > 0 ? "+" : ""}
-                                    {fc.pctChange ?? "—"}
-                                    {fc.pctChange !== null ? "%" : ""}
-                                  </span>
-                                  <span className="shrink-0 text-[10px] text-muted">{itemOpen ? t.common.hide : t.common.details}</span>
-                                </div>
-                                <div className="ps-4 font-mono text-[11px] break-words text-muted">
-                                  {t.common.month(report.comparedToMonth)}:{" "}
-                                  <EditableValue
-                                    value={fc.prevValue}
-                                    formatted={formatNumber(fc.prevValue)}
-                                    edited={editedCells.get(JSON.stringify([area, fam, report.comparedToMonth]))}
-                                    onSave={(v) => handleEditSalesCell(area, fam, report.comparedToMonth, v)}
-                                  />{" "}
-                                  →{" "}
-                                  {t.common.month(report.latestMonth)}:{" "}
-                                  <EditableValue
-                                    value={fc.currValue}
-                                    formatted={formatNumber(fc.currValue)}
-                                    edited={editedCells.get(JSON.stringify([area, fam, report.latestMonth]))}
-                                    onSave={(v) => handleEditSalesCell(area, fam, report.latestMonth, v)}
-                                  />
-                                </div>
-
-                                {itemOpen && renderItemDetail(fam)}
-                              </div>
-                              );
-                            })}
-                          </div>
-                        </div>
-                        );
-                      })()}
-
-                      <RepHistoryPanel
-                        area={area}
-                        datasetId={selectedDatasetId!}
-                        year={year}
-                        assignments={areaAssignments}
-                        onChanged={() => selectedDatasetId && fetchAssignments(selectedDatasetId, year)}
-                      />
-
-                      {linkedContext.length > 0 && (
-                        <div>
-                          <div className="mb-2 text-xs font-semibold text-white">{t.linkedFiles.linkedContextTitle}</div>
-                          <div className="space-y-2">
-                            {linkedContext.map(({ file, records }) => (
-                              <div key={file.id} className="rounded-lg bg-surf2/60 p-3 text-xs">
-                                <div className="mb-1 flex items-center gap-1.5">
-                                  <span className="shrink-0 rounded-full border border-bdr px-1.5 py-0.5 text-[10px] text-muted">
-                                    {{ achievement: t.linkedFiles.typeAchievement, kpis: t.linkedFiles.typeKpis, other: t.linkedFiles.typeOther }[file.fileType]}
-                                  </span>
-                                  <span className="font-semibold text-white" dir="auto">{file.displayName}</span>
-                                </div>
-                                {records.map((r) => (
-                                  <div key={r.id} className="ps-1 text-muted">
-                                    {Object.entries(r.data).map(([k, v]) => (
-                                      <div key={k} dir="auto">
-                                        <span className="text-white">{k}:</span>{" "}
-                                        <EditableFieldValue
-                                          value={v}
-                                          edited={r.isEdited && r.editedAt ? { editedBy: r.editedBy, editedAt: r.editedAt } : undefined}
-                                          onSave={(newValue) => handleEditLinkedField(r.id, k, newValue)}
-                                        />
-                                      </div>
-                                    ))}
-                                  </div>
-                                ))}
-                              </div>
-                            ))}
-                          </div>
-                        </div>
-                      )}
-
-                      {areaFindings.map((f, i) => (
-                        <div key={i} className="break-words rounded-lg bg-surf2 px-3 py-2.5">
-                          <p className="mb-1.5">{findingSummary(f, report, t)}</p>
-                          {"rootCauseFamily" in f && (
-                            <p className="mb-1.5 text-xs text-muted">
-                              {t.dashboard.rootCauseItem}{" "}
-                              <span className="font-semibold" style={{ color: colorForFamily(f.rootCauseFamily) }}>
-                                {f.rootCauseFamily}
-                              </span>
-                              {" · "}
-                              {f.rootCauseDetail.pctChange}% ({t.dashboard.valueDrop(formatNumber(f.rootCauseDetail.absDrop))})
-                            </p>
-                          )}
-                          <p className="text-xs">
-                            <span className="font-semibold text-amber">{t.dashboard.decision} </span>
-                            {findingDecision(f, t)}
-                          </p>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                </div>
-              );
-            })}
+            {/* The one area card, shared with the district-manager
+                drill-down — see AreaDetail.tsx. */}
+            {areas.map(([area]) => (
+              // The canonical card: this is the one global search scrolls to.
+              <div key={area}>{renderAreaDetail(area, true)}</div>
+            ))}
           </div>
         </div>
       )}

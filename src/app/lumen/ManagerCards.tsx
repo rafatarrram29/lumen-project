@@ -16,6 +16,7 @@ import { useLanguage } from "@/lib/i18n/LanguageProvider";
 import type { MonthPoint } from "@/lib/lumen/engine";
 import { areasUnderManager, type OrgManager } from "@/lib/lumen/orgStructure";
 import { ItemTrendChart } from "./ItemTrendChart";
+import type { ReactNode } from "react";
 
 type ItemSeries = Record<string, MonthPoint[]>;
 
@@ -28,12 +29,32 @@ export function ManagerCards({
   datasetId,
   year,
   hasQuantity,
+  renderAreaDetail,
+  onAreaOpen,
 }: {
   managers: OrgManager[];
   datasetId: string;
   year: number;
   /** From the report — whether the dataset carries real quantities. */
   hasQuantity: boolean;
+  /**
+   * The full area card, rendered by its one owner (AreaDetail, via
+   * LumenClient) and dropped in here.
+   *
+   * Passed in rather than imported and assembled locally so that the area
+   * a manager opens is literally the card the Sales tab shows — same
+   * component, same props, same inline editing and rep history — instead
+   * of a lighter copy that drifts from it. Returns null for an area the
+   * report has no figures for.
+   */
+  renderAreaDetail: (area: string) => ReactNode;
+  /**
+   * Called when an area is opened here, so the dashboard can expand that
+   * area in its own state. The card reads its expanded/collapsed state
+   * from one place; without this it would render collapsed and the
+   * drill-down would show a summary row instead of the card.
+   */
+  onAreaOpen: (area: string) => void;
 }) {
   const { t } = useLanguage();
   const [openManager, setOpenManager] = useState<string | null>(null);
@@ -77,7 +98,14 @@ export function ManagerCards({
 
               {open && (
                 <div className="border-t border-bdr px-4 py-3">
-                  <TeamDetail manager={manager} datasetId={datasetId} year={year} hasQuantity={hasQuantity} />
+                  <TeamDetail
+                    manager={manager}
+                    datasetId={datasetId}
+                    year={year}
+                    hasQuantity={hasQuantity}
+                    renderAreaDetail={renderAreaDetail}
+                    onAreaOpen={onAreaOpen}
+                  />
                 </div>
               )}
             </div>
@@ -93,13 +121,21 @@ function TeamDetail({
   datasetId,
   year,
   hasQuantity,
+  renderAreaDetail,
+  onAreaOpen,
 }: {
   manager: OrgManager;
   datasetId: string;
   year: number;
   hasQuantity: boolean;
+  renderAreaDetail: (area: string) => ReactNode;
+  onAreaOpen: (area: string) => void;
 }) {
   const { t } = useLanguage();
+  // Which area's full card is open under this manager. One at a time: the
+  // card is tall, and two of them open at once buries the team it belongs
+  // to.
+  const [openArea, setOpenArea] = useState<string | null>(null);
   const areas = areasUnderManager(manager);
   // Identifies the request, so a slow answer for one manager cannot land in
   // another manager's card after the user has moved on — the result is only
@@ -155,31 +191,53 @@ function TeamDetail({
             <p className="text-xs text-muted">{t.org.noAreasForRep}</p>
           ) : (
             <div className="space-y-1">
-              {rep.areas.map((area) => (
-                <div key={area.area} className="flex items-center justify-between gap-3 text-xs">
-                  <div className="min-w-0">
-                    <span className={`truncate ${area.currentlyHeld ? "text-white" : "text-muted"}`} dir="auto">
-                      {area.area}
-                    </span>
-                    <span className="ms-2 text-muted">{t.org.coversMonths(area.months.join(", "))}</span>
-                    {/* An area handed over mid-year still belongs in the
-                        rep's history, but its latest-month figure is
-                        somebody else's — say so rather than letting the
-                        number look like it counts. */}
-                    {!area.currentlyHeld && <span className="ms-2 text-[10px] text-muted">{t.org.pastCoverage}</span>}
-                  </div>
-                  <div className={`shrink-0 font-mono ${area.currentlyHeld ? "text-muted" : "text-muted/50"}`}>
-                    {area.currValue !== null ? formatNumber(area.currValue) : "—"}
-                    {area.pctChange !== null && (
-                      <span className={area.pctChange < 0 ? " text-red" : " text-green"}>
-                        {" "}
-                        {area.pctChange > 0 ? "+" : ""}
-                        {area.pctChange}%
-                      </span>
+              {rep.areas.map((area) => {
+                const areaOpen = openArea === area.area;
+                return (
+                  <div key={area.area}>
+                    <button
+                      type="button"
+                      data-testid="manager-area-row"
+                      onClick={() => {
+                        setOpenArea(areaOpen ? null : area.area);
+                        if (!areaOpen) onAreaOpen(area.area);
+                      }}
+                      className="flex w-full items-center justify-between gap-3 rounded-lg px-1.5 py-1 text-start text-xs transition-colors hover:bg-surf2"
+                    >
+                      <div className="min-w-0">
+                        <span className={`truncate ${area.currentlyHeld ? "text-white" : "text-muted"}`} dir="auto">
+                          {area.area}
+                        </span>
+                        <span className="ms-2 text-muted">{t.org.coversMonths(area.months.join(", "))}</span>
+                        {/* An area handed over mid-year still belongs in the
+                            rep's history, but its latest-month figure is
+                            somebody else's — say so rather than letting the
+                            number look like it counts. */}
+                        {!area.currentlyHeld && <span className="ms-2 text-[10px] text-muted">{t.org.pastCoverage}</span>}
+                      </div>
+                      <div className={`shrink-0 font-mono ${area.currentlyHeld ? "text-muted" : "text-muted/50"}`}>
+                        {area.currValue !== null ? formatNumber(area.currValue) : "—"}
+                        {area.pctChange !== null && (
+                          <span className={area.pctChange < 0 ? " text-red" : " text-green"}>
+                            {" "}
+                            {area.pctChange > 0 ? "+" : ""}
+                            {area.pctChange}%
+                          </span>
+                        )}
+                      </div>
+                    </button>
+
+                    {/* The real thing: the same card the Sales tab renders,
+                        with its trend, per-item breakdown, rep history and
+                        inline editing — not a summary of it. */}
+                    {areaOpen && (
+                      <div data-testid="manager-area-detail" className="mt-2">
+                        {renderAreaDetail(area.area)}
+                      </div>
                     )}
                   </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
           )}
         </div>
