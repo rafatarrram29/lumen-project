@@ -3,15 +3,30 @@
 import { useEffect, useState } from "react";
 import { useLanguage } from "@/lib/i18n/LanguageProvider";
 
+/**
+ * The one stat tile in the app.
+ *
+ * Sales and Market Insights each used to have their own — same shell, but
+ * different label typography, a different value font, and an entrance
+ * animation on one and not the other, so the two halves of the dashboard
+ * visibly did not match. `subtitle` and `accent` are what the IMS version
+ * needed on top; everything else is now shared, which is what makes the
+ * two sections read as one product.
+ */
 export function StatTile({
   label,
   value,
+  subtitle,
   tone = "default",
+  accent,
   delayMs = 0,
 }: {
   label: string;
   value: string;
+  subtitle?: string;
   tone?: "default" | "red" | "amber" | "green";
+  /** A CSS colour for the leading edge — used to key a tile to a series. */
+  accent?: string;
   delayMs?: number;
 }) {
   const [mounted, setMounted] = useState(false);
@@ -40,10 +55,12 @@ export function StatTile({
         opacity: mounted ? 1 : 0,
         transform: mounted ? "translateY(0)" : "translateY(6px)",
         transitionDelay: `${delayMs}ms`,
+        ...(accent ? { borderInlineStartWidth: 3, borderInlineStartColor: accent } : {}),
       }}
     >
       <div className="mb-1 text-xs text-muted">{label}</div>
       <div className={`break-words font-mono font-semibold leading-tight ${sizeClass} ${toneClass}`}>{value}</div>
+      {subtitle && <div className="mt-0.5 break-words text-[11px] text-muted">{subtitle}</div>}
     </div>
   );
 }

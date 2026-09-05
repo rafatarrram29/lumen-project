@@ -6,6 +6,7 @@ import type { ImsColumnMapping } from "@/lib/lumen/imsMapping";
 import { useLanguage } from "@/lib/i18n/LanguageProvider";
 import type { Translations } from "@/lib/i18n/translations";
 import { ImsTrendChart } from "./ImsTrendChart";
+import { StatTile } from "./charts";
 import { EditableFieldValue } from "./EditableValue";
 
 export type ImsFile = {
@@ -66,16 +67,6 @@ function FindingCard({ finding, t }: { finding: ImsFinding; t: Translations }) {
       <p className="break-words" dir="auto">
         {text}
       </p>
-    </div>
-  );
-}
-
-function MetricCard({ label, value, subtitle, accent }: { label: string; value: string; subtitle: string; accent: string }) {
-  return (
-    <div className="rounded-xl border border-bdr bg-surf p-3.5" style={{ borderInlineStartWidth: 3, borderInlineStartColor: accent }}>
-      <div className="mb-1 text-[11px] uppercase tracking-wide text-muted">{label}</div>
-      <div className="text-xl font-semibold text-white">{value}</div>
-      <div className="mt-0.5 text-[11px] text-muted">{subtitle}</div>
     </div>
   );
 }
@@ -252,29 +243,33 @@ export function ImsPanel({
           </div>
 
           <div className="mb-5 grid grid-cols-2 gap-3">
-            <MetricCard
+            <StatTile
               label={t.ims.ytdMarketShare}
               value={formatShare(selected.latestShare)}
               subtitle={selected.rank !== null ? t.ims.rankInCategory(selected.rank, selected.totalInGroup) : t.ims.notAvailable}
               accent="var(--red)"
+              delayMs={0}
             />
-            <MetricCard
+            <StatTile
               label={t.ims.ourGrowth}
               value={formatSignedPct(selected.ourGrowthRate)}
               subtitle={t.ims.ourGrowthSubtitle}
               accent="var(--amber)"
+              delayMs={60}
             />
-            <MetricCard
+            <StatTile
               label={t.ims.marketGrowthLabel}
               value={formatSignedPct(selected.marketGrowthRate)}
               subtitle={t.ims.marketGrowthSubtitle}
               accent="var(--cyan)"
+              delayMs={120}
             />
-            <MetricCard
+            <StatTile
               label={t.ims.shareGainLossLabel}
               value={formatPoints(selected.pctPointChange)}
               subtitle={t.ims.shareGainLossSubtitle}
               accent="var(--red)"
+              delayMs={180}
             />
           </div>
 

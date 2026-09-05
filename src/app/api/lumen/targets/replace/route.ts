@@ -1,20 +1,14 @@
 import { NextResponse } from "next/server";
-import { createClient } from "@/lib/supabase/server";
+import { requireUser } from "@/lib/lumen/requireUser";
 
 // A targets file represents the current plan, not a history of edits, so
 // uploading a new one wholesale replaces every existing target row for
 // that dataset+year rather than asking about per-month overlap like the
 // sales upload does.
 export async function POST(request: Request) {
-  const supabase = await createClient();
-
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-
-  if (!user) {
-    return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
-  }
+  const auth = await requireUser();
+  if (auth.response) return auth.response;
+  const { supabase } = auth;
 
   const body = await request.json().catch(() => null);
   const year = Number(body?.year);

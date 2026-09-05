@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { createClient } from "@/lib/supabase/server";
+import { requireUser } from "@/lib/lumen/requireUser";
 import { dedupeExactDuplicates, POSTGRES_UNIQUE_VIOLATION } from "@/lib/lumen/duplicateCheck";
 
 const MAX_ROWS_PER_REQUEST = 5000;
@@ -17,15 +17,9 @@ type IncomingRow = {
 // (mirrors the dataset-create -> upload-rows split used for the primary
 // sales file and for linked files).
 export async function POST(request: Request, { params }: { params: Promise<{ id: string }> }) {
-  const supabase = await createClient();
-
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-
-  if (!user) {
-    return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
-  }
+  const auth = await requireUser();
+  if (auth.response) return auth.response;
+  const { supabase, user } = auth;
 
   const { id: fileId } = await params;
   if (!fileId) {

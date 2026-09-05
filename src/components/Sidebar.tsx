@@ -3,6 +3,7 @@
 import Link from "next/link";
 import type { ReactNode } from "react";
 import { createClient } from "@/lib/supabase/client";
+import { clearAppCache } from "@/lib/clearAppCache";
 import { useLanguage } from "@/lib/i18n/LanguageProvider";
 import { useInstall } from "./InstallPrompt";
 import LanguageToggle from "./LanguageToggle";
@@ -21,6 +22,9 @@ export default function Sidebar({
   async function handleLogout() {
     const supabase = createClient();
     await supabase.auth.signOut();
+    // Drop the offline cache too — it holds this user's dashboard pages,
+    // which must not outlive their session on a shared device.
+    await clearAppCache();
     window.location.href = "/login";
   }
 

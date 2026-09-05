@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { createClient } from "@/lib/supabase/server";
+import { requireUser } from "@/lib/lumen/requireUser";
 
 // Inline-edits a single field inside one linked-file row's `data` blob
 // (Achievement, KPIs, or any other linked file type). Linked files are a
@@ -8,15 +8,9 @@ import { createClient } from "@/lib/supabase/server";
 // nothing else to recompute; the edited value just needs to persist and
 // be flagged as edited.
 export async function PATCH(request: Request, { params }: { params: Promise<{ id: string }> }) {
-  const supabase = await createClient();
-
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-
-  if (!user) {
-    return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
-  }
+  const auth = await requireUser();
+  if (auth.response) return auth.response;
+  const { supabase, user } = auth;
 
   const { id } = await params;
   if (!id) {
