@@ -111,9 +111,18 @@ design reference only — it is not part of the running app.
     and adds the machinery for restricting sign-up to your own email
     domains — see **Restricting who can sign up** below. It only ever
     removes permissions, never rows, and is safe to run twice.
-19. Open **Settings -> API** and copy the **Project URL** and the **anon
+19. Then run `supabase/lumen_aggregates_migration.sql`. **Run this one too,
+    especially if your data is large or growing.** It adds a function that
+    sums each dataset into per-area/item/month totals inside the database,
+    so loading the dashboard transfers one row per (area, item, month,
+    line, rep) instead of one row per transaction. It creates a function
+    and an index — it reads no data, writes no data, and is safe to run
+    twice. The app works without it (it falls back to reading the raw
+    rows), it is just slower, and the gap widens as the data grows. See
+    **Why the aggregate matters** below.
+20. Open **Settings -> API** and copy the **Project URL** and the **anon
    public** key.
-20. Open **Authentication -> Sign In / Providers** and make sure **Email**
+21. Open **Authentication -> Sign In / Providers** and make sure **Email**
    is enabled (it is by default). For local development, under
    **Authentication -> URL Configuration**, you can leave the defaults —
    we'll add your real domain there once deployed.
@@ -427,6 +436,56 @@ per browser and applied instantly on the next visit, before the page even
 paints (no flash of the wrong theme). Every interactive element — charts,
 tables, badges, the Export/Undo buttons — reads from the same theme tokens,
 so both modes stay fully legible everywhere, in either language.
+
+## Why the aggregate matters
+
+Building the dashboard means summing sales into totals per area, per item,
+per rep, per month. That summing has to happen somewhere. It used to happen
+in the app, which meant every raw sales row travelled from the database to
+the server on every single page load — measured at roughly 152 bytes per
+row on the wire, so a few hundred thousand rows is tens of megabytes, every
+load.
+
+`lumen_sales_aggregate()` (step 19) does the summing in Postgres instead.
+What comes back is one row per **(area, item, month, line, rep)** rather
+than one row per transaction.
+
+The difference is not a constant factor, it is a change in what the cost
+depends on:
+
+- **Before:** the load grows with the number of *transactions*. Twelve
+  months of invoices for the same twelve products cost twelve times as
+  much to open as one month.
+- **After:** the load grows with the *shape of the business* — how many
+  areas, items and months there are. Selling more of the same things, to
+  more customers, costs nothing extra to display.
+
+That is the property that matters when Lumen goes from one line to a whole
+company: the number of areas and products grows slowly and predictably,
+while the number of transactions does not.
+
+Measured on a local Postgres, with a fixed business shape (40 areas x 120
+items x 12 months) and only the number of transaction rows behind each
+combination varying:
+
+| transaction rows per combination | rows read before | rows read after | less data |
+| --- | --- | --- | --- |
+| 1   |    57,600 |  57,600 |  1x |
+| 5   |   288,000 |  57,600 |  5x |
+| 20  | 1,152,000 |  57,600 | 20x |
+
+The right-hand column never moves. That is the whole point: the cost of
+opening the dashboard is now fixed by how many areas, items and months you
+have, not by how much you sold.
+
+On a smaller dataset (8 areas x 12 items x 6 months, 40 rows per
+combination) the same change turned 23,040 rows — 3.6 MB of JSON — into
+1,152 rows, 183 KB.
+
+The numbers on screen are identical either way. The function only groups
+and sums what the app was about to group and sum anyway, and it runs as the
+calling user (`SECURITY INVOKER`), so row-level security still decides
+which datasets anyone can see.
 
 ## Restricting who can sign up (optional)
 

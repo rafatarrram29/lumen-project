@@ -3,6 +3,7 @@ import { requireUser } from "@/lib/lumen/requireUser";
 import { buildImsReport, type ImsRecord } from "@/lib/lumen/imsEngine";
 import { buildReport, type SalesRecord } from "@/lib/lumen/engine";
 import { fetchAllRows } from "@/lib/lumen/fetchAllRows";
+import { readSalesRows } from "@/lib/lumen/loadReport";
 
 export async function GET(request: Request) {
   const auth = await requireUser();
@@ -36,13 +37,10 @@ export async function GET(request: Request) {
       .select("own_company, created_at")
       .eq("dataset_id", datasetId)
       .order("created_at", { ascending: false }),
-    fetchAllRows(() =>
-      supabase
-        .from("lumen_sales_records")
-        .select("area, family, sales_value, sales_qty, month, line, rep")
-        .eq("year", year)
-        .eq("dataset_id", datasetId),
-    ),
+    // The same database-side aggregate the sales dashboard reads through —
+    // this route needs the identical totals, and reading raw transaction
+    // rows here would reintroduce exactly the payload this replaced.
+    readSalesRows(supabase, datasetId, year),
   ]);
 
   if (imsError) {

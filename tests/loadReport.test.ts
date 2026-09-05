@@ -25,10 +25,34 @@ function sorted(rows: AnyRow[], ordering: { column: string; ascending: boolean }
   });
 }
 
-function fakeSupabase(tables: Record<string, AnyRow[]>, opts: { failTable?: string } = {}) {
+function fakeSupabase(
+  tables: Record<string, AnyRow[]>,
+  opts: { failTable?: string; rpc?: AnyRow[]; rpcError?: string } = {},
+) {
   const queries: { table: string; columns: string; filters: Record<string, unknown> }[] = [];
+  const rpcCalls: { fn: string; args: AnyRow }[] = [];
 
   const client = {
+    // The database-side aggregate. Absent `opts.rpc`/`opts.rpcError` it
+    // behaves like a project where the migration has not been run.
+    rpc(fn: string, args: AnyRow) {
+      rpcCalls.push({ fn, args });
+      let ordering: { column: string; ascending: boolean } | null = null;
+      const builder = {
+        order(column: string, options: { ascending: boolean }) {
+          ordering = { column, ascending: options.ascending };
+          return builder;
+        },
+        range(from: number, to: number) {
+          const message =
+            opts.rpcError ??
+            (opts.rpc ? null : `Could not find the function public.${fn} in the schema cache`);
+          if (message) return Promise.resolve({ data: null, error: { message } });
+          return Promise.resolve({ data: sorted(opts.rpc ?? [], ordering).slice(from, to + 1), error: null });
+        },
+      };
+      return builder;
+    },
     from(table: string) {
       const filters: Record<string, unknown> = {};
       let columns = "";
@@ -66,7 +90,7 @@ function fakeSupabase(tables: Record<string, AnyRow[]>, opts: { failTable?: stri
     },
   };
 
-  return { client, queries };
+  return { client, queries, rpcCalls };
 }
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -256,5 +280,88 @@ describe("latestYearWithData", () => {
     const year = await latestYearWithData(asClient(client), "ds-1");
     assert.notEqual(year, new Date().getFullYear() + 1);
     assert.equal(year, 2025);
+  });
+});
+
+describe("loadReport reads through the database-side aggregate", () => {
+  const aggregated = [
+    salesRow({ area: "A", family: "X", month: 1, sales_value: 1000 }),
+    salesRow({
+      area: "A", family: "X", month: 2, sales_value: 700,
+      is_edited: true, edited_at: "2026-02-02T00:00:00.000Z", edited_by: "sara@example.com",
+    }),
+    salesRow({ area: "B", family: "X", month: 1, sales_value: 1000 }),
+    salesRow({ area: "B", family: "X", month: 2, sales_value: 700 }),
+  ].map((r, i) => ({ ...r, id: i + 1 }));
+
+  test("calls the aggregate with the dataset and year, and never touches the raw table", async () => {
+    const { client, queries, rpcCalls } = fakeSupabase({ lumen_targets: [] }, { rpc: aggregated });
+    const { payload, error } = await loadReport(asClient(client), "ds-1", 2026);
+
+    assert.equal(error, null);
+    assert.deepEqual(rpcCalls[0], {
+      fn: "lumen_sales_aggregate",
+      args: { p_dataset_id: "ds-1", p_year: 2026 },
+    });
+    assert.equal(queries.find((q) => q.table === "lumen_sales_records"), undefined);
+    assert.ok(payload && !("error" in payload));
+    assert.equal((payload as { areas: Record<string, unknown> }).areas.A !== undefined, true);
+  });
+
+  test("the edit markers survive the aggregate path", async () => {
+    const { client } = fakeSupabase({ lumen_targets: [] }, { rpc: aggregated });
+    const { payload } = await loadReport(asClient(client), "ds-1", 2026);
+    assert.deepEqual(payload!.editedCells.map((c) => c.key), [JSON.stringify(["A", "X", 2])]);
+  });
+
+  test("a project without the migration falls back to the raw rows", async () => {
+    // The aggregate is missing, so this must still produce a report — the
+    // old path, same output, just slower.
+    const { client, queries, rpcCalls } = fakeSupabase({ lumen_sales_records: aggregated, lumen_targets: [] });
+    const { payload, error } = await loadReport(asClient(client), "ds-1", 2026);
+
+    assert.equal(error, null);
+    assert.equal(rpcCalls.length > 0, true, "should have tried the aggregate first");
+    const salesQuery = queries.find((q) => q.table === "lumen_sales_records");
+    assert.ok(salesQuery, "did not fall back to the raw table");
+    for (const column of ["is_edited", "edited_at", "edited_by"]) {
+      assert.ok(salesQuery!.columns.includes(column), `fallback missing ${column}`);
+    }
+    assert.ok(payload && !("error" in payload));
+  });
+
+  test("the fallback produces the same report the aggregate does", async () => {
+    const viaAggregate = await loadReport(
+      asClient(fakeSupabase({ lumen_targets: [] }, { rpc: aggregated }).client),
+      "ds-1",
+      2026,
+    );
+    const viaRaw = await loadReport(
+      asClient(fakeSupabase({ lumen_sales_records: aggregated, lumen_targets: [] }).client),
+      "ds-1",
+      2026,
+    );
+    assert.deepEqual(viaRaw.payload, viaAggregate.payload);
+  });
+
+  test("a broken aggregate degrades to the raw path rather than failing the page", async () => {
+    const { client, queries } = fakeSupabase(
+      { lumen_sales_records: aggregated, lumen_targets: [] },
+      { rpcError: "permission denied for function lumen_sales_aggregate" },
+    );
+    const { payload, error } = await loadReport(asClient(client), "ds-1", 2026);
+    assert.equal(error, null);
+    assert.ok(queries.some((q) => q.table === "lumen_sales_records"));
+    assert.ok(payload);
+  });
+
+  test("if BOTH paths fail, the error is reported rather than shown as an empty dataset", async () => {
+    const { client } = fakeSupabase(
+      { lumen_sales_records: aggregated, lumen_targets: [] },
+      { rpcError: "aggregate is down", failTable: "lumen_sales_records" },
+    );
+    const { payload, error } = await loadReport(asClient(client), "ds-1", 2026);
+    assert.equal(payload, null);
+    assert.equal(error, "lumen_sales_records is down");
   });
 });
