@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useLanguage } from "@/lib/i18n/LanguageProvider";
 
-type SearchGroup = "area" | "item" | "rep";
+type SearchGroup = "area" | "item" | "rep" | "market";
 
 function rankedMatches(list: string[], query: string): string[] {
   const q = query.toLowerCase();
@@ -18,19 +18,28 @@ function rankedMatches(list: string[], query: string): string[] {
 }
 
 // Fixed at the top of the dashboard regardless of which tab (Sales/IMS) is
-// active, so a manager can jump straight to an area/item/rep's detail
-// instead of scrolling through the lists by hand. Search runs against the
-// current Sales report's entity names only — reps and the item/area detail
-// views it jumps to only exist there.
+// active, so a manager can jump straight to an entity's detail instead of
+// scrolling the lists by hand. It covers both tabs: picking a Market
+// Insights group switches to that tab and opens on it, the same way
+// picking an area opens its Sales breakdown.
 export function GlobalSearch({
   areas,
   items,
   reps,
+  marketGroups = [],
+  onFocus,
   onSelect,
 }: {
   areas: string[];
   items: string[];
   reps: string[];
+  marketGroups?: string[];
+  /**
+   * Market Insights is no longer fetched on page load, so starting a
+   * search is the cue to go and get it — otherwise its groups would be
+   * searchable only after visiting that tab once.
+   */
+  onFocus?: () => void;
   onSelect: (group: SearchGroup, name: string) => void;
 }) {
   const { t } = useLanguage();
@@ -50,7 +59,8 @@ export function GlobalSearch({
   const areaMatches = trimmed ? rankedMatches(areas, trimmed) : [];
   const itemMatches = trimmed ? rankedMatches(items, trimmed) : [];
   const repMatches = trimmed ? rankedMatches(reps, trimmed) : [];
-  const totalMatches = areaMatches.length + itemMatches.length + repMatches.length;
+  const marketMatches = trimmed ? rankedMatches(marketGroups, trimmed) : [];
+  const totalMatches = areaMatches.length + itemMatches.length + repMatches.length + marketMatches.length;
   const showDropdown = open && trimmed !== "";
 
   function pick(group: SearchGroup, name: string) {
@@ -69,7 +79,10 @@ export function GlobalSearch({
             setQuery(e.target.value);
             setOpen(true);
           }}
-          onFocus={() => setOpen(true)}
+          onFocus={() => {
+            setOpen(true);
+            onFocus?.();
+          }}
           onKeyDown={(e) => e.key === "Escape" && setOpen(false)}
           placeholder={t.search.placeholder}
           aria-label={t.search.placeholder}
@@ -90,6 +103,9 @@ export function GlobalSearch({
                 )}
                 {repMatches.length > 0 && (
                   <SearchGroupList label={t.search.repsGroup} names={repMatches} onPick={(n) => pick("rep", n)} />
+                )}
+                {marketMatches.length > 0 && (
+                  <SearchGroupList label={t.search.marketGroup} names={marketMatches} onPick={(n) => pick("market", n)} />
                 )}
               </>
             )}

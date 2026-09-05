@@ -37,6 +37,7 @@ import { AddImsFileModal, type ImsFileSave } from "./AddImsFileModal";
 import { applyImsMapping } from "@/lib/lumen/imsMapping";
 import type { ImsReport } from "@/lib/lumen/imsEngine";
 import { dedupeExactDuplicates } from "@/lib/lumen/duplicateCheck";
+import { imsGroupLabel } from "@/lib/lumen/imsLabels";
 import { GlobalSearch } from "./GlobalSearch";
 
 // recharts is a heavy dependency only ever needed once a trend chart is
@@ -172,6 +173,9 @@ export default function LumenClient({
   // than state because nothing renders from it — it only decides whether
   // opening the tab needs to fetch.
   const imsLoadedKeyRef = useRef<string | null>(null);
+  // Set when global search jumps to a Market Insights group; used as the
+  // panel's key so it opens on that group.
+  const [imsFocusGroup, setImsFocusGroup] = useState<string | null>(null);
   const [imsFiles, setImsFiles] = useState<ImsFile[]>([]);
   const [imsReport, setImsReport] = useState<ImsReport | null>(null);
   const [imsLoading, setImsLoading] = useState(false);
@@ -1132,6 +1136,7 @@ export default function LumenClient({
         lang,
         datasetName: dataset?.name ?? "Lumen",
         selectedIds,
+        imsReport,
       };
       if (format === "pdf") {
         const { exportToPdf } = await import("@/lib/lumen/exportPdf");
@@ -1501,7 +1506,7 @@ export default function LumenClient({
 
       {showExportModal && report && !("error" in report) && (
         <ExportModal
-          groups={buildExportItems(report, t)}
+          groups={buildExportItems(report, t, imsReport)}
           exporting={exporting}
           onCancel={() => setShowExportModal(false)}
           onExport={handleExport}
@@ -1515,7 +1520,17 @@ export default function LumenClient({
           areas={areas.map(([area]) => area)}
           items={Object.keys(report.familyChanges)}
           reps={report.hasReps ? Object.keys(report.repChanges) : []}
+          marketGroups={(imsReport?.areaProducts ?? []).map(imsGroupLabel)}
+          // Market Insights isn't fetched on page load any more (see P1), so
+          // load it when someone starts searching — otherwise its groups
+          // would be findable only after visiting that tab once.
+          onFocus={ensureImsLoaded}
           onSelect={(group, name) => {
+            if (group === "market") {
+              setActiveTab("ims");
+              setImsFocusGroup(name);
+              return;
+            }
             if (activeTab !== "sales") setActiveTab("sales");
             if (group === "area") selectArea(name);
             else if (group === "item") selectItem(name);
@@ -1551,6 +1566,8 @@ export default function LumenClient({
 
       {activeTab === "ims" && selectedDatasetId && (
         <ImsPanel
+          key={imsFocusGroup ?? "ims-panel"}
+          focusGroup={imsFocusGroup}
           report={imsReport}
           files={imsFiles}
           loading={imsLoading}
@@ -1581,7 +1598,12 @@ export default function LumenClient({
           <div className="mb-4 flex justify-end">
             <button
               type="button"
-              onClick={() => setShowExportModal(true)}
+              onClick={() => {
+                // Market Insights isn't fetched on page load any more, so
+                // make sure it's here before offering it in the checklist.
+                ensureImsLoaded();
+                setShowExportModal(true);
+              }}
               className="rounded-lg border border-bdr px-4 py-2 text-sm text-muted transition-colors hover:border-amber hover:text-white"
             >
               {t.export.button}

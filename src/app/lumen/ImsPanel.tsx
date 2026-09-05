@@ -7,6 +7,8 @@ import { useLanguage } from "@/lib/i18n/LanguageProvider";
 import type { Translations } from "@/lib/i18n/translations";
 import { ImsTrendChart } from "./ImsTrendChart";
 import { StatTile } from "./charts";
+// Shared with the export so a group is named the same on screen and in the PDF.
+import { imsGroupLabel as groupLabel } from "@/lib/lumen/imsLabels";
 import { EditableFieldValue } from "./EditableValue";
 
 export type ImsFile = {
@@ -36,10 +38,6 @@ function formatSignedPct(n: number | null): string {
 // The dimension a group is really "about" — product in the common case, or
 // area for a file organized purely by geography with no product breakdown
 // (isValidImsMapping guarantees at least one of the two is set).
-function groupLabel(ap: ImsAreaProduct): string {
-  return ap.product ?? ap.area ?? "—";
-}
-
 function FindingCard({ finding, t }: { finding: ImsFinding; t: Translations }) {
   if (finding.type === "share_move") {
     const isDrop = finding.direction === "drop";
@@ -123,6 +121,7 @@ export function ImsPanel({
   onDeleteFile,
   onRenameGroup,
   onRenameCompany,
+  focusGroup = null,
 }: {
   report: ImsReport | null;
   files: ImsFile[];
@@ -135,6 +134,13 @@ export function ImsPanel({
   // every IMS file in the dataset — see /api/lumen/ims-files/rename.
   onRenameGroup: (ap: ImsAreaProduct, newLabel: string) => void;
   onRenameCompany: (oldName: string, newName: string) => void;
+  /**
+   * A group to open on, chosen from outside — global search jumping
+   * straight to it. Read once as the initial pick; the parent remounts the
+   * panel (keyed on this value) when it changes, so a later pick made
+   * inside the panel still wins and no effect has to sync the two.
+   */
+  focusGroup?: string | null;
 }) {
   const { t } = useLanguage();
   const addInputRef = useRef<HTMLInputElement>(null);
@@ -147,7 +153,7 @@ export function ImsPanel({
   // isn't yet) one of the current groups — a fresh report, a deleted file,
   // or simply no selection made yet — without a setState-in-effect render
   // cascade to get there.
-  const [pickedLabel, setPickedLabel] = useState<string | null>(null);
+  const [pickedLabel, setPickedLabel] = useState<string | null>(focusGroup);
   const fallbackLabel = groups.length > 0 ? groupLabel(groups[0]) : null;
   const selectedLabel = pickedLabel && groups.some((ap) => groupLabel(ap) === pickedLabel) ? pickedLabel : fallbackLabel;
 
