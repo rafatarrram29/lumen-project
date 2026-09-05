@@ -30,21 +30,19 @@ export async function GET(request: Request) {
   // latency, which matters here since the client re-hits it on every
   // dataset/year switch, not just the first page load.
   const [{ data, error }, { data: targetData }] = await Promise.all([
-    fetchAllRows((from, to) =>
+    fetchAllRows(() =>
       supabase
         .from("lumen_sales_records")
         .select("area, family, sales_value, sales_qty, month, line, rep, is_edited, edited_at, edited_by")
         .eq("year", year)
-        .eq("dataset_id", datasetId)
-        .range(from, to),
+        .eq("dataset_id", datasetId),
     ),
-    fetchAllRows((from, to) =>
+    fetchAllRows(() =>
       supabase
         .from("lumen_targets")
         .select("area, rep, item, month, target_value")
         .eq("year", year)
-        .eq("dataset_id", datasetId)
-        .range(from, to),
+        .eq("dataset_id", datasetId),
     ),
   ]);
 

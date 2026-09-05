@@ -30,26 +30,24 @@ export async function GET(request: Request) {
   // setting, and this dataset's sales rows (for the sales-vs-share
   // insight) — fetched concurrently.
   const [{ data: imsData, error: imsError }, { data: filesData }, { data: salesData }] = await Promise.all([
-    fetchAllRows((from, to) =>
+    fetchAllRows(() =>
       supabase
         .from("lumen_ims_records")
         .select("area, product, company, market_share, month, growth_rate")
         .eq("year", year)
-        .eq("dataset_id", datasetId)
-        .range(from, to),
+        .eq("dataset_id", datasetId),
     ),
     supabase
       .from("lumen_ims_files")
       .select("own_company, created_at")
       .eq("dataset_id", datasetId)
       .order("created_at", { ascending: false }),
-    fetchAllRows((from, to) =>
+    fetchAllRows(() =>
       supabase
         .from("lumen_sales_records")
         .select("area, family, sales_value, sales_qty, month, line, rep")
         .eq("year", year)
-        .eq("dataset_id", datasetId)
-        .range(from, to),
+        .eq("dataset_id", datasetId),
     ),
   ]);
 

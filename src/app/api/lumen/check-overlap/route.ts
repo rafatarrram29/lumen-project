@@ -29,14 +29,13 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Missing datasetId" }, { status: 400 });
   }
 
-  const { data, error } = await fetchAllRows((from, to) =>
+  const { data, error } = await fetchAllRows(() =>
     supabase
       .from("lumen_sales_records")
       .select("month, area, source_file, sales_value")
       .eq("year", year)
       .eq("dataset_id", datasetId)
-      .in("month", months)
-      .range(from, to),
+      .in("month", months),
   );
 
   if (error) {
