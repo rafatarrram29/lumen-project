@@ -1,7 +1,7 @@
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
-import { buildReport, type Report, type SalesRecord, type TargetRecord } from "@/lib/lumen/engine";
-import { fetchAllRows } from "@/lib/lumen/fetchAllRows";
+import type { Report } from "@/lib/lumen/engine";
+import { loadReport, latestYearWithData, type EditedCell } from "@/lib/lumen/loadReport";
 import type { ColumnMapping, Dataset, TargetColumnMapping } from "@/lib/lumen/columnMapping";
 import LumenClient from "./LumenClient";
 
@@ -30,51 +30,27 @@ export default async function LumenPage() {
     userId: d.user_id as string | null,
   }));
 
-  const year = new Date().getFullYear();
   const initialDatasetId = datasets[0]?.id ?? null;
 
+  let year = new Date().getFullYear();
   let initialReport: Report = { error: "No datasets yet — upload a file to get started." };
+  let initialEditedCells: EditedCell[] = [];
 
   if (initialDatasetId) {
-    // Neither query depends on the other's result — fetching them
-    // concurrently instead of one after another roughly halves this
-    // part of the page's server-side latency.
-    const [{ data }, { data: targetData }] = await Promise.all([
-      fetchAllRows(() =>
-        supabase
-          .from("lumen_sales_records")
-          .select("area, family, sales_value, sales_qty, month, line, rep")
-          .eq("year", year)
-          .eq("dataset_id", initialDatasetId),
-      ),
-      fetchAllRows(() =>
-        supabase
-          .from("lumen_targets")
-          .select("area, rep, item, month, target_value")
-          .eq("year", year)
-          .eq("dataset_id", initialDatasetId),
-      ),
-    ]);
+    year = await latestYearWithData(supabase, initialDatasetId);
 
-    const records: SalesRecord[] = (data ?? []).map((r) => ({
-      area: r.area as string,
-      family: r.family as string,
-      salesValue: Number(r.sales_value),
-      salesQty: r.sales_qty !== null ? Number(r.sales_qty) : null,
-      month: Number(r.month),
-      line: r.line as string | null,
-      rep: r.rep as string | null,
-    }));
+    // The exact code path /api/lumen/analyze uses, so the first paint and
+    // every refresh after it agree — including which figures are marked as
+    // manually corrected, which the first paint used to leave out.
+    const { payload, error } = await loadReport(supabase, initialDatasetId, year);
 
-    const targets: TargetRecord[] = (targetData ?? []).map((t) => ({
-      area: t.area as string | null,
-      rep: t.rep as string | null,
-      item: t.item as string | null,
-      month: Number(t.month),
-      targetValue: Number(t.target_value),
-    }));
-
-    initialReport = buildReport(records, year, targets);
+    if (payload) {
+      const { editedCells, ...report } = payload;
+      initialReport = report;
+      initialEditedCells = editedCells;
+    } else {
+      initialReport = { error: error ?? "Could not build the report" };
+    }
   }
 
   return (
@@ -85,6 +61,7 @@ export default async function LumenPage() {
       initialDatasets={datasets}
       initialDatasetId={initialDatasetId}
       initialReport={initialReport}
+      initialEditedCells={initialEditedCells}
     />
   );
 }

@@ -11,6 +11,7 @@ import {
   type TargetColumnMapping,
 } from "@/lib/lumen/columnMapping";
 import type { Finding, Report } from "@/lib/lumen/engine";
+import type { EditedCell } from "@/lib/lumen/loadReport";
 import { StatTile, AreaChangeBars, FamilyChangeBars, RepLeaderboard } from "./charts";
 import { colorForFamily } from "@/lib/lumen/familyColors";
 import Sidebar from "@/components/Sidebar";
@@ -115,6 +116,10 @@ function TargetChip({
   );
 }
 
+function editedCellMap(cells: EditedCell[]) {
+  return new Map(cells.map((c) => [c.key, { editedBy: c.editedBy, editedAt: c.editedAt }]));
+}
+
 export default function LumenClient({
   userEmail,
   userId,
@@ -122,6 +127,7 @@ export default function LumenClient({
   initialDatasets,
   initialDatasetId,
   initialReport,
+  initialEditedCells,
 }: {
   userEmail: string;
   userId: string;
@@ -129,6 +135,7 @@ export default function LumenClient({
   initialDatasets: Dataset[];
   initialDatasetId: string | null;
   initialReport: Report;
+  initialEditedCells: EditedCell[];
 }) {
   const { t, lang } = useLanguage();
   const [year, setYear] = useState(initialYear);
@@ -153,7 +160,10 @@ export default function LumenClient({
   const [pendingLinkedFile, setPendingLinkedFile] = useState<{ file: File; sheet: RawSheet } | null>(null);
   const [replacingLinkedFileId, setReplacingLinkedFileId] = useState<string | null>(null);
   const [dataEdits, setDataEdits] = useState<DataEdit[]>([]);
-  const [editedCells, setEditedCells] = useState<Map<string, { editedBy: string | null; editedAt: string }>>(new Map());
+  // Seeded from the server render rather than starting empty: the marks on
+  // manually corrected figures used to appear only after the first refetch,
+  // which made them look intermittent.
+  const [editedCells, setEditedCells] = useState(() => editedCellMap(initialEditedCells));
   const [activeTab, setActiveTab] = useState<"sales" | "ims">("sales");
   const [imsFiles, setImsFiles] = useState<ImsFile[]>([]);
   const [imsReport, setImsReport] = useState<ImsReport | null>(null);
@@ -282,11 +292,7 @@ export default function LumenClient({
       const res = await fetch(`/api/lumen/analyze?year=${y}&datasetId=${datasetId}`);
       const json = await res.json();
       setReport(json);
-      const cells = new Map<string, { editedBy: string | null; editedAt: string }>();
-      for (const c of json.editedCells ?? []) {
-        cells.set(c.key, { editedBy: c.editedBy, editedAt: c.editedAt });
-      }
-      setEditedCells(cells);
+      setEditedCells(editedCellMap(json.editedCells ?? []));
     } catch {
       setReport({ error: t.dashboard.couldNotLoad });
     } finally {
@@ -1578,6 +1584,15 @@ export default function LumenClient({
               </label>
             )}
           </div>
+
+          {report.targetMonthMismatch && (
+            <div className="mb-4 rounded-xl border border-amber/40 bg-amber/10 px-4 py-3 text-sm text-amber">
+              {t.targets.monthMismatch(
+                report.targetMonthMismatch.targetMonths.join(", "),
+                report.targetMonthMismatch.latestMonth,
+              )}
+            </div>
+          )}
 
           {systemicFindings.map((f, i) => (
             <div key={i} className="mb-5 rounded-2xl border border-red/40 bg-red/10 p-5">

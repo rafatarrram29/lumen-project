@@ -511,6 +511,37 @@ describe("targets vs actual", () => {
     assert.deepEqual(report.areaTargets.A, { targetValue: 0, pctOfTarget: null });
   });
 
+  test("targets uploaded for the wrong month are reported, not silently dropped", () => {
+    // Sales run to month 2; the targets file covers month 3. The Target vs
+    // Actual section has nothing to show — the failure used to be complete
+    // silence, with no way to tell an empty section from a wrong upload.
+    const report = ok(
+      buildReport(sales, YEAR, [
+        target({ month: 3, area: "A", targetValue: 1000 }),
+        target({ month: 4, area: "A", targetValue: 1000 }),
+        target({ month: 3, rep: "Sara", targetValue: 500 }),
+      ]),
+    );
+    assert.equal(report.hasTargets, false);
+    assert.deepEqual(report.targetMonthMismatch, { targetMonths: [3, 4], latestMonth: 2 });
+  });
+
+  test("no warning when the targets do cover the latest month", () => {
+    const report = ok(
+      buildReport(sales, YEAR, [
+        target({ month: 1, area: "A", targetValue: 1000 }),
+        target({ month: 2, area: "A", targetValue: 1000 }),
+      ]),
+    );
+    assert.equal(report.hasTargets, true);
+    assert.equal(report.targetMonthMismatch, null);
+  });
+
+  test("no warning when no targets were uploaded at all", () => {
+    const report = ok(buildReport(sales, YEAR));
+    assert.equal(report.targetMonthMismatch, null);
+  });
+
   test("a target for an area with no sales at all still shows, with no percentage", () => {
     const report = ok(buildReport(sales, YEAR, [target({ month: 2, area: "Ghost", targetValue: 1000 })]));
     assert.deepEqual(report.areaTargets.Ghost, { targetValue: 1000, pctOfTarget: null });

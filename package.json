@@ -7,7 +7,7 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
-    "test": "node --test tests/*.test.ts"
+    "test": "node --import ./tests/resolve-ts.mjs --test tests/*.test.ts"
   },
   "dependencies": {
     "@supabase/ssr": "^0.12.4",

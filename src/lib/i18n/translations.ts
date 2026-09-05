@@ -73,6 +73,7 @@ export type Translations = {
     underTargetBy: (pct: number) => string;
     thresholdLabel: string;
     uploadSuccess: (n: number) => string;
+    monthMismatch: (targetMonths: string, latestMonth: number) => string;
   };
   export: {
     button: string;
@@ -430,6 +431,8 @@ const en: Translations = {
     underTargetBy: (pct) => `Under target by ${pct}%`,
     thresholdLabel: "Alert threshold",
     uploadSuccess: (n) => `Uploaded ${n} target rows.`,
+    monthMismatch: (targetMonths, latestMonth) =>
+      `Targets were uploaded for month ${targetMonths}, but the latest month with sales is ${latestMonth} — so there is nothing to compare them against and no target figures are shown. Upload targets for month ${latestMonth}, or add that month's sales.`,
   },
   export: {
     button: "Export",
@@ -802,6 +805,8 @@ const ar: Translations = {
     underTargetBy: (pct) => `تحت الهدف بنسبة ${pct}%`,
     thresholdLabel: "نسبة التنبيه",
     uploadSuccess: (n) => `تم رفع ${n} صف هدف.`,
+    monthMismatch: (targetMonths, latestMonth) =>
+      `الأهداف اترفعت لشهر ${targetMonths}، لكن آخر شهر فيه مبيعات هو ${latestMonth} — فمفيش حاجة تتقارن بيها ومش هتظهر أي أرقام أهداف. ارفع أهداف لشهر ${latestMonth}، أو ضيف مبيعات الشهر ده.`,
   },
   export: {
     button: "تصدير",
