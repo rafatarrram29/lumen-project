@@ -126,6 +126,12 @@ export type Report =
       hasTargets: boolean;
       areaTargets: Record<string, TargetProgress>;
       repTargets: Record<string, TargetProgress>;
+      // Set when a targets file was uploaded but none of it covers the
+      // latest sales month, so there is nothing to compare against and the
+      // whole Target vs Actual section silently disappears. Null whenever
+      // there is nothing to warn about (no targets at all, or targets that
+      // do cover the latest month).
+      targetMonthMismatch: { targetMonths: number[]; latestMonth: number } | null;
     };
 
 function pctChange(prev: number | null | undefined, curr: number): number | null {
@@ -544,7 +550,14 @@ export function buildReport(records: SalesRecord[], year: number, targets: Targe
   // uploaded for this dataset). Only the latest month is compared against
   // its target — a target row attributes to an area and/or a rep whenever
   // that dimension is set on it, so the same row can count toward both. ---
-  const hasTargets = targets.some((t) => t.month === latest);
+  // Uploading targets for the wrong month is an easy mistake — an October
+  // targets file next to sales that only run to September — and it used to
+  // fail completely silently: hasTargets stayed false and the section just
+  // wasn't there. Record the mismatch so the dashboard can say so.
+  const targetMonths = Array.from(new Set(targets.map((t) => t.month))).sort((a, b) => a - b);
+  const hasTargets = targetMonths.includes(latest);
+  const targetMonthMismatch =
+    targetMonths.length > 0 && !hasTargets ? { targetMonths, latestMonth: latest } : null;
   const areaTargetTotals = new Map<string, number>();
   const repTargetTotals = new Map<string, number>();
   for (const t of targets) {
@@ -588,5 +601,6 @@ export function buildReport(records: SalesRecord[], year: number, targets: Targe
     hasTargets,
     areaTargets,
     repTargets,
+    targetMonthMismatch,
   };
 }

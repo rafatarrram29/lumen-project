@@ -1,7 +1,6 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
-import { buildReport, type SalesRecord, type TargetRecord } from "@/lib/lumen/engine";
-import { fetchAllRows } from "@/lib/lumen/fetchAllRows";
+import { loadReport } from "@/lib/lumen/loadReport";
 
 export async function GET(request: Request) {
   const supabase = await createClient();
@@ -25,69 +24,13 @@ export async function GET(request: Request) {
     return NextResponse.json({ error: "Missing datasetId" }, { status: 400 });
   }
 
-  // Neither query depends on the other's result — fetching them
-  // concurrently instead of one after another roughly halves this route's
-  // latency, which matters here since the client re-hits it on every
-  // dataset/year switch, not just the first page load.
-  const [{ data, error }, { data: targetData }] = await Promise.all([
-    fetchAllRows(() =>
-      supabase
-        .from("lumen_sales_records")
-        .select("area, family, sales_value, sales_qty, month, line, rep, is_edited, edited_at, edited_by")
-        .eq("year", year)
-        .eq("dataset_id", datasetId),
-    ),
-    fetchAllRows(() =>
-      supabase
-        .from("lumen_targets")
-        .select("area, rep, item, month, target_value")
-        .eq("year", year)
-        .eq("dataset_id", datasetId),
-    ),
-  ]);
+  // Same code path the server-rendered first paint uses, so the two can't
+  // disagree about what the dashboard should show.
+  const { payload, error } = await loadReport(supabase, datasetId, year);
 
-  if (error) {
-    return NextResponse.json({ error }, { status: 500 });
+  if (error || !payload) {
+    return NextResponse.json({ error: error ?? "Could not build the report" }, { status: 500 });
   }
 
-  const records: SalesRecord[] = (data ?? []).map((r) => ({
-    area: r.area as string,
-    family: r.family as string,
-    salesValue: Number(r.sales_value),
-    salesQty: r.sales_qty !== null ? Number(r.sales_qty) : null,
-    month: Number(r.month),
-    line: r.line as string | null,
-    rep: r.rep as string | null,
-  }));
-
-  const targets: TargetRecord[] = (targetData ?? []).map((t) => ({
-    area: t.area as string | null,
-    rep: t.rep as string | null,
-    item: t.item as string | null,
-    month: Number(t.month),
-    targetValue: Number(t.target_value),
-  }));
-
-  const report = buildReport(records, year, targets);
-
-  // JSON-encoded [area, family, month] keys for every row that was
-  // manually edited, with who/when the most recent edit to that cell was —
-  // lets the dashboard mark exactly the figures that came from an inline
-  // edit rather than the originally uploaded file, without exposing raw
-  // row ids to the client.
-  const editedCellsMap = new Map<string, { editedBy: string | null; editedAt: string }>();
-  for (const r of data ?? []) {
-    if (!r.is_edited) continue;
-    const key = JSON.stringify([r.area as string, r.family as string, r.month as number]);
-    const existing = editedCellsMap.get(key);
-    if (!existing || (r.edited_at && r.edited_at > existing.editedAt)) {
-      editedCellsMap.set(key, {
-        editedBy: r.edited_by as string | null,
-        editedAt: (r.edited_at as string) ?? new Date(0).toISOString(),
-      });
-    }
-  }
-  const editedCells = Array.from(editedCellsMap.entries()).map(([key, info]) => ({ key, ...info }));
-
-  return NextResponse.json({ ...report, editedCells });
+  return NextResponse.json(payload);
 }
