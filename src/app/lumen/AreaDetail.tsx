@@ -21,7 +21,7 @@ import type { Finding, Report } from "@/lib/lumen/engine";
 import { colorForFamily } from "@/lib/lumen/familyColors";
 import { findingSummary, findingDecision } from "@/lib/i18n/findingText";
 import { repResponsibleInMonth, type RepAssignment } from "@/lib/lumen/repAssignments";
-import { managerForRep, type ManagerLink } from "@/lib/lumen/orgStructure";
+import { managerForRep, averageSeriesForAreas, type AreaScope, type ManagerLink } from "@/lib/lumen/orgStructure";
 import { recordsForAreaMonth, type LinkedFile, type LinkedRecord } from "@/lib/lumen/linkedFiles";
 import { EditableValue, EditableFieldValue } from "./EditableValue";
 import { RepHistoryPanel } from "./RepHistoryPanel";
@@ -54,6 +54,7 @@ export function AreaDetail({
   handleEditSalesCell,
   handleEditLinkedField,
   anchored = false,
+  scope = null,
 }: {
   area: string;
   d: AreaChange;
@@ -64,7 +65,7 @@ export function AreaDetail({
   expandedItems: Set<string>;
   toggleItem: (item: string) => void;
   /** The per-item drill-down, rendered by its one owner and passed in. */
-  renderItemDetail: (item: string) => ReactNode;
+  renderItemDetail: (item: string, scope?: AreaScope | null) => ReactNode;
   assignments: RepAssignment[];
   managerLinks: ManagerLink[];
   linkedFiles: LinkedFile[];
@@ -85,6 +86,12 @@ export function AreaDetail({
    * Sheikh 1" to whichever copy happened to come first.
    */
   anchored?: boolean;
+  /**
+   * Narrows every figure in this card to one part of the org chart. Null on
+   * the Sales tab, where the whole dataset is the right frame; set inside a
+   * manager's or a rep's block, where it is not.
+   */
+  scope?: AreaScope | null;
 }) {
   const { t } = useLanguage();
               const lineSummary = report.lines[d.line];
@@ -96,7 +103,22 @@ export function AreaDetail({
                     ? t.dashboard.partOfLineDrop
                     : t.dashboard.noChangeThisMonth;
 
-              const lineSeries = lineSummary?.monthlySeries ?? [];
+              // What this area is measured against. On the Sales tab that is
+              // its whole line, which is the right frame there. Inside a
+              // rep's or a manager's block it is not: "vs the line" quietly
+              // drags in 30 areas the viewer is not looking at, so the
+              // comparison becomes the average of the areas in scope.
+              const lineSeries =
+                scope && scope.areas.length > 0
+                  ? averageSeriesForAreas(report.areas, scope.areas)
+                  : (lineSummary?.monthlySeries ?? []);
+              // TrendChart names these after where they appear, not their
+              // length: compareLabel is the legend entry, compareShortLabel
+              // the tooltip row — which carries its own colon the way
+              // t.chart.lineAvg does.
+              const compareLabel = scope ? scope.label : undefined;
+              const compareShortLabel = scope ? `${scope.label}:` : undefined;
+              const compareWord = scope ? scope.shortLabel : report.hasLines ? d.line : t.dashboard.lineWord;
               const lineLast = lineSeries[lineSeries.length - 1];
               const linePrev = lineSeries[lineSeries.length - 2];
               const linePct =
@@ -168,11 +190,7 @@ export function AreaDetail({
                           )}
                         {linePct !== null && (
                           <p className="mb-2 text-xs text-muted">
-                            {t.dashboard.areaMovedVs(
-                              d.pctChange ?? 0,
-                              report.hasLines ? d.line : t.dashboard.lineWord,
-                              linePct,
-                            )}
+                            {t.dashboard.areaMovedVs(d.pctChange ?? 0, compareWord, linePct)}
                           </p>
                         )}
                         {responsibleInLatest && (
@@ -210,6 +228,8 @@ export function AreaDetail({
                             areaLabel={area}
                             areaSeries={d.monthlySeries}
                             lineSeries={lineSeries}
+                            compareShortLabel={compareShortLabel}
+                            compareLabel={compareLabel}
                           />
                         </div>
                       )}
@@ -274,7 +294,10 @@ export function AreaDetail({
                                   />
                                 </div>
 
-                                {itemOpen && renderItemDetail(fam)}
+                                {/* Scope travels down with it: an item opened
+                                    under a rep lists that rep's areas, not
+                                    every area in the dataset. */}
+                                {itemOpen && renderItemDetail(fam, scope)}
                               </div>
                               );
                             })}

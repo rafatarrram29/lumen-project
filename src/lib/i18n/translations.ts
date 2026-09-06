@@ -370,6 +370,11 @@ export type Translations = {
     reassignWarning: (rep: string, manager: string) => string;
     remove: string;
     pastCoverage: string;
+    repAreasLabel: (rep: string) => string;
+    repAreasShort: string;
+    teamAreasLabel: (manager: string) => string;
+    teamAreasShort: string;
+    scopedToAreas: (n: number, label: string) => string;
   };
   units: {
     units: string;
@@ -795,6 +800,11 @@ const en: Translations = {
     reassignWarning: (rep, manager) => `${rep} currently reports to ${manager} and will be moved.`,
     remove: "Remove",
     pastCoverage: "no longer held",
+    repAreasLabel: (rep) => `${rep}'s areas`,
+    repAreasShort: "rep's areas",
+    teamAreasLabel: (manager) => `${manager}'s team`,
+    teamAreasShort: "team's areas",
+    scopedToAreas: (n, label) => `${n} area${n === 1 ? "" : "s"} · ${label}`,
   },
   units: {
     units: "Units",
@@ -1218,6 +1228,11 @@ const ar: Translations = {
     reassignWarning: (rep, manager) => `${rep} تابع حالياً لـ${manager} وهيتنقل.`,
     remove: "إزالة",
     pastCoverage: "مش تابعة له حالياً",
+    repAreasLabel: (rep) => `مناطق ${rep}`,
+    repAreasShort: "مناطق المندوب",
+    teamAreasLabel: (manager) => `فريق ${manager}`,
+    teamAreasShort: "مناطق الفريق",
+    scopedToAreas: (n, label) => `${n} منطقة · ${label}`,
   },
   units: {
     units: "وحدات",
