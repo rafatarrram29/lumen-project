@@ -31,20 +31,22 @@ function checkIsSpreadsheet(buffer: ArrayBuffer, fileName: string) {
   }
 }
 
-export async function readWorkbookSheet(file: File): Promise<RawSheet> {
+// raw:true here is a no-op for a real .xlsx/.xls binary (its cells already
+// carry explicit types) but is required for CSV/plaintext: SheetJS's
+// default plaintext parsing "helpfully" infers numbers/dates from cell
+// text, which silently mangles anything that looks numeric-but-isn't —
+// a leading-zero code ("007" -> 7), a trailing zero ("42000.50" ->
+// 42000.5), or a slash-separated value (a dosage strength like "25/500")
+// read as something else entirely. raw:true keeps every plaintext cell
+// exactly as typed, character for character.
+async function loadWorksheet(file: File): Promise<XLSX.WorkSheet> {
   const buffer = await file.arrayBuffer();
   checkIsSpreadsheet(buffer, file.name);
-  // raw:true here is a no-op for a real .xlsx/.xls binary (its cells already
-  // carry explicit types) but is required for CSV/plaintext: SheetJS's
-  // default plaintext parsing "helpfully" infers numbers/dates from cell
-  // text, which silently mangles anything that looks numeric-but-isn't —
-  // a leading-zero code ("007" -> 7), a trailing zero ("42000.50" ->
-  // 42000.5), or a slash-separated value (a dosage strength like "25/500")
-  // read as something else entirely. raw:true keeps every plaintext cell
-  // exactly as typed, character for character.
   const workbook = XLSX.read(buffer, { type: "array", raw: true });
-  const sheet = workbook.Sheets[workbook.SheetNames[0]];
+  return workbook.Sheets[workbook.SheetNames[0]];
+}
 
+function sheetToRawSheet(sheet: XLSX.WorkSheet): RawSheet {
   const grid = XLSX.utils.sheet_to_json<unknown[]>(sheet, {
     header: 1,
     defval: null,
@@ -88,4 +90,36 @@ export async function readWorkbookSheet(file: File): Promise<RawSheet> {
   });
 
   return { headers: Object.keys(raw[0]), rows: raw, displayRows: display };
+}
+
+export async function readWorkbookSheet(file: File): Promise<RawSheet> {
+  const sheet = await loadWorksheet(file);
+  return sheetToRawSheet(sheet);
+}
+
+// Targets files sometimes lay every month out side by side instead of one
+// row per month (a two-row header: a month/"Year Total" label above each
+// column block, a repeating metric-name row below it) — see
+// wideTargetsFormat.ts. Detected only for the targets uploader, never for
+// the sales/linked-file uploader above, since a plain sales export has no
+// such shape to look for and this avoids any risk of it being misread as
+// one.
+export async function readTargetsWorkbookSheet(file: File): Promise<RawSheet> {
+  const sheet = await loadWorksheet(file);
+
+  const rawGrid = XLSX.utils.sheet_to_json<unknown[]>(sheet, {
+    header: 1,
+    defval: null,
+    blankrows: false,
+  });
+  const displayGrid = XLSX.utils.sheet_to_json<unknown[]>(sheet, {
+    header: 1,
+    defval: null,
+    blankrows: false,
+    raw: false,
+  });
+
+  const { detectWideTargetsLayout } = await import("./wideTargetsFormat");
+  const wide = detectWideTargetsLayout(rawGrid, displayGrid);
+  return wide ?? sheetToRawSheet(sheet);
 }
