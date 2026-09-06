@@ -9,6 +9,8 @@ type IncomingTargetRow = {
   item: string | null;
   month: number;
   targetValue: number;
+  /** The plan file's own achievement %, when it had one. */
+  achPct?: number | null;
 };
 
 export async function POST(request: Request) {
@@ -20,6 +22,15 @@ export async function POST(request: Request) {
   const year = Number(body?.year);
   const datasetId = typeof body?.datasetId === "string" ? body.datasetId : null;
   const rows: IncomingTargetRow[] = Array.isArray(body?.rows) ? body.rows : [];
+  // Where the upload was started from. A file uploaded from inside a rep's
+  // card does not need a Rep column — the card already said whose plan it
+  // is — so any row that names neither a rep nor an area is filed under
+  // the scope. A row that DOES name one keeps its own: the file is the
+  // more specific statement, and the dialog has already asked about the
+  // disagreement before getting here.
+  const scopeRep = typeof body?.scopeRep === "string" && body.scopeRep.trim() !== "" ? body.scopeRep.trim() : null;
+  const scopeArea = typeof body?.scopeArea === "string" && body.scopeArea.trim() !== "" ? body.scopeArea.trim() : null;
+  const sourceFile = typeof body?.sourceFile === "string" ? body.sourceFile : null;
 
   if (!Number.isInteger(year) || year < 2000 || year > 2100) {
     return NextResponse.json({ error: "Invalid year" }, { status: 400 });
@@ -44,18 +55,26 @@ export async function POST(request: Request) {
         Number.isInteger(r.month) &&
         typeof r.targetValue === "number" &&
         Number.isFinite(r.targetValue) &&
-        (r.area || r.rep || r.item),
+        (r.area || r.rep || r.item || scopeRep || scopeArea),
     )
-    .map((r) => ({
-      area: typeof r.area === "string" ? r.area : null,
-      rep: typeof r.rep === "string" ? r.rep : null,
-      item: typeof r.item === "string" ? r.item : null,
-      month: r.month,
-      year,
-      target_value: r.targetValue,
-      uploaded_at: uploadedAt,
-      dataset_id: datasetId,
-    }));
+    .map((r) => {
+      const area = typeof r.area === "string" ? r.area : null;
+      const rep = typeof r.rep === "string" ? r.rep : null;
+      const named = Boolean(area || rep);
+      return {
+        area: named ? area : scopeArea,
+        rep: named ? rep : scopeRep,
+        item: typeof r.item === "string" ? r.item : null,
+        month: r.month,
+        year,
+        target_value: r.targetValue,
+        ach_pct: typeof r.achPct === "number" && Number.isFinite(r.achPct) ? r.achPct : null,
+        is_manual: false,
+        source_file: sourceFile,
+        uploaded_at: uploadedAt,
+        dataset_id: datasetId,
+      };
+    });
 
   if (records.length === 0) {
     return NextResponse.json({ error: "No valid rows in payload" }, { status: 400 });

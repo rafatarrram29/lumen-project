@@ -68,6 +68,13 @@ export type TargetColumnMapping = {
   item: string | null;
   month: string;
   value: string;
+  /**
+   * The plan file's own achievement percentage, when it carries one.
+   * Optional on the type as well as nullable, because mappings saved
+   * before this column existed simply do not have the key — reading one
+   * back must not turn into "the user un-mapped it".
+   */
+  achPct?: string | null;
 };
 
 export type ParsedTargetRow = {
@@ -76,6 +83,9 @@ export type ParsedTargetRow = {
   item: string | null;
   month: number;
   targetValue: number;
+  /** From the file, if it had an Ach% column. Never used in place of the
+   *  value Lumen computes — see targetProgress.ts. */
+  achPct: number | null;
 };
 
 export type Dataset = {
@@ -114,6 +124,7 @@ export function parseNumeric(raw: unknown): number {
 }
 
 type GuessRule = { field: keyof ColumnMapping; keywords: string[] };
+type TargetGuessRule = { field: keyof TargetColumnMapping; keywords: string[] };
 
 // Best-effort pre-fill for the mapping step, so most files just need a
 // glance and confirm rather than mapping six columns by hand every time.
@@ -160,12 +171,13 @@ export function guessMapping(headers: string[]): Partial<Record<keyof ColumnMapp
   return guess;
 }
 
-const TARGET_GUESS_RULES: GuessRule[] = [
+const TARGET_GUESS_RULES: TargetGuessRule[] = [
   { field: "area", keywords: ["area", "region", "territory"] },
   { field: "rep", keywords: ["rep", "representative", "salesperson", "agent"] },
   { field: "item", keywords: ["item", "product", "sku", "material"] },
   { field: "month", keywords: ["month", "period"] },
-  { field: "value", keywords: ["target value", "target", "goal", "quota"] },
+  { field: "value", keywords: ["fct val", "target value", "target", "goal", "quota", "fct"] },
+  { field: "achPct", keywords: ["ach %", "ach%", "achievement", "ach"] },
 ];
 
 export function guessTargetMapping(headers: string[]): Partial<Record<keyof TargetColumnMapping, string>> {
@@ -187,7 +199,7 @@ export function guessTargetMapping(headers: string[]): Partial<Record<keyof Targ
       }
     }
     if (best) {
-      guess[rule.field as keyof TargetColumnMapping] = best;
+      guess[rule.field] = best;
       used.add(best);
     }
   }
@@ -227,12 +239,19 @@ export function applyTargetMapping(
     const repVal = mapping.rep ? r[mapping.rep] : null;
     const itemVal = mapping.item ? r[mapping.item] : null;
 
+    // An unreadable Ach% is dropped rather than skipping the row: the
+    // target value is the number that matters, and the percentage is a
+    // cross-check Lumen can compute for itself anyway.
+    const achRaw = mapping.achPct ? r[mapping.achPct] : null;
+    const achParsed = achRaw != null ? parseNumeric(achRaw) : NaN;
+
     rows.push({
       area: areaVal != null ? textCellValue(sheet, i, mapping.area!, areaVal) : null,
       rep: repVal != null ? textCellValue(sheet, i, mapping.rep!, repVal) : null,
       item: itemVal != null ? textCellValue(sheet, i, mapping.item!, itemVal) : null,
       month,
       targetValue,
+      achPct: Number.isNaN(achParsed) ? null : achParsed,
     });
   });
 

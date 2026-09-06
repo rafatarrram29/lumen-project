@@ -26,10 +26,13 @@ import {
 import { dedupeExactDuplicates } from "@/lib/lumen/duplicateCheck";
 import type { Translations } from "@/lib/i18n/translations";
 import type { WizardChoice } from "./UploadWizardModal";
+import type { TargetScope } from "./UploadTargetsModal";
 import { formatNumber } from "./dashboardBits";
 import { errorText, intoBatches, issueLine, type UploadStatus } from "./uploadShared";
 
 type PendingFile = { file: File; sheet: RawSheet };
+/** A pending targets file, plus the card the upload was started from. */
+type PendingTargets = PendingFile & { scope: TargetScope | null };
 
 export function useSalesUploads({
   datasetId,
@@ -40,6 +43,7 @@ export function useSalesUploads({
   status,
   fetchReport,
   onDatasetSwitched,
+  onTargetsChanged,
 }: {
   datasetId: string | null;
   year: number;
@@ -50,9 +54,11 @@ export function useSalesUploads({
   fetchReport: (datasetId: string, year: number) => Promise<unknown>;
   /** Called when an upload lands in a dataset other than the one on screen. */
   onDatasetSwitched: (datasetId: string) => void;
+  /** Called once targets have changed, so the per-card panels refetch. */
+  onTargetsChanged: () => void;
 }) {
   const [pendingFiles, setPendingFiles] = useState<PendingFile[]>([]);
-  const [pendingTargets, setPendingTargets] = useState<PendingFile | null>(null);
+  const [pendingTargets, setPendingTargets] = useState<PendingTargets | null>(null);
 
   /** Read the workbooks the user picked; anything unreadable is named. */
   async function handleFilesSelected(files: File[]) {
@@ -72,12 +78,18 @@ export function useSalesUploads({
     status.setError(issueLine(failed));
   }
 
-  async function handleTargetsFileSelected(file: File) {
+  /**
+   * `scope` is set when the upload was started from inside a rep's or an
+   * area's card. It travels with the file all the way to the insert, so a
+   * plan with no Rep column still lands on the right rep — and so the
+   * replace that precedes it clears only that rep's rows.
+   */
+  async function handleTargetsFileSelected(file: File, scope: TargetScope | null = null) {
     status.setError(null);
     status.setMessage(null);
     try {
       const { readWorkbookSheet } = await import("@/lib/lumen/readWorkbookSheet");
-      setPendingTargets({ file, sheet: await readWorkbookSheet(file) });
+      setPendingTargets({ file, sheet: await readWorkbookSheet(file), scope });
     } catch (err) {
       status.setError(errorText(err, "Could not read that file."));
     }
@@ -94,12 +106,15 @@ export function useSalesUploads({
 
     try {
       const { rows, skipped } = applyTargetMapping(pending.sheet, mapping);
+      const scope = pending.scope;
 
       const current = datasets.find((d) => d.id === datasetId)?.targetColumnMapping;
       const mappingUnchanged =
         current !== null &&
         current !== undefined &&
-        (["area", "rep", "item", "month", "value"] as const).every((k) => current[k] === mapping[k]);
+        (["area", "rep", "item", "month", "value", "achPct"] as const).every(
+          (k) => (current[k] ?? null) === (mapping[k] ?? null),
+        );
 
       if (!mappingUnchanged) {
         const patchRes = await fetch(`/api/lumen/datasets/${datasetId}`, {
@@ -112,12 +127,14 @@ export function useSalesUploads({
         }
       }
 
-      // Targets are replaced wholesale rather than merged: a second upload
-      // is a correction of the first, not an addition to it.
+      // Targets are replaced rather than merged: a second upload is a
+      // correction of the first, not an addition to it. Scoped, it clears
+      // only the rep or area whose card this came from — the rest of the
+      // district's plan is somebody else's and stays put.
       const replaceRes = await fetch("/api/lumen/targets/replace", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ year, datasetId }),
+        body: JSON.stringify({ year, datasetId, scopeRep: scope?.rep ?? null, scopeArea: scope?.area ?? null }),
       });
       const replaceJson = await replaceRes.json();
       if (!replaceRes.ok) throw new Error(replaceJson.error || "Could not clear existing targets");
@@ -129,7 +146,14 @@ export function useSalesUploads({
         const res = await fetch("/api/lumen/targets", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ year, datasetId, rows: batches[i] }),
+          body: JSON.stringify({
+            year,
+            datasetId,
+            rows: batches[i],
+            scopeRep: scope?.rep ?? null,
+            scopeArea: scope?.area ?? null,
+            sourceFile: pending.file.name,
+          }),
         });
         const json = await res.json();
         if (!res.ok) throw new Error(json.error || "Targets upload failed");
@@ -145,6 +169,7 @@ export function useSalesUploads({
         ),
       );
       await fetchReport(datasetId, year);
+      onTargetsChanged();
     } catch (err) {
       status.setError(errorText(err, "Targets upload failed"));
     } finally {

@@ -66,8 +66,28 @@ export type Translations = {
     modalTitle: (fileName: string) => string;
     subtitle: string;
     fieldTargetValue: string;
+    fieldAchPct: string;
     atLeastOneRequired: string;
     replaceWarning: string;
+    scopedReplaceWarning: (scope: string) => string;
+    scopeNote: (scope: string) => string;
+    scopeConflict: (scope: string, found: string) => string;
+    scopeConflictConfirm: string;
+    addTargetButton: string;
+    progressTitle: string;
+    progressSubtitle: string;
+    progressSubtitleMonth: (month: number) => string;
+    salesLabel: string;
+    targetLabel: string;
+    achLabel: string;
+    noTargetYet: string;
+    achMismatch: (item: string, filePct: number, ourPct: number) => string;
+    manualTargetHint: string;
+    teamTargetTitle: string;
+    repsBelowTarget: (below: number, measured: number) => string;
+    allRepsOnTarget: string;
+    repsWithoutTarget: (reps: string) => string;
+    editTargetHint: string;
     ofTarget: (pct: number) => string;
     underTarget: string;
     underTargetBy: (pct: number) => string;
@@ -477,7 +497,34 @@ const en: Translations = {
     modalTitle: (fileName) => `Upload targets — ${fileName}`,
     subtitle:
       "Match each column to what it means. Uploading replaces every existing target for this dataset and year.",
-    fieldTargetValue: "Target value",
+    fieldTargetValue: "Target value (FCT)",
+    fieldAchPct: "Ach % (optional)",
+    scopedReplaceWarning: (scope) =>
+      `Uploading replaces the targets already stored for ${scope} — and only those. Every other rep's plan is left alone.`,
+    scopeNote: (scope) =>
+      `Started from ${scope}, so rows with no Rep or Area column are filed under ${scope} automatically.`,
+    scopeConflict: (scope, found) =>
+      `This file names ${found}, not ${scope}. Continue and the file's own names win.`,
+    scopeConflictConfirm: "Use the file's names",
+    addTargetButton: "+ Add target",
+    progressTitle: "Target vs Achievement",
+    progressSubtitle: "Actual sales against the plan, month by month.",
+    progressSubtitleMonth: (month) =>
+      `Chart: every month. Figures below: month ${month}.`,
+    salesLabel: "Sales",
+    targetLabel: "Target",
+    achLabel: "Ach %",
+    noTargetYet: "No target uploaded for this yet — add one to see achievement here.",
+    achMismatch: (item, filePct, ourPct) =>
+      `${item}: the file says ${filePct}% but sales / target is ${ourPct}%.`,
+    manualTargetHint: "Typed in by hand — a later upload for this scope will not overwrite it.",
+    teamTargetTitle: "Team target vs achievement",
+    repsBelowTarget: (below, measured) =>
+      `${below} of ${measured} rep${measured === 1 ? "" : "s"} below target`,
+    allRepsOnTarget: "Every rep on target",
+    repsWithoutTarget: (reps) =>
+      `No plan uploaded yet for ${reps} — their sales are left out of the team percentage until there is one.`,
+    editTargetHint: "Click a target to correct it",
     atLeastOneRequired: "Map at least one of Area, Rep, or Item so targets can be matched to actuals.",
     replaceWarning: "This replaces all existing targets for this dataset. This cannot be undone.",
     ofTarget: (pct) => `${pct}% of target`,
@@ -905,7 +952,33 @@ const ar: Translations = {
     uploadButton: "+ رفع الأهداف",
     modalTitle: (fileName) => `رفع أهداف — ${fileName}`,
     subtitle: "اربط كل عمود بمعناه. الرفع ده هيستبدل كل الأهداف الحالية لمجموعة البيانات والسنة دي.",
-    fieldTargetValue: "قيمة الهدف",
+    fieldTargetValue: "قيمة التارجت (FCT)",
+    fieldAchPct: "نسبة التحقيق % (اختياري)",
+    scopedReplaceWarning: (scope) =>
+      `الرفع هيستبدل التارجت المتخزن لـ${scope} — وده بس. خطط باقي المناديب مش هتتلمس.`,
+    scopeNote: (scope) =>
+      `الرفع بدأ من ${scope}، فالصفوف اللي مفيهاش عمود مندوب أو منطقة هتتسجل على ${scope} تلقائياً.`,
+    scopeConflict: (scope, found) =>
+      `الملف ده بيقول ${found}، مش ${scope}. لو كمّلت، أسماء الملف هي اللي هتتحسب.`,
+    scopeConflictConfirm: "استخدم أسماء الملف",
+    addTargetButton: "+ إضافة تارجت",
+    progressTitle: "التارجت مقابل التحقيق",
+    progressSubtitle: "المبيعات الفعلية مقابل الخطة، شهر بشهر.",
+    progressSubtitleMonth: (month) =>
+      `الشارت: كل الشهور. الأرقام تحت: شهر ${month}.`,
+    salesLabel: "المبيعات",
+    targetLabel: "التارجت",
+    achLabel: "نسبة التحقيق %",
+    noTargetYet: "مفيش تارجت مرفوع لده لسه — ضيف واحد عشان تشوف نسبة التحقيق هنا.",
+    achMismatch: (item, filePct, ourPct) =>
+      `${item}: الملف بيقول ${filePct}% لكن المبيعات ÷ التارجت = ${ourPct}%.`,
+    manualTargetHint: "متكتب بإيد — رفع ملف بعد كده على نفس النطاق مش هيمسحه.",
+    teamTargetTitle: "تارجت الفريق مقابل التحقيق",
+    repsBelowTarget: (below, measured) => `${below} من ${measured} مندوب تحت الهدف`,
+    allRepsOnTarget: "كل المناديب على الهدف",
+    repsWithoutTarget: (reps) =>
+      `مفيش خطة مرفوعة لـ${reps} لسه — مبيعاتهم مش داخلة في نسبة الفريق لحد ما تترفع.`,
+    editTargetHint: "اضغط على أي تارجت عشان تصححه",
     atLeastOneRequired: "اربط عمود واحد على الأقل من المنطقة أو المندوب أو الصنف عشان الأهداف تتطابق مع الفعلي.",
     replaceWarning: "ده هيستبدل كل الأهداف الحالية لمجموعة البيانات دي. الخطوة دي مينفعش نرجع فيها.",
     ofTarget: (pct) => `${pct}% من الهدف`,

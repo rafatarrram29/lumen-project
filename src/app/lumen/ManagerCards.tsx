@@ -21,6 +21,8 @@ import { useLanguage } from "@/lib/i18n/LanguageProvider";
 import type { MonthPoint } from "@/lib/lumen/engine";
 import { areasUnderManager, type AreaScope, type OrgManager, type OrgRep } from "@/lib/lumen/orgStructure";
 import { ItemTrendChart } from "./ItemTrendChart";
+import { TargetProgressPanel, type TargetEdit } from "./TargetProgressPanel";
+import { useTargetProgress } from "./useTargetProgress";
 import type { ReactNode } from "react";
 
 type ItemSeries = Record<string, MonthPoint[]>;
@@ -98,6 +100,11 @@ export function ManagerCards({
   hasQuantity,
   renderAreaDetail,
   onAreaOpen,
+  targetThreshold,
+  latestMonth,
+  targetsVersion,
+  onAddRepTarget,
+  onEditRepTarget,
 }: {
   managers: OrgManager[];
   datasetId: string;
@@ -123,6 +130,14 @@ export function ManagerCards({
    * drill-down would show a summary row instead of the card.
    */
   onAreaOpen: (area: string) => void;
+  /** The achievement below which a rep counts as behind. */
+  targetThreshold: number;
+  /** The month a hand-typed target is filed under. */
+  latestMonth: number;
+  /** Bumped after a target upload or edit, so the panels refetch. */
+  targetsVersion: number;
+  onAddRepTarget: (rep: string) => void;
+  onEditRepTarget: (rep: string, edit: TargetEdit) => Promise<void>;
 }) {
   const { t } = useLanguage();
   const [openManager, setOpenManager] = useState<string | null>(null);
@@ -173,6 +188,11 @@ export function ManagerCards({
                     hasQuantity={hasQuantity}
                     renderAreaDetail={renderAreaDetail}
                     onAreaOpen={onAreaOpen}
+                    targetThreshold={targetThreshold}
+                    latestMonth={latestMonth}
+                    targetsVersion={targetsVersion}
+                    onAddRepTarget={onAddRepTarget}
+                    onEditRepTarget={onEditRepTarget}
                   />
                 </div>
               )}
@@ -191,6 +211,11 @@ function TeamDetail({
   hasQuantity,
   renderAreaDetail,
   onAreaOpen,
+  targetThreshold,
+  latestMonth,
+  targetsVersion,
+  onAddRepTarget,
+  onEditRepTarget,
 }: {
   manager: OrgManager;
   datasetId: string;
@@ -198,6 +223,11 @@ function TeamDetail({
   hasQuantity: boolean;
   renderAreaDetail: RenderAreaDetail;
   onAreaOpen: (area: string) => void;
+  targetThreshold: number;
+  latestMonth: number;
+  targetsVersion: number;
+  onAddRepTarget: (rep: string) => void;
+  onEditRepTarget: (rep: string, edit: TargetEdit) => Promise<void>;
 }) {
   const { t } = useLanguage();
   // Which area's full card is open under this manager. One at a time: the
@@ -209,8 +239,32 @@ function TeamDetail({
   const { items, hasQuantity: itemsHaveQuantity } = useScopedItems(datasetId, year, areas, hasQuantity, true);
   const unitLabel = itemsHaveQuantity ? t.units.units : t.units.value;
 
+  // One request for the whole team: the endpoint scopes each rep and rolls
+  // them up server-side, so the manager's figure is the sum of the same
+  // numbers each rep's own card shows — never an average of percentages.
+  const teamScopes = useMemo(
+    () => manager.reps.map((r) => ({ rep: r.rep, areas: r.areas.map((a) => a.area) })),
+    [manager.reps],
+  );
+  const teamProgress = useTargetProgress({
+    datasetId,
+    year,
+    scopes: teamScopes,
+    threshold: targetThreshold,
+    enabled: teamScopes.length > 0,
+    version: targetsVersion,
+  });
+
   return (
     <div className="space-y-4">
+      <TargetProgressPanel
+        progress={teamProgress.data?.team ?? teamProgress.data?.members[0]?.progress ?? null}
+        threshold={targetThreshold}
+        editMonth={latestMonth}
+        loading={teamProgress.loading}
+        compact
+      />
+
       {manager.reps.map((rep) => (
         <RepBlock
           key={rep.rep}
@@ -222,6 +276,11 @@ function TeamDetail({
           setOpenArea={setOpenArea}
           renderAreaDetail={renderAreaDetail}
           onAreaOpen={onAreaOpen}
+          targetThreshold={targetThreshold}
+          latestMonth={latestMonth}
+          targetsVersion={targetsVersion}
+          onAddRepTarget={onAddRepTarget}
+          onEditRepTarget={onEditRepTarget}
         />
       ))}
 
@@ -275,6 +334,11 @@ function RepBlock({
   setOpenArea,
   renderAreaDetail,
   onAreaOpen,
+  targetThreshold,
+  latestMonth,
+  targetsVersion,
+  onAddRepTarget,
+  onEditRepTarget,
 }: {
   rep: OrgRep;
   datasetId: string;
@@ -284,9 +348,23 @@ function RepBlock({
   setOpenArea: (area: string | null) => void;
   renderAreaDetail: RenderAreaDetail;
   onAreaOpen: (area: string) => void;
+  targetThreshold: number;
+  latestMonth: number;
+  targetsVersion: number;
+  onAddRepTarget: (rep: string) => void;
+  onEditRepTarget: (rep: string, edit: TargetEdit) => Promise<void>;
 }) {
   const { t } = useLanguage();
   const repAreas = useMemo(() => rep.areas.map((a) => a.area), [rep.areas]);
+  const repScopes = useMemo(() => [{ rep: rep.rep, areas: repAreas }], [rep.rep, repAreas]);
+  const repProgress = useTargetProgress({
+    datasetId,
+    year,
+    scopes: repScopes,
+    threshold: targetThreshold,
+    enabled: true,
+    version: targetsVersion,
+  });
   const ownsOpenArea = openArea !== null && repAreas.includes(openArea);
   // Only fetched once one of this rep's areas is actually open — a manager
   // with eight reps would otherwise fire eight requests on every expand.
@@ -313,12 +391,24 @@ function RepBlock({
         };
 
   return (
-    <div className="rounded-xl border border-bdr bg-surf2/40 p-3">
+    <div data-testid="rep-block" data-rep={rep.rep} className="rounded-xl border border-bdr bg-surf2/40 p-3">
       <div className="mb-2 flex items-center justify-between gap-3">
         <div className="min-w-0 truncate text-sm font-semibold text-white" dir="auto">
           {rep.rep}
         </div>
         <div className="shrink-0 font-mono text-sm text-amber">{formatNumber(rep.totalValue)}</div>
+      </div>
+
+      <div className="mb-2">
+        <TargetProgressPanel
+          progress={repProgress.data?.members[0]?.progress ?? null}
+          threshold={targetThreshold}
+          editMonth={latestMonth}
+          loading={repProgress.loading}
+          compact
+          onAddTarget={() => onAddRepTarget(rep.rep)}
+          onEditTarget={(edit) => onEditRepTarget(rep.rep, edit)}
+        />
       </div>
 
       {rep.areas.length === 0 ? (

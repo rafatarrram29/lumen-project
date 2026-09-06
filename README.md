@@ -124,9 +124,14 @@ design reference only — it is not part of the running app.
     **District managers** layer. Purely additive — it creates one table
     holding which manager each rep reports to, and nothing else. Until you
     assign anyone, the app behaves exactly as it does without it.
-21. Open **Settings -> API** and copy the **Project URL** and the **anon
+21. Then run `supabase/lumen_target_progress_migration.sql` if you want
+    **Target vs Achievement** per rep and per manager (described below).
+    Purely additive — every column it adds to `lumen_targets` is nullable
+    or defaulted, so targets you have already uploaded keep working
+    exactly as they do today.
+22. Open **Settings -> API** and copy the **Project URL** and the **anon
    public** key.
-22. Open **Authentication -> Sign In / Providers** and make sure **Email**
+23. Open **Authentication -> Sign In / Providers** and make sure **Email**
    is enabled (it is by default). For local development, under
    **Authentication -> URL Configuration**, you can leave the defaults —
    we'll add your real domain there once deployed.
@@ -205,6 +210,61 @@ Once targets exist for the latest month, the dashboard shows **% of
 target** next to each area's and rep's raw numbers, with a clear "Under
 target by X%" alert when either falls below an adjustable threshold
 (70% by default). Datasets with no targets file work exactly as before.
+
+## Target vs Achievement, per rep and per manager (optional)
+
+The dataset-wide targets file above is the whole district's plan. This is
+the same thing at the level people are actually held to.
+
+**Uploading from a card.** Every area card, and every rep block inside a
+district manager's card, has a **+ Add target** button. It opens the same
+targets dialog, mapped the same way — with one difference: the file does
+not need a Rep or Area column, because the card already said whose plan it
+is. Rows with neither are filed under that rep or area automatically.
+
+A file that *does* name someone still wins, and the dialog says so before
+saving: "This file names Karim Sobhy, not Mona Adel. Continue and the
+file's own names win." Nothing is written until that is acknowledged.
+
+Uploading from a card replaces the targets for **that scope only**. Every
+other rep's plan is left alone — the sidebar upload is still the one that
+replaces the whole dataset's.
+
+**What the card then shows.** Sales beside target for every month as a
+comparison chart (bars for the two amounts, achievement as a line), the
+headline Sales / Target / Ach % for the latest month, and the same figures
+item by item. An achievement under the alert threshold gets the same red
+treatment the rest of the dashboard uses.
+
+**An Ach % column in the file is checked, not trusted.** If the plan file
+carries its own achievement percentage it is stored, and compared against
+sales / target computed from the data — row by row, one item in one month.
+Where they disagree by more than 2 points the card says so, naming both
+figures. Neither replaces the other: which is right is a question about the
+file.
+
+**Correcting a target by hand.** Click any target figure on a card to type
+a new one. It goes through the same Correction log as a sales edit, is
+undoable with Ctrl+Z, and is marked with a ✎ so it is distinguishable from
+an uploaded figure. A later upload for the same scope leaves hand-typed
+rows alone — someone corrected that number deliberately, and re-uploading
+the plan is not a request to undo it.
+
+**Rolled up to the manager.** A district manager's card carries the same
+panel for the whole team: total sales, total target, and the team's
+achievement — computed as **total sales / total target**, not the average
+of the reps' percentages. Averaging weights a rep with a small territory
+the same as one carrying half the district, which is how a team lands "at
+98%" while missing its number.
+
+Reps with no plan uploaded are named and left out of the team percentage
+rather than counted: their sales with nothing to divide by turned a team at
+75% into a team at 103%. The card also summarises who is behind — "1 of 2
+reps below target — Mona Adel" — before anyone opens a single rep.
+
+Run `supabase/lumen_target_progress_migration.sql` once to enable it.
+Purely additive: every column it adds is nullable or defaulted, so targets
+already uploaded keep working exactly as they do today.
 
 ## Rep assignment history (optional)
 
