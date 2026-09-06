@@ -26,7 +26,7 @@ import { recordsForAreaMonth, type LinkedFile, type LinkedRecord } from "@/lib/l
 import { EditableValue, EditableFieldValue } from "./EditableValue";
 import { RepHistoryPanel } from "./RepHistoryPanel";
 import { TrendChart } from "./TrendChart";
-import { areaCardId, formatNumber, Badge, TargetChip } from "./dashboardBits";
+import { areaCardId, formatNumber, Badge, PctDelta, TargetChip } from "./dashboardBits";
 
 type SuccessReport = Extract<Report, { findings: Finding[] }>;
 type AreaChange = SuccessReport["areas"][string];
@@ -265,15 +265,7 @@ export function AreaDetail({
                                     title={t.inlineEdit.renameHint}
                                     onSave={(v) => handleRenameSalesField("item", fam, v.trim())}
                                   />
-                                  <span
-                                    className={`shrink-0 font-mono ${
-                                      fc.pctChange !== null && fc.pctChange < 0 ? "text-red" : "text-green"
-                                    }`}
-                                  >
-                                    {fc.pctChange !== null && fc.pctChange > 0 ? "+" : ""}
-                                    {fc.pctChange ?? "—"}
-                                    {fc.pctChange !== null ? "%" : ""}
-                                  </span>
+                                  <PctDelta pctChange={fc.pctChange} />
                                   <span className="shrink-0 text-[10px] text-muted">{itemOpen ? t.common.hide : t.common.details}</span>
                                 </div>
                                 <div className="ps-4 font-mono text-[11px] break-words text-muted">

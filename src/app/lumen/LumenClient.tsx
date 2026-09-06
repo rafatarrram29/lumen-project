@@ -2,26 +2,18 @@
 
 import { useEffect, useRef, useState } from "react";
 import dynamic from "next/dynamic";
-import {
-  applyColumnMapping,
-  applyTargetMapping,
-  type ColumnMapping,
-  type Dataset,
-  type RawSheet,
-  type TargetColumnMapping,
-} from "@/lib/lumen/columnMapping";
+import type { Dataset } from "@/lib/lumen/columnMapping";
 import type { Finding, Report } from "@/lib/lumen/engine";
 import type { EditedCell } from "@/lib/lumen/loadReport";
 import { StatTile, AreaChangeBars, FamilyChangeBars, RepLeaderboard } from "./charts";
 import { colorForFamily } from "@/lib/lumen/familyColors";
-import Sidebar from "@/components/Sidebar";
-import { UploadWizardModal, type WizardChoice } from "./UploadWizardModal";
+import { DashboardSidebar } from "./DashboardSidebar";
+import { UploadWizardModal } from "./UploadWizardModal";
 import { UploadTargetsModal } from "./UploadTargetsModal";
 import { buildOrgChart, knownReps, scopedAreaRanking, type AreaScope } from "@/lib/lumen/orgStructure";
 import { AssignAreasModal } from "./AssignAreasModal";
 import { AssignManagersModal } from "./AssignManagersModal";
 import { ManagerCards } from "./ManagerCards";
-import { LinkedFilesPanel } from "./LinkedFilesPanel";
 import { AddLinkedFileModal } from "./AddLinkedFileModal";
 import { CorrectionLogModal } from "./CorrectionLogModal";
 import { EditSalesMappingModal } from "./EditSalesMappingModal";
@@ -31,15 +23,15 @@ import { buildExportItems } from "@/lib/lumen/exportItems";
 import { useLanguage } from "@/lib/i18n/LanguageProvider";
 import { findingSummary, findingDecision } from "@/lib/i18n/findingText";
 import { AddImsFileModal } from "./AddImsFileModal";
-import { dedupeExactDuplicates } from "@/lib/lumen/duplicateCheck";
 import { imsGroupLabel } from "@/lib/lumen/imsLabels";
 import { GlobalSearch } from "./GlobalSearch";
 import { useLumenData } from "./useLumenData";
-import { areaCardId, itemCardId, repCardId, formatNumber, TargetChip } from "./dashboardBits";
+import { areaCardId, itemCardId, repCardId, formatNumber, BreakdownRow, TargetChip } from "./dashboardBits";
 import { AreaDetail } from "./AreaDetail";
-import { UPLOAD_BATCH_SIZE, UNDO_WINDOW_MS, type UploadStatus } from "./uploadShared";
+import { UNDO_WINDOW_MS, type UploadStatus } from "./uploadShared";
 import { useLinkedFileUploads } from "./useLinkedFileUploads";
 import { useImsFileUploads } from "./useImsFileUploads";
+import { useSalesUploads } from "./useSalesUploads";
 
 // recharts is a heavy dependency only ever needed once a trend chart is
 // actually shown (an area or item card expanded, or the Market Insights
@@ -86,9 +78,6 @@ export default function LumenClient({
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
   const [expandedItems, setExpandedItems] = useState<Set<string>>(new Set());
   const [expandedReps, setExpandedReps] = useState<Set<string>>(new Set());
-  const [pendingFiles, setPendingFiles] = useState<{ file: File; sheet: RawSheet }[]>([]);
-  const [pendingTargetsFile, setPendingTargetsFile] = useState<File | null>(null);
-  const [pendingTargetsSheet, setPendingTargetsSheet] = useState<RawSheet | null>(null);
   const [targetThreshold, setTargetThreshold] = useState(70);
   const [activeTab, setActiveTab] = useState<"sales" | "ims">("sales");
   const [showAssignAreas, setShowAssignAreas] = useState(false);
@@ -102,8 +91,6 @@ export default function LumenClient({
   const [showExportModal, setShowExportModal] = useState(false);
   const [exporting, setExporting] = useState(false);
   const [lastEdit, setLastEdit] = useState<LastEdit | null>(null);
-  const fileInputRef = useRef<HTMLInputElement>(null);
-  const targetsFileInputRef = useRef<HTMLInputElement>(null);
   const undoTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Every read the dashboard performs lives in useLumenData — see the note
@@ -180,6 +167,30 @@ export default function LumenClient({
     fetchLinkedFiles,
     fetchLinkedRecords,
     fetchDataEdits,
+  });
+
+  const {
+    pendingFiles,
+    pendingTargets,
+    cancelPendingFiles,
+    cancelPendingTargets,
+    handleFilesSelected,
+    handleTargetsFileSelected,
+    handleTargetsConfirm,
+    handleWizardConfirm,
+    handleSaveSalesMapping,
+  } = useSalesUploads({
+    datasetId: selectedDatasetId,
+    year,
+    datasets,
+    setDatasets,
+    t,
+    status: uploadStatus,
+    fetchReport,
+    onDatasetSwitched: (id) => {
+      setSelectedDatasetId(id);
+      setExpanded(new Set());
+    },
   });
 
   const {
@@ -282,382 +293,6 @@ export default function LumenClient({
       }
     } catch (err) {
       setUploadError(err instanceof Error ? err.message : "Could not delete dataset");
-    }
-  }
-
-  async function handleFilesSelected(files: File[]) {
-    setUploadError(null);
-    setUploadMessage(null);
-    const { readWorkbookSheet } = await import("@/lib/lumen/readWorkbookSheet");
-    const read: { file: File; sheet: RawSheet }[] = [];
-    const failed: string[] = [];
-    for (const file of files) {
-      try {
-        const sheet = await readWorkbookSheet(file);
-        read.push({ file, sheet });
-      } catch (err) {
-        failed.push(`${file.name}: ${err instanceof Error ? err.message : "Could not read that file."}`);
-      }
-    }
-    if (read.length > 0) setPendingFiles(read);
-    if (failed.length > 0) setUploadError(failed.join(" | "));
-  }
-
-  async function handleTargetsFileSelected(file: File) {
-    setUploadError(null);
-    setUploadMessage(null);
-    try {
-      const { readWorkbookSheet } = await import("@/lib/lumen/readWorkbookSheet");
-      const sheet = await readWorkbookSheet(file);
-      setPendingTargetsFile(file);
-      setPendingTargetsSheet(sheet);
-    } catch (err) {
-      setUploadError(err instanceof Error ? err.message : "Could not read that file.");
-    }
-  }
-
-  async function handleTargetsConfirm(mapping: TargetColumnMapping) {
-    const file = pendingTargetsFile;
-    const sheet = pendingTargetsSheet;
-    setPendingTargetsFile(null);
-    setPendingTargetsSheet(null);
-    if (!file || !sheet || !selectedDatasetId) return;
-
-    setUploading(true);
-    setUploadError(null);
-    setUploadMessage(null);
-
-    try {
-      const { rows, skipped } = applyTargetMapping(sheet, mapping);
-
-      const currentDataset = datasets.find((d) => d.id === selectedDatasetId);
-      const mappingUnchanged =
-        currentDataset?.targetColumnMapping &&
-        currentDataset.targetColumnMapping.area === mapping.area &&
-        currentDataset.targetColumnMapping.rep === mapping.rep &&
-        currentDataset.targetColumnMapping.item === mapping.item &&
-        currentDataset.targetColumnMapping.month === mapping.month &&
-        currentDataset.targetColumnMapping.value === mapping.value;
-
-      if (!mappingUnchanged) {
-        const patchRes = await fetch(`/api/lumen/datasets/${selectedDatasetId}`, {
-          method: "PATCH",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ targetColumnMapping: mapping }),
-        });
-        if (patchRes.ok) {
-          setDatasets((prev) =>
-            prev.map((d) => (d.id === selectedDatasetId ? { ...d, targetColumnMapping: mapping } : d)),
-          );
-        }
-      }
-
-      const replaceRes = await fetch("/api/lumen/targets/replace", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ year, datasetId: selectedDatasetId }),
-      });
-      const replaceJson = await replaceRes.json();
-      if (!replaceRes.ok) throw new Error(replaceJson.error || "Could not clear existing targets");
-
-      const batches = [];
-      for (let i = 0; i < rows.length; i += UPLOAD_BATCH_SIZE) {
-        batches.push(rows.slice(i, i + UPLOAD_BATCH_SIZE));
-      }
-
-      let inserted = 0;
-      for (let i = 0; i < batches.length; i++) {
-        setUploadProgress(`Uploading batch ${i + 1} of ${batches.length}…`);
-        const res = await fetch("/api/lumen/targets", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ year, datasetId: selectedDatasetId, rows: batches[i] }),
-        });
-        const json = await res.json();
-        if (!res.ok) throw new Error(json.error || "Targets upload failed");
-        inserted += json.inserted;
-      }
-
-      setUploadMessage(t.targets.uploadSuccess(inserted));
-      if (skipped.count > 0) {
-        setUploadError(
-          `Skipped ${skipped.count} row(s) that couldn't be read (${skipped.examples.join("; ") || "missing month/value"}) — check the source file for those rows.`,
-        );
-      }
-      await fetchReport(selectedDatasetId, year);
-    } catch (err) {
-      setUploadError(err instanceof Error ? err.message : "Targets upload failed");
-    } finally {
-      setUploading(false);
-      setUploadProgress(null);
-    }
-  }
-
-  async function uploadRowsToDataset(
-    datasetId: string,
-    mapping: ColumnMapping,
-    sheet: RawSheet,
-    fileName: string,
-    fileLabel: string,
-  ): Promise<{ inserted: number; warning?: string } | false> {
-    const { rows: parsedRows, skipped } = applyColumnMapping(sheet, mapping);
-    // An exact repeat of a row within this same file (every TRACKED column
-    // identical, including the value) can only be safely auto-removed when
-    // the mapping includes a real per-row identifier (Customer ID, invoice
-    // number, ...): without one, two DIFFERENT customers who happen to
-    // order the same quantity at the same price look byte-identical to
-    // everything this app tracks, and are NOT duplicates — auto-deleting
-    // on that weaker key was measured to silently remove 68-75% of two
-    // real multi-customer sales files' rows. With a uniqueId mapped, the
-    // key can tell the two cases apart and it's safe to drop and continue;
-    // without one, this falls back to the original behavior further down
-    // (the server rejects the batch and asks the uploader to look at it).
-    // Either way this is scoped to THIS one file/upload attempt only — a
-    // new upload colliding with rows already committed from an earlier
-    // upload is a different case, still handled by the overlap/replace
-    // prompt above and the database's own uniqueness constraint.
-    const dedupeResult = mapping.uniqueId
-      ? dedupeExactDuplicates(
-          parsedRows,
-          (r) => `${r.month}|${r.area}|${r.item}|${r.rep ?? ""}|${r.salesValue}|${r.salesQty ?? ""}|${r.uniqueId ?? ""}`,
-          (r) => `${r.area} / ${r.item} / month ${r.month}`,
-        )
-      : { kept: parsedRows, removed: { count: 0, examples: [] as string[] } };
-    const rows = dedupeResult.kept;
-    const duplicatesRemoved = dedupeResult.removed;
-    const monthsInFile = Array.from(new Set(rows.map((r) => r.month))).sort((a, b) => a - b);
-    const areasInFile = Array.from(new Set(rows.map((r) => r.area)));
-
-    const overlapRes = await fetch("/api/lumen/check-overlap", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ year, datasetId, months: monthsInFile, areas: areasInFile }),
-    });
-    const overlapJson = await overlapRes.json();
-    if (!overlapRes.ok) throw new Error(overlapJson.error || "Could not check for existing months");
-
-    const overlappingMonths: number[] = overlapJson.overlappingMonths ?? [];
-    if (overlappingMonths.length > 0) {
-      const existingSourceFiles: string[] = overlapJson.existingSourceFiles ?? [];
-      const existingFilesNote =
-        existingSourceFiles.length > 0
-          ? ` The data currently there came from: ${existingSourceFiles.join(", ")}.`
-          : "";
-      const proceed = window.confirm(
-        `${fileLabel} — month(s) ${overlappingMonths.join(", ")} already have data in this dataset for ${year}.${existingFilesNote} ` +
-          `Continuing will delete the existing rows for those months and replace them with ` +
-          `this file. This cannot be undone. Continue?`,
-      );
-      if (!proceed) return false;
-
-      // Replacing a month deletes EVERY area's rows for it, not just the
-      // ones this file has. An area that currently has data for these
-      // months but isn't in this file at all would lose that data
-      // permanently with nothing to replace it — a second, more explicit
-      // confirmation makes that impossible to blow through by accident
-      // (this is the exact shape of mistake that produced a real
-      // production data-loss incident: a smaller/test file silently
-      // wiping out other areas' real numbers for the same month).
-      const areasAtRisk: { area: string; rowCount: number; totalValue: number }[] = overlapJson.areasAtRisk ?? [];
-      if (areasAtRisk.length > 0) {
-        const list = areasAtRisk
-          .map((a) => `${a.area} (${formatNumber(a.totalValue)} across ${a.rowCount} row(s))`)
-          .join(", ");
-        const proceedAnyway = window.confirm(
-          `⚠️ WARNING — ${fileLabel} does NOT include these area(s), which currently have data for month(s) ` +
-            `${overlappingMonths.join(", ")}: ${list}. ` +
-            `Continuing will PERMANENTLY DELETE their data for these months, with nothing from this file to replace it. ` +
-            `Only continue if you really mean to remove those areas' data for these months.`,
-        );
-        if (!proceedAnyway) return false;
-      }
-
-      const replaceRes = await fetch("/api/lumen/replace-months", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ year, datasetId, months: overlappingMonths }),
-      });
-      const replaceJson = await replaceRes.json();
-      if (!replaceRes.ok) throw new Error(replaceJson.error || "Could not clear the old months");
-    }
-
-    const batches = [];
-    for (let i = 0; i < rows.length; i += UPLOAD_BATCH_SIZE) {
-      batches.push(rows.slice(i, i + UPLOAD_BATCH_SIZE));
-    }
-
-    let inserted = 0;
-    try {
-      for (let i = 0; i < batches.length; i++) {
-        setUploadProgress(`${fileLabel}: batch ${i + 1} of ${batches.length}…`);
-        const res = await fetch("/api/lumen/upload", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            year,
-            datasetId,
-            sourceFile: fileName,
-            rows: batches[i],
-            // Tells the server which duplicate-check mode is safe to run:
-            // with a real per-row identifier mapped, each row already
-            // carries its own uniqueId (part of ParsedSalesRow), so the
-            // server can dedupe-and-continue using the SAME strong key
-            // this file was already deduped with above; without one, it
-            // falls back to the original reject-and-ask behavior, since
-            // there's no way to tell a real duplicate apart from two
-            // different customers who coincidentally share every tracked
-            // column.
-            hasUniqueId: Boolean(mapping.uniqueId),
-            // Reported once (on the first batch only) — the whole file's
-            // duplicates were already found and dropped above, before
-            // batching, so there is exactly one summary for this upload.
-            ...(i === 0 && duplicatesRemoved.count > 0 ? { duplicatesRemoved } : {}),
-          }),
-        });
-        const json = await res.json();
-        if (!res.ok) throw new Error(json.error || "Upload failed");
-        inserted += json.inserted;
-      }
-    } catch (err) {
-      // A batch failed partway through — rather than leave this file's
-      // months half-written (some areas present, others missing, with no
-      // visible sign anything went wrong), roll back everything this
-      // attempt touched so the month is either fully there or not there
-      // at all, never a silent partial mix.
-      await fetch("/api/lumen/replace-months", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ year, datasetId, months: monthsInFile }),
-      }).catch(() => {});
-      throw new Error(
-        `${err instanceof Error ? err.message : "Upload failed"} — the partial data from this attempt was rolled back. Please try again.`,
-      );
-    }
-
-    // Final sanity check: does the dataset actually now hold as many rows
-    // for these months as we just inserted? This should always match —
-    // the within-file dedup above and the database's own uniqueness
-    // constraint both prevent a mismatch — but this is the one place we
-    // can catch anything neither of those anticipated before the user
-    // walks away trusting a silently wrong number.
-    const warnings: string[] = [];
-    if (skipped.count > 0) {
-      warnings.push(
-        `${fileLabel}: skipped ${skipped.count} row(s) that couldn't be read (${skipped.examples.join("; ") || "missing area/item/value/month"}) — check the source file for those rows.`,
-      );
-    }
-    if (duplicatesRemoved.count > 0) {
-      warnings.push(
-        `${fileLabel}: removed ${duplicatesRemoved.count} row(s) repeated identically within this file ` +
-          `(e.g. ${duplicatesRemoved.examples.join("; ") || "a repeated row"}) — kept one copy of each, logged in the Correction log.`,
-      );
-    }
-    try {
-      const countRes = await fetch(
-        `/api/lumen/sales-records/count?year=${year}&datasetId=${datasetId}&months=${monthsInFile.join(",")}`,
-      );
-      const countJson = await countRes.json();
-      if (countRes.ok && typeof countJson.count === "number" && countJson.count !== inserted) {
-        warnings.push(
-          `${fileLabel}: expected ${inserted} rows for this upload, but the dataset now has ${countJson.count} for these months — please check the Correction log and this area's numbers before relying on them.`,
-        );
-      }
-    } catch {
-      // best-effort only; not being able to verify isn't itself an error
-    }
-
-    return { inserted, warning: warnings.length > 0 ? warnings.join(" | ") : undefined };
-  }
-
-  async function handleWizardConfirm(choice: WizardChoice) {
-    const files = pendingFiles;
-    setPendingFiles([]);
-    if (files.length === 0) return;
-
-    setUploading(true);
-    setUploadError(null);
-    setUploadMessage(null);
-
-    try {
-      let datasetId: string;
-      let mapping: ColumnMapping;
-
-      if (choice.mode === "new") {
-        const res = await fetch("/api/lumen/datasets", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ name: choice.name, columnMapping: choice.mapping }),
-        });
-        const json = await res.json();
-        if (!res.ok) throw new Error(json.error || "Could not create the dataset");
-        datasetId = json.dataset.id;
-        mapping = json.dataset.columnMapping;
-        setDatasets((prev) => [json.dataset, ...prev]);
-      } else {
-        datasetId = choice.datasetId;
-        const existing = datasets.find((d) => d.id === datasetId);
-        if (!existing) throw new Error("Dataset not found");
-        mapping = existing.columnMapping;
-      }
-
-      let successCount = 0;
-      let totalInserted = 0;
-      const failures: string[] = [];
-      const warnings: string[] = [];
-
-      for (let i = 0; i < files.length; i++) {
-        const { file, sheet } = files[i];
-        const fileLabel = files.length > 1 ? `${file.name} (${i + 1}/${files.length})` : file.name;
-        try {
-          const result = await uploadRowsToDataset(datasetId, mapping, sheet, file.name, fileLabel);
-          if (result !== false) {
-            successCount++;
-            totalInserted += result.inserted;
-            if (result.warning) warnings.push(result.warning);
-          }
-        } catch (err) {
-          failures.push(`${file.name}: ${err instanceof Error ? err.message : "Upload failed"}`);
-        }
-      }
-
-      if (successCount > 0) {
-        setUploadMessage(
-          files.length > 1
-            ? `Uploaded ${successCount} of ${files.length} files (${formatNumber(totalInserted)} rows).`
-            : `Uploaded and processed ${files[0].file.name} (${formatNumber(totalInserted)} rows).`,
-        );
-        setSelectedDatasetId(datasetId);
-        setExpanded(new Set());
-        await fetchReport(datasetId, year);
-      }
-      if (warnings.length > 0) {
-        setUploadError((prev) => [prev, ...warnings].filter(Boolean).join(" | "));
-      }
-      if (failures.length > 0) {
-        setUploadError(failures.join(" | "));
-      }
-    } catch (err) {
-      setUploadError(err instanceof Error ? err.message : "Upload failed");
-    } finally {
-      setUploading(false);
-      setUploadProgress(null);
-    }
-  }
-
-  async function handleSaveSalesMapping(mapping: ColumnMapping) {
-    if (!selectedDatasetId) return;
-    try {
-      const res = await fetch(`/api/lumen/datasets/${selectedDatasetId}`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ columnMapping: mapping }),
-      });
-      const json = await res.json();
-      if (!res.ok) throw new Error(json.error || "Could not update the mapping");
-      setDatasets((prev) => prev.map((d) => (d.id === selectedDatasetId ? { ...d, columnMapping: mapping } : d)));
-      setShowEditSalesMapping(false);
-    } catch (err) {
-      setUploadError(err instanceof Error ? err.message : "Could not update the mapping");
     }
   }
 
@@ -1032,162 +667,38 @@ export default function LumenClient({
 
   return (
     <div className="flex min-h-screen flex-col bg-bg sm:flex-row">
-      <Sidebar userEmail={userEmail}>
-        {activeTab === "sales" && (
-        <>
-        <input
-          ref={fileInputRef}
-          type="file"
-          multiple
-          accept=".xlsx,.xls,.xlsm,.csv,.tsv,.txt,.ods"
-          className="hidden"
-          onChange={(e) => {
-            const files = Array.from(e.target.files ?? []);
-            if (files.length > 0) handleFilesSelected(files);
-            e.target.value = "";
-          }}
-        />
-        <button
-          onClick={() => fileInputRef.current?.click()}
-          disabled={uploading}
-          className="mb-2 w-full rounded-lg border border-dashed border-bdr px-3 py-2.5 text-sm text-muted transition-colors hover:border-amber hover:text-white disabled:opacity-60"
-        >
-          {uploading ? uploadProgress ?? t.sidebar.uploading : t.sidebar.upload}
-        </button>
-
-        {selectedDatasetId && (
-          <>
-            <input
-              ref={targetsFileInputRef}
-              type="file"
-              accept=".xlsx,.xls,.xlsm,.csv,.tsv,.txt,.ods"
-              className="hidden"
-              onChange={(e) => {
-                const file = e.target.files?.[0];
-                if (file) handleTargetsFileSelected(file);
-                e.target.value = "";
-              }}
-            />
-            <button
-              onClick={() => targetsFileInputRef.current?.click()}
-              disabled={uploading}
-              className="mb-2 w-full rounded-lg border border-dashed border-bdr px-3 py-2.5 text-sm text-muted transition-colors hover:border-amber hover:text-white disabled:opacity-60"
-            >
-              {t.sidebar.uploadTargets}
-            </button>
-            <button
-              type="button"
-              onClick={() => setShowAssignAreas(true)}
-              disabled={uploading}
-              className="mb-2 w-full rounded-lg border border-dashed border-bdr px-3 py-2.5 text-sm text-muted transition-colors hover:border-amber hover:text-white disabled:opacity-60"
-            >
-              {t.org.assignAreasButton}
-            </button>
-            <button
-              type="button"
-              onClick={() => setShowAssignManagers(true)}
-              disabled={uploading}
-              className="mb-2 w-full rounded-lg border border-dashed border-bdr px-3 py-2.5 text-sm text-muted transition-colors hover:border-amber hover:text-white disabled:opacity-60"
-            >
-              {t.org.assignManagersButton}
-            </button>
-          </>
-        )}
-
-        <label className="mb-2 flex items-center justify-between gap-2 text-sm text-muted">
-          {t.sidebar.year}
-          <input
-            type="number"
-            value={year}
-            onChange={(e) => setYear(Number(e.target.value))}
-            className="w-20 rounded-lg border border-bdr bg-surf2 px-2 py-1.5 font-mono text-sm text-white outline-none focus:border-amber"
-          />
-        </label>
-        <button
-          onClick={() => {
-            clearUndo();
-            if (selectedDatasetId) fetchReport(selectedDatasetId, year);
-          }}
-          disabled={loadingReport || !selectedDatasetId}
-          className="w-full rounded-lg bg-gradient-to-br from-amber to-[var(--amber-2)] px-4 py-2 text-sm font-semibold text-on-accent disabled:opacity-50"
-        >
-          {loadingReport ? t.sidebar.loading : t.sidebar.analyze}
-        </button>
-        </>
-        )}
-
-        {/* Shared by both the Sales and IMS upload flows, so this stays
-            visible regardless of which tab is active. */}
-        {uploadError && <p className="mb-2 mt-2 break-words text-xs text-red">{uploadError}</p>}
-        {uploadMessage && <p className="mb-2 mt-2 break-words text-xs text-green">{uploadMessage}</p>}
-
-        {datasets.length > 0 && (
-          <div className="mt-4 border-t border-bdr pt-4">
-            <div className="mb-2 text-xs font-semibold text-muted">{t.sidebar.datasets}</div>
-            <div className="flex flex-col gap-1.5">
-              {datasets.map((d) => {
-                const isSelected = d.id === selectedDatasetId;
-                return (
-                  <div key={d.id} className="flex items-center gap-1.5">
-                    <button
-                      onClick={() => selectDataset(d.id)}
-                      title={d.name}
-                      dir="auto"
-                      className={`min-w-0 flex-1 truncate rounded-lg border px-3 py-1.5 text-start text-sm transition-colors ${
-                        isSelected
-                          ? "border-amber bg-amber/10 text-white"
-                          : "border-bdr text-muted hover:text-white"
-                      }`}
-                    >
-                      {d.name}
-                    </button>
-                    {isSelected && d.userId === userId && (
-                      <>
-                        <button
-                          onClick={() => setShowEditSalesMapping(true)}
-                          title={t.editMapping.editSalesButton}
-                          aria-label={t.editMapping.editSalesButton}
-                          className="shrink-0 rounded-lg border border-bdr px-2.5 py-1.5 text-muted transition-colors hover:border-amber hover:text-amber"
-                        >
-                          ⚙
-                        </button>
-                        <button
-                          onClick={() => handleDeleteDataset(d)}
-                          title={t.sidebar.deleteDataset(d.name)}
-                          aria-label={t.sidebar.deleteDataset(d.name)}
-                          className="shrink-0 rounded-lg border border-bdr px-2.5 py-1.5 text-muted transition-colors hover:border-red hover:text-red"
-                        >
-                          ×
-                        </button>
-                      </>
-                    )}
-                  </div>
-                );
-              })}
-            </div>
-          </div>
-        )}
-
-        {activeTab === "sales" && selectedDatasetId && (
-          <LinkedFilesPanel
-            files={linkedFiles}
-            disabled={uploading}
-            onAddFile={handleAddLinkedFile}
-            onReplaceFile={handleReplaceLinkedFile}
-            onDeleteFile={handleDeleteLinkedFile}
-            onEditJoinKeys={handleEditJoinKeys}
-          />
-        )}
-
-        {activeTab === "sales" && selectedDatasetId && (
-          <button
-            onClick={() => setShowCorrectionLog(true)}
-            className="mt-4 w-full rounded-lg border border-bdr px-3 py-2 text-xs text-muted transition-colors hover:border-amber hover:text-white"
-          >
-            {t.corrections.logButton}
-          </button>
-        )}
-      </Sidebar>
+      <DashboardSidebar
+        userEmail={userEmail}
+        userId={userId}
+        t={t}
+        activeTab={activeTab}
+        uploading={uploading}
+        uploadProgress={uploadProgress}
+        uploadError={uploadError}
+        uploadMessage={uploadMessage}
+        loadingReport={loadingReport}
+        year={year}
+        setYear={setYear}
+        datasets={datasets}
+        selectedDatasetId={selectedDatasetId}
+        linkedFiles={linkedFiles}
+        onFilesSelected={handleFilesSelected}
+        onTargetsFileSelected={handleTargetsFileSelected}
+        onAssignAreas={() => setShowAssignAreas(true)}
+        onAssignManagers={() => setShowAssignManagers(true)}
+        onAnalyze={() => {
+          clearUndo();
+          if (selectedDatasetId) fetchReport(selectedDatasetId, year);
+        }}
+        onSelectDataset={selectDataset}
+        onEditMapping={() => setShowEditSalesMapping(true)}
+        onDeleteDataset={handleDeleteDataset}
+        onShowCorrectionLog={() => setShowCorrectionLog(true)}
+        onAddLinkedFile={handleAddLinkedFile}
+        onReplaceLinkedFile={handleReplaceLinkedFile}
+        onDeleteLinkedFile={handleDeleteLinkedFile}
+        onEditJoinKeys={handleEditJoinKeys}
+      />
 
       {pendingFiles.length > 0 && (
         <UploadWizardModal
@@ -1196,20 +707,17 @@ export default function LumenClient({
           sheet={pendingFiles[0].sheet}
           datasets={datasets}
           defaultDatasetId={selectedDatasetId}
-          onCancel={() => setPendingFiles([])}
+          onCancel={cancelPendingFiles}
           onConfirm={handleWizardConfirm}
         />
       )}
 
-      {pendingTargetsFile && pendingTargetsSheet && selectedDatasetId && (
+      {pendingTargets && selectedDatasetId && (
         <UploadTargetsModal
-          fileName={pendingTargetsFile.name}
-          sheet={pendingTargetsSheet}
+          fileName={pendingTargets.file.name}
+          sheet={pendingTargets.sheet}
           dataset={datasets.find((d) => d.id === selectedDatasetId)!}
-          onCancel={() => {
-            setPendingTargetsFile(null);
-            setPendingTargetsSheet(null);
-          }}
+          onCancel={cancelPendingTargets}
           onConfirm={handleTargetsConfirm}
         />
       )}
@@ -1248,7 +756,9 @@ export default function LumenClient({
         <EditSalesMappingModal
           mapping={datasets.find((d) => d.id === selectedDatasetId)!.columnMapping}
           onCancel={() => setShowEditSalesMapping(false)}
-          onSave={handleSaveSalesMapping}
+          onSave={async (mapping) => {
+            if (await handleSaveSalesMapping(mapping)) setShowEditSalesMapping(false);
+          }}
         />
       )}
 
@@ -1471,35 +981,26 @@ export default function LumenClient({
               <div className="space-y-2">
                 {Object.entries(report.familyChanges)
                   .sort((a, b) => (a[1].pctChange ?? Infinity) - (b[1].pctChange ?? Infinity))
-                  .map(([fam, fc]) => {
-                    const itemOpen = expandedItems.has(fam);
-                    return (
-                      <div key={fam} id={itemCardId(fam)} className="scroll-mt-4 text-xs">
-                        <button
-                          onClick={() => toggleItem(fam)}
-                          className="flex w-full items-center gap-2 rounded-lg text-start transition-colors hover:bg-surf2/60"
-                        >
-                          <span className="h-2 w-2 shrink-0 rounded-full" style={{ backgroundColor: colorForFamily(fam) }} />
-                          <span className="min-w-0 flex-1 truncate text-muted" dir="auto">{fam}</span>
-                          <span
-                            className={`shrink-0 font-mono ${
-                              fc.pctChange !== null && fc.pctChange < 0 ? "text-red" : "text-green"
-                            }`}
-                          >
-                            {fc.pctChange !== null && fc.pctChange > 0 ? "+" : ""}
-                            {fc.pctChange ?? "—"}
-                            {fc.pctChange !== null ? "%" : ""}
-                          </span>
-                          <span className="shrink-0 text-[10px] text-muted">{itemOpen ? t.common.hide : t.common.details}</span>
-                        </button>
-                        <div className="ps-4 font-mono text-[11px] break-words text-muted">
-                          {t.common.month(report.comparedToMonth)}: {formatNumber(fc.prevValue)} →{" "}
-                          {t.common.month(report.latestMonth)}: {formatNumber(fc.currValue)}
-                        </div>
-                        {itemOpen && renderItemDetail(fam)}
-                      </div>
-                    );
-                  })}
+                  .map(([fam, fc]) => (
+                    <BreakdownRow
+                      key={fam}
+                      id={itemCardId(fam)}
+                      name={fam}
+                      pctChange={fc.pctChange}
+                      prevValue={fc.prevValue}
+                      currValue={fc.currValue}
+                      comparedToMonth={report.comparedToMonth}
+                      latestMonth={report.latestMonth}
+                      isOpen={expandedItems.has(fam)}
+                      onToggle={() => toggleItem(fam)}
+                      t={t}
+                      leading={
+                        <span className="h-2 w-2 shrink-0 rounded-full" style={{ backgroundColor: colorForFamily(fam) }} />
+                      }
+                    >
+                      {renderItemDetail(fam)}
+                    </BreakdownRow>
+                  ))}
               </div>
             </div>
           )}
@@ -1527,57 +1028,46 @@ export default function LumenClient({
                 {Object.entries(report.repChanges)
                   .sort((a, b) => (a[1].pctChange ?? Infinity) - (b[1].pctChange ?? Infinity))
                   .map(([rep, rc]) => {
-                    const repOpen = expandedReps.has(rep);
                     const repSeries = report.repMonthlySeries[rep] ?? [];
                     return (
-                      <div key={rep} id={repCardId(rep)} className="scroll-mt-4 text-xs">
-                        <button
-                          onClick={() => toggleRep(rep)}
-                          className="flex w-full items-center gap-2 rounded-lg text-start transition-colors hover:bg-surf2/60"
-                        >
-                          <span className="min-w-0 flex-1 truncate text-muted" dir="auto">{rep}</span>
-                          <span
-                            className={`shrink-0 font-mono ${
-                              rc.pctChange !== null && rc.pctChange < 0 ? "text-red" : "text-green"
-                            }`}
-                          >
-                            {rc.pctChange !== null && rc.pctChange > 0 ? "+" : ""}
-                            {rc.pctChange ?? "—"}
-                            {rc.pctChange !== null ? "%" : ""}
-                          </span>
-                          <TargetChip progress={report.repTargets[rep]} threshold={targetThreshold} t={t} />
-                          <span className="shrink-0 text-[10px] text-muted">{repOpen ? t.common.hide : t.common.details}</span>
-                        </button>
-                        <div className="ps-4 font-mono text-[11px] break-words text-muted">
-                          {t.common.month(report.comparedToMonth)}: {formatNumber(rc.prevValue)} →{" "}
-                          {t.common.month(report.latestMonth)}: {formatNumber(rc.currValue)}
-                        </div>
-                        {repOpen && (
-                          <div className="ms-4 mt-2 space-y-2 rounded-lg bg-surf2/60 p-3">
-                            {report.repTargets[rep] &&
-                              report.repTargets[rep].pctOfTarget !== null &&
-                              report.repTargets[rep].pctOfTarget! < targetThreshold && (
-                                <p className="rounded-lg bg-red/10 px-2 py-1.5 text-[11px] font-semibold text-red">
-                                  {t.targets.underTargetBy(Math.round((100 - report.repTargets[rep].pctOfTarget!) * 10) / 10)}
-                                </p>
-                              )}
-                            {repSeries.length >= 2 && (
-                              <div>
-                                <div className="mb-1 text-[11px] font-semibold text-white">
-                                  {t.dashboard.trendLastMonths(repSeries.length)}
-                                </div>
-                                <TrendChart
-                                  areaLabel={rep}
-                                  areaSeries={repSeries}
-                                  lineSeries={report.repAverageSeries}
-                                  compareShortLabel={t.chart.repAvg}
-                                  compareLabel={t.chart.allRepsAverage}
-                                />
-                              </div>
+                      <BreakdownRow
+                        key={rep}
+                        id={repCardId(rep)}
+                        name={rep}
+                        pctChange={rc.pctChange}
+                        prevValue={rc.prevValue}
+                        currValue={rc.currValue}
+                        comparedToMonth={report.comparedToMonth}
+                        latestMonth={report.latestMonth}
+                        isOpen={expandedReps.has(rep)}
+                        onToggle={() => toggleRep(rep)}
+                        t={t}
+                        trailing={<TargetChip progress={report.repTargets[rep]} threshold={targetThreshold} t={t} />}
+                      >
+                        <div className="ms-4 mt-2 space-y-2 rounded-lg bg-surf2/60 p-3">
+                          {report.repTargets[rep] &&
+                            report.repTargets[rep].pctOfTarget !== null &&
+                            report.repTargets[rep].pctOfTarget! < targetThreshold && (
+                              <p className="rounded-lg bg-red/10 px-2 py-1.5 text-[11px] font-semibold text-red">
+                                {t.targets.underTargetBy(Math.round((100 - report.repTargets[rep].pctOfTarget!) * 10) / 10)}
+                              </p>
                             )}
-                          </div>
-                        )}
-                      </div>
+                          {repSeries.length >= 2 && (
+                            <div>
+                              <div className="mb-1 text-[11px] font-semibold text-white">
+                                {t.dashboard.trendLastMonths(repSeries.length)}
+                              </div>
+                              <TrendChart
+                                areaLabel={rep}
+                                areaSeries={repSeries}
+                                lineSeries={report.repAverageSeries}
+                                compareShortLabel={t.chart.repAvg}
+                                compareLabel={t.chart.allRepsAverage}
+                              />
+                            </div>
+                          )}
+                        </div>
+                      </BreakdownRow>
                     );
                   })}
               </div>
