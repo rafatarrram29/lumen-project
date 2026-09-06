@@ -88,8 +88,8 @@ export function useSalesUploads({
     status.setError(null);
     status.setMessage(null);
     try {
-      const { readWorkbookSheet } = await import("@/lib/lumen/readWorkbookSheet");
-      setPendingTargets({ file, sheet: await readWorkbookSheet(file), scope });
+      const { readTargetsWorkbookSheet } = await import("@/lib/lumen/readWorkbookSheet");
+      setPendingTargets({ file, sheet: await readTargetsWorkbookSheet(file), scope });
     } catch (err) {
       status.setError(errorText(err, "Could not read that file."));
     }

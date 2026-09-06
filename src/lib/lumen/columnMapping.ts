@@ -62,6 +62,25 @@ export function textCellValue(sheet: RawSheet, rowIndex: number, key: string, ra
   return String(display ?? rawValue).trim();
 }
 
+// A cell formatted as Excel's "Percentage" number type stores its raw value
+// (what `rows`/parseNumeric would read) as a FRACTION — 1.3962 for a cell
+// that displays "139.62%" — while the rendered display text already carries
+// the correct, human-scaled number. Reading the raw value for a percentage
+// field is therefore off by a factor of 100 whenever the source cell used
+// real Percentage formatting (as opposed to someone just typing "139.62" or
+// "139.62%" into a plain cell, where raw and display agree). Preferring
+// display text — stripping a trailing "%" — sidesteps the ambiguity instead
+// of trying to detect the cell's number format.
+export function percentCellValue(sheet: RawSheet, rowIndex: number, key: string, rawValue: unknown): number | null {
+  const display = sheet.displayRows?.[rowIndex]?.[key];
+  if (typeof display === "string" && display.trim() !== "") {
+    const parsed = parseNumeric(display.trim().replace(/%\s*$/, ""));
+    if (!Number.isNaN(parsed)) return parsed;
+  }
+  const parsed = parseNumeric(rawValue);
+  return Number.isNaN(parsed) ? null : parsed;
+}
+
 export type TargetColumnMapping = {
   area: string | null;
   rep: string | null;
@@ -311,7 +330,7 @@ export function applyTargetMapping(
     // target value is the number that matters, and the percentage is a
     // cross-check Lumen can compute for itself anyway.
     const achRaw = mapping.achPct ? r[mapping.achPct] : null;
-    const achParsed = achRaw != null ? parseNumeric(achRaw) : NaN;
+    const achPct = achRaw != null ? percentCellValue(sheet, i, mapping.achPct!, achRaw) : null;
 
     rows.push({
       area: areaVal != null ? textCellValue(sheet, i, mapping.area!, areaVal) : null,
@@ -319,7 +338,7 @@ export function applyTargetMapping(
       item: itemVal != null ? textCellValue(sheet, i, mapping.item!, itemVal) : null,
       month,
       targetValue,
-      achPct: Number.isNaN(achParsed) ? null : achParsed,
+      achPct,
     });
   });
 
