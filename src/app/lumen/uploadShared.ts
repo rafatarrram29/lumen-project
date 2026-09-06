@@ -25,3 +25,33 @@ export type UploadStatus = {
 export function errorText(err: unknown, fallback: string): string {
   return err instanceof Error ? err.message : fallback;
 }
+
+/** Rows split into insert-sized batches, in order. */
+export function intoBatches<T>(rows: T[]): T[][] {
+  const batches: T[][] = [];
+  for (let i = 0; i < rows.length; i += UPLOAD_BATCH_SIZE) {
+    batches.push(rows.slice(i, i + UPLOAD_BATCH_SIZE));
+  }
+  return batches;
+}
+
+/**
+ * Every problem an upload ran into, as the one line the status bar shows.
+ *
+ * There is a single error slot, and a multi-file upload can produce two
+ * kinds of problem at once: a file that failed outright, and a file that
+ * went in but with a warning worth reading (rows skipped, duplicates
+ * dropped, a row count that does not match what was inserted). Writing
+ * them to that slot in sequence meant the last write won and the warning
+ * vanished — precisely the warnings that exist to stop someone trusting a
+ * wrong number. They are combined instead.
+ *
+ * Null when there was nothing to report, so the caller can leave the slot
+ * alone rather than clearing it with an empty string.
+ */
+export function issueLine(...groups: (string[] | string | null | undefined)[]): string | null {
+  const all = groups
+    .flatMap((g) => (Array.isArray(g) ? g : [g]))
+    .filter((s): s is string => typeof s === "string" && s.trim().length > 0);
+  return all.length > 0 ? all.join(" | ") : null;
+}

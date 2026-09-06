@@ -9,6 +9,7 @@
 // different badge, its own slightly different number formatting, and stops
 // looking like the same product.
 
+import type { ReactNode } from "react";
 import type { Translations } from "@/lib/i18n/translations";
 
 export function areaCardId(area: string): string {
@@ -22,7 +23,6 @@ export function itemCardId(item: string): string {
 export function repCardId(rep: string): string {
   return `rep-card-${encodeURIComponent(rep)}`;
 }
-
 
 
 export function formatNumber(n: number): string {
@@ -70,5 +70,86 @@ export function TargetChip({
     >
       {t.targets.ofTarget(progress.pctOfTarget)}
     </span>
+  );
+}
+
+/**
+ * A percentage change, in the dashboard's one house style: signed, red
+ * below zero, green at or above it, and an em dash where the previous
+ * month had nothing to compare against (a new area or item is not "0%").
+ */
+export function PctDelta({ pctChange }: { pctChange: number | null }) {
+  return (
+    <span className={`shrink-0 font-mono ${pctChange !== null && pctChange < 0 ? "text-red" : "text-green"}`}>
+      {pctChange !== null && pctChange > 0 ? "+" : ""}
+      {pctChange ?? "—"}
+      {pctChange !== null ? "%" : ""}
+    </span>
+  );
+}
+
+/**
+ * One line of a breakdown list — the items list, the reps list — as a
+ * clickable header plus the month-over-month figures under it.
+ *
+ * The three lists that use this were written separately and had drifted:
+ * same row, three copies of the percentage formatting, three slightly
+ * different ways of laying out the prev-to-curr line. What actually
+ * differs between them is what sits either side of the number, so that is
+ * what the slots are for; the detail each one opens is its own and stays
+ * its own, passed as children.
+ */
+export function BreakdownRow({
+  id,
+  name,
+  pctChange,
+  prevValue,
+  currValue,
+  comparedToMonth,
+  latestMonth,
+  isOpen,
+  onToggle,
+  t,
+  leading,
+  trailing,
+  children,
+}: {
+  id: string;
+  name: string;
+  pctChange: number | null;
+  prevValue: number;
+  currValue: number;
+  comparedToMonth: number;
+  latestMonth: number;
+  isOpen: boolean;
+  onToggle: () => void;
+  t: Translations;
+  /** Before the name — the item's colour dot, for instance. */
+  leading?: ReactNode;
+  /** After the number — a target chip, for instance. */
+  trailing?: ReactNode;
+  /** The drill-down this row opens. */
+  children?: ReactNode;
+}) {
+  return (
+    <div id={id} className="scroll-mt-4 text-xs">
+      <button
+        onClick={onToggle}
+        className="flex w-full items-center gap-2 rounded-lg text-start transition-colors hover:bg-surf2/60"
+      >
+        {leading}
+        <span className="min-w-0 flex-1 truncate text-muted" dir="auto">
+          {name}
+        </span>
+        <PctDelta pctChange={pctChange} />
+        {trailing}
+        <span className="shrink-0 text-[10px] text-muted">{isOpen ? t.common.hide : t.common.details}</span>
+      </button>
+      <div className="ps-4 font-mono text-[11px] break-words text-muted">
+        {t.common.month(comparedToMonth)}: {formatNumber(prevValue)} → {t.common.month(latestMonth)}:{" "}
+        {formatNumber(currValue)}
+      </div>
+      {isOpen && children}
+    </div>
   );
 }
