@@ -9,7 +9,7 @@ import { StatTile, AreaChangeBars, FamilyChangeBars, RepLeaderboard } from "./ch
 import { colorForFamily } from "@/lib/lumen/familyColors";
 import { DashboardSidebar } from "./DashboardSidebar";
 import { UploadWizardModal } from "./UploadWizardModal";
-import { UploadTargetsModal } from "./UploadTargetsModal";
+import { UploadTargetsModal, type TargetScope } from "./UploadTargetsModal";
 import { buildOrgChart, knownReps, scopedAreaRanking, type AreaScope } from "@/lib/lumen/orgStructure";
 import { AssignAreasModal } from "./AssignAreasModal";
 import { AssignManagersModal } from "./AssignManagersModal";
@@ -28,6 +28,7 @@ import { GlobalSearch } from "./GlobalSearch";
 import { useLumenData } from "./useLumenData";
 import { areaCardId, itemCardId, repCardId, formatNumber, BreakdownRow, TargetChip } from "./dashboardBits";
 import { AreaDetail } from "./AreaDetail";
+import type { TargetEdit } from "./TargetProgressPanel";
 import { UNDO_WINDOW_MS, type UploadStatus } from "./uploadShared";
 import { useLinkedFileUploads } from "./useLinkedFileUploads";
 import { useImsFileUploads } from "./useImsFileUploads";
@@ -47,7 +48,15 @@ type LastEdit =
   | { kind: "sales"; area: string; family: string; month: number; oldValue: number; newValue: number }
   | { kind: "linked"; recordId: string; key: string; oldValue: unknown; newValue: unknown }
   | { kind: "rename"; field: "area" | "item"; oldValue: string; newValue: string }
-  | { kind: "imsRename"; field: "area" | "product" | "company"; oldValue: string; newValue: string };
+  | { kind: "imsRename"; field: "area" | "product" | "company"; oldValue: string; newValue: string }
+  | {
+      kind: "target";
+      scope: TargetScope;
+      item: string;
+      month: number;
+      oldValue: number;
+      newValue: number;
+    };
 
 export default function LumenClient({
   userEmail,
@@ -79,6 +88,12 @@ export default function LumenClient({
   const [expandedItems, setExpandedItems] = useState<Set<string>>(new Set());
   const [expandedReps, setExpandedReps] = useState<Set<string>>(new Set());
   const [targetThreshold, setTargetThreshold] = useState(70);
+  // Which card an "+ Add target" came from, and a counter every Target vs
+  // Achievement panel watches: they fetch their own figures, so something
+  // has to tell them the plan changed.
+  const [targetScope, setTargetScope] = useState<TargetScope | null>(null);
+  const [targetsVersion, setTargetsVersion] = useState(0);
+  const scopedTargetInputRef = useRef<HTMLInputElement>(null);
   const [activeTab, setActiveTab] = useState<"sales" | "ims">("sales");
   const [showAssignAreas, setShowAssignAreas] = useState(false);
   const [showAssignManagers, setShowAssignManagers] = useState(false);
@@ -191,6 +206,10 @@ export default function LumenClient({
       setSelectedDatasetId(id);
       setExpanded(new Set());
     },
+    onTargetsChanged: () => {
+      setTargetScope(null);
+      setTargetsVersion((v) => v + 1);
+    },
   });
 
   const {
@@ -296,6 +315,50 @@ export default function LumenClient({
     }
   }
 
+  /**
+   * Opens the targets upload already attached to one card. The file needs
+   * no Rep or Area column of its own — this is where that comes from.
+   */
+  function requestScopedTargetUpload(scope: TargetScope) {
+    setTargetScope(scope);
+    scopedTargetInputRef.current?.click();
+  }
+
+  /**
+   * Corrects one target figure by hand. Goes through the same Correction
+   * log as a sales edit, and bumps targetsVersion so every panel that
+   * depends on it — the rep's, and the manager roll-up above it —
+   * recomputes rather than showing a stale achievement.
+   */
+  async function handleEditTarget(scope: TargetScope, edit: TargetEdit, isUndo = false) {
+    if (!selectedDatasetId) return;
+    try {
+      const res = await fetch("/api/lumen/targets/cell", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          datasetId: selectedDatasetId,
+          year,
+          month: edit.month,
+          item: edit.item,
+          rep: scope.rep ?? null,
+          area: scope.area ?? null,
+          newValue: edit.newValue,
+          isUndo,
+        }),
+      });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error || "Could not update the target");
+      if (!isUndo) {
+        armUndo({ kind: "target", scope, item: edit.item, month: edit.month, oldValue: json.oldValue, newValue: edit.newValue });
+      }
+      setTargetsVersion((v) => v + 1);
+      if (selectedDatasetId) fetchDataEdits(selectedDatasetId);
+    } catch (err) {
+      setUploadError(err instanceof Error ? err.message : "Could not update the target");
+    }
+  }
+
   async function handleEditSalesCell(area: string, family: string, month: number, newValue: number, isUndo = false) {
     if (!selectedDatasetId) return;
     try {
@@ -369,6 +432,8 @@ export default function LumenClient({
       await handleEditLinkedField(edit.recordId, edit.key, String(edit.oldValue), true);
     } else if (edit.kind === "rename") {
       await handleRenameSalesField(edit.field, edit.newValue, edit.oldValue, true);
+    } else if (edit.kind === "target") {
+      await handleEditTarget(edit.scope, { item: edit.item, month: edit.month, newValue: edit.oldValue }, true);
     } else {
       await handleRenameImsField(edit.field, edit.newValue, edit.oldValue, true);
     }
@@ -639,6 +704,9 @@ export default function LumenClient({
         handleRenameSalesField={handleRenameSalesField}
         handleEditSalesCell={handleEditSalesCell}
         handleEditLinkedField={handleEditLinkedField}
+        targetsVersion={targetsVersion}
+        onAddTarget={(a) => requestScopedTargetUpload({ area: a })}
+        onEditTarget={(a, edit) => handleEditTarget({ area: a }, edit)}
       />
     );
   }
@@ -712,12 +780,31 @@ export default function LumenClient({
         />
       )}
 
+      {/* Card-level "+ Add target". A second input rather than reusing the
+          sidebar's: that one lives inside DashboardSidebar and is hidden
+          with the whole rail on the Market Insights tab. */}
+      <input
+        ref={scopedTargetInputRef}
+        type="file"
+        accept=".xlsx,.xls,.xlsm,.csv,.tsv,.txt,.ods"
+        className="hidden"
+        onChange={(e) => {
+          const file = e.target.files?.[0];
+          if (file) handleTargetsFileSelected(file, targetScope);
+          e.target.value = "";
+        }}
+      />
+
       {pendingTargets && selectedDatasetId && (
         <UploadTargetsModal
           fileName={pendingTargets.file.name}
           sheet={pendingTargets.sheet}
           dataset={datasets.find((d) => d.id === selectedDatasetId)!}
-          onCancel={cancelPendingTargets}
+          scope={pendingTargets.scope}
+          onCancel={() => {
+            cancelPendingTargets();
+            setTargetScope(null);
+          }}
           onConfirm={handleTargetsConfirm}
         />
       )}
@@ -942,6 +1029,11 @@ export default function LumenClient({
               // state, so the card that appears is the expanded card
               // rather than its collapsed header row.
               onAreaOpen={(area) => setExpanded((prev) => new Set(prev).add(area))}
+              targetThreshold={targetThreshold}
+              latestMonth={report.latestMonth}
+              targetsVersion={targetsVersion}
+              onAddRepTarget={(rep) => requestScopedTargetUpload({ rep })}
+              onEditRepTarget={(rep, edit) => handleEditTarget({ rep }, edit)}
             />
           )}
 
