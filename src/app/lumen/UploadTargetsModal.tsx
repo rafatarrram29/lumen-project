@@ -55,26 +55,37 @@ export function UploadTargetsModal({
 }) {
   const { t } = useLanguage();
 
+  // The mapping this dataset's last targets upload was confirmed with. It
+  // is reused only when every column it names is actually in this file —
+  // otherwise it describes a different file's shape and would map the
+  // wrong columns silently.
   const savedMapping = dataset.targetColumnMapping;
-  const savedMappingMatches =
+  const savedMappingMatches = Boolean(
     savedMapping &&
-    [savedMapping.area, savedMapping.rep, savedMapping.item, savedMapping.month, savedMapping.value]
-      .filter((v): v is string => v !== null)
-      .every((v) => sheet.headers.includes(v));
+      [savedMapping.area, savedMapping.rep, savedMapping.item, savedMapping.month, savedMapping.value, savedMapping.achPct]
+        .filter((v): v is string => typeof v === "string" && v !== "")
+        .every((v) => sheet.headers.includes(v)),
+  );
 
   const guess = useMemo(() => guessTargetMapping(sheet.headers), [sheet.headers]);
-  const [mapping, setMapping] = useState<Record<FieldKey, string | null>>(() =>
-    savedMappingMatches && savedMapping
-      ? { ...savedMapping, achPct: savedMapping.achPct ?? guess.achPct ?? null }
-      : {
-          area: guess.area ?? null,
-          rep: guess.rep ?? null,
-          item: guess.item ?? null,
-          month: guess.month ?? null,
-          value: guess.value ?? null,
-          achPct: guess.achPct ?? null,
-        },
+
+  // Remembered first, guessed for anything it does not cover. A mapping
+  // saved before the Ach% column existed leaves that field null; falling
+  // back to the guess fills it in rather than making the user find it
+  // again, and the same holds for any field added later.
+  const initial: Record<FieldKey, string | null> = FIELD_ORDER.reduce(
+    (acc, key) => {
+      const remembered = savedMappingMatches ? (savedMapping?.[key] ?? null) : null;
+      acc[key] = remembered ?? guess[key] ?? null;
+      return acc;
+    },
+    {} as Record<FieldKey, string | null>,
   );
+  const [mapping, setMapping] = useState<Record<FieldKey, string | null>>(initial);
+
+  // How the fields on screen got their values, so the dialog can say so
+  // rather than leaving the user to wonder whether it read the file.
+  const filledCount = FIELD_ORDER.filter((k) => initial[k]).length;
   // Names in the file that disagree with the card the upload was started
   // from. Filled in on Continue, and shown as a confirmation rather than
   // an error: the file may well be right and the card the wrong place to
@@ -142,6 +153,12 @@ export function UploadTargetsModal({
         {scope && (
           <p className="mb-4 break-words rounded-lg bg-cyan/10 px-3 py-2 text-xs text-cyan">
             {t.targets.scopeNote(scopeLabel(scope))}
+          </p>
+        )}
+
+        {filledCount > 0 && (
+          <p className="mb-4 break-words rounded-lg bg-green/10 px-3 py-2 text-xs text-green">
+            {savedMappingMatches ? t.targets.mappingRemembered : t.targets.mappingGuessed(filledCount)}
           </p>
         )}
 

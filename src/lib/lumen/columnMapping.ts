@@ -124,7 +124,6 @@ export function parseNumeric(raw: unknown): number {
 }
 
 type GuessRule = { field: keyof ColumnMapping; keywords: string[] };
-type TargetGuessRule = { field: keyof TargetColumnMapping; keywords: string[] };
 
 // Best-effort pre-fill for the mapping step, so most files just need a
 // glance and confirm rather than mapping six columns by hand every time.
@@ -171,40 +170,109 @@ export function guessMapping(headers: string[]): Partial<Record<keyof ColumnMapp
   return guess;
 }
 
-const TARGET_GUESS_RULES: TargetGuessRule[] = [
-  { field: "area", keywords: ["area", "region", "territory"] },
-  { field: "rep", keywords: ["rep", "representative", "salesperson", "agent"] },
-  { field: "item", keywords: ["item", "product", "sku", "material"] },
+/**
+ * Header text, flattened enough to compare: separators become spaces, so
+ * "FCT_Val", "FCT-Val" and "FCT  Val" all read as "fct val". Percent signs
+ * survive, because "Ach %" is a name people actually use.
+ */
+function normalizeHeader(header: string): string {
+  return header
+    .trim()
+    .toLowerCase()
+    .replace(/[_\-./\\]+/g, " ")
+    .replace(/\s+/g, " ");
+}
+
+const SUBSTRING_MIN = 4;
+
+/**
+ * How well one header answers to one keyword.
+ *
+ *   exact  "Month" for "month"          — unambiguous
+ *   word   "BU Rep" for "rep"           — the keyword is a word in the name
+ *   part   "FCTVal" for "forecast"      — a bare substring, and the reason
+ *                                          short keywords are barred from it
+ *
+ * The substring floor is what stopped "Report Month" being read as the rep
+ * column: "rep" appears inside "report", and the old scorer took it, then
+ * had nothing left for Month. Only keywords of four characters or more may
+ * match without a word boundary.
+ */
+function keywordScore(normalized: string, keyword: string): number {
+  if (normalized === keyword) return 1000 + keyword.length;
+  const bounded = new RegExp(`(^| )${keyword.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}( |$)`);
+  if (bounded.test(normalized)) return 100 + keyword.length;
+  if (keyword.length >= SUBSTRING_MIN && normalized.includes(keyword)) return keyword.length;
+  return 0;
+}
+
+type ScoredRule<K extends string> = {
+  field: K;
+  keywords: string[];
+  /** Words that make a match more likely to be the right column, not another. */
+  bonus?: string[];
+};
+
+/**
+ * Match headers to fields, best pairing first.
+ *
+ * The old version walked the fields in order and let each take its own best
+ * remaining header. That let an early field with a weak match take a header
+ * a later field needed exactly — "Report Month" going to Rep, leaving Month
+ * unmapped. Scoring every pairing and then assigning the strongest first
+ * means a confident match always wins over a vague one, whichever field
+ * happens to be declared first.
+ */
+function guessByScore<K extends string>(rules: ScoredRule<K>[], headers: string[]): Partial<Record<K, string>> {
+  const pairs: { field: K; header: string; score: number; rank: number }[] = [];
+
+  rules.forEach((rule, ruleIndex) => {
+    headers.forEach((header, headerIndex) => {
+      const normalized = normalizeHeader(header);
+      let best = 0;
+      for (const keyword of rule.keywords) best = Math.max(best, keywordScore(normalized, keyword));
+      if (best === 0) return;
+      // A qualifier like "Val" separates "FCT Val" from a bare "FCT", and
+      // "Target Value" from "Target Ach %".
+      const bonus = (rule.bonus ?? []).some((b) => keywordScore(normalized, b) > 0) ? 25 : 0;
+      pairs.push({ field: rule.field, header, score: best + bonus, rank: ruleIndex * 1000 + headerIndex });
+    });
+  });
+
+  // Deterministic: equal scores fall back to declaration order, so the same
+  // file always maps the same way.
+  pairs.sort((a, b) => b.score - a.score || a.rank - b.rank);
+
+  const guess: Partial<Record<K, string>> = {};
+  const takenHeaders = new Set<string>();
+  for (const pair of pairs) {
+    if (guess[pair.field] !== undefined || takenHeaders.has(pair.header)) continue;
+    guess[pair.field] = pair.header;
+    takenHeaders.add(pair.header);
+  }
+  return guess;
+}
+
+/**
+ * The vocabulary a targets file is likely to use. Wider than the sales
+ * one on purpose: a plan file is exported from whatever tool made the plan,
+ * so its column names vary far more than a sales export's do.
+ */
+const TARGET_GUESS_RULES: ScoredRule<keyof TargetColumnMapping>[] = [
+  { field: "area", keywords: ["area", "region", "governorate", "gov", "territory", "district", "city"] },
+  { field: "rep", keywords: ["rep", "bu rep", "medical rep", "representative", "salesperson", "agent"] },
+  { field: "item", keywords: ["item", "parent item", "product", "sku", "brand", "material"] },
   { field: "month", keywords: ["month", "period"] },
-  { field: "value", keywords: ["fct val", "target value", "target", "goal", "quota", "fct"] },
-  { field: "achPct", keywords: ["ach %", "ach%", "achievement", "ach"] },
+  {
+    field: "value",
+    keywords: ["fct val", "fct value", "target value", "forecast value", "fct", "forecast", "target", "plan", "budget", "goal", "quota"],
+    bonus: ["val", "value", "amount"],
+  },
+  { field: "achPct", keywords: ["ach %", "ach%", "ach", "achievement", "achieved", "attainment"] },
 ];
 
 export function guessTargetMapping(headers: string[]): Partial<Record<keyof TargetColumnMapping, string>> {
-  const guess: Partial<Record<keyof TargetColumnMapping, string>> = {};
-  const used = new Set<string>();
-
-  for (const rule of TARGET_GUESS_RULES) {
-    let best: string | null = null;
-    let bestScore = 0;
-    for (const header of headers) {
-      if (used.has(header)) continue;
-      const normalized = header.trim().toLowerCase();
-      for (const keyword of rule.keywords) {
-        const score = normalized === keyword ? keyword.length + 1000 : normalized.includes(keyword) ? keyword.length : 0;
-        if (score > bestScore) {
-          best = header;
-          bestScore = score;
-        }
-      }
-    }
-    if (best) {
-      guess[rule.field] = best;
-      used.add(best);
-    }
-  }
-
-  return guess;
+  return guessByScore(TARGET_GUESS_RULES, headers);
 }
 
 export function applyTargetMapping(

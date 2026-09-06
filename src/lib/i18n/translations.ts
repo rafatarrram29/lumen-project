@@ -73,6 +73,8 @@ export type Translations = {
     scopeNote: (scope: string) => string;
     scopeConflict: (scope: string, found: string) => string;
     scopeConflictConfirm: string;
+    mappingGuessed: (count: number) => string;
+    mappingRemembered: string;
     addTargetButton: string;
     progressTitle: string;
     progressSubtitle: string;
@@ -506,6 +508,10 @@ const en: Translations = {
     scopeConflict: (scope, found) =>
       `This file names ${found}, not ${scope}. Continue and the file's own names win.`,
     scopeConflictConfirm: "Use the file's names",
+    mappingGuessed: (count) =>
+      `${count} column${count === 1 ? "" : "s"} matched from this file's headers — check them and change anything that looks wrong.`,
+    mappingRemembered:
+      "Filled in from the mapping you confirmed last time for this dataset. Change anything that has moved.",
     addTargetButton: "+ Add target",
     progressTitle: "Target vs Achievement",
     progressSubtitle: "Actual sales against the plan, month by month.",
@@ -961,6 +967,10 @@ const ar: Translations = {
     scopeConflict: (scope, found) =>
       `الملف ده بيقول ${found}، مش ${scope}. لو كمّلت، أسماء الملف هي اللي هتتحسب.`,
     scopeConflictConfirm: "استخدم أسماء الملف",
+    mappingGuessed: (count) =>
+      `اتربط ${count} عمود تلقائياً من أسماء الأعمدة في الملف — راجعهم وغيّر أي حاجة شكلها غلط.`,
+    mappingRemembered:
+      "اتملّت من الـmapping اللي أكّدته آخر مرة للداتاست ده. غيّر أي حاجة اتغيّرت.",
     addTargetButton: "+ إضافة تارجت",
     progressTitle: "التارجت مقابل التحقيق",
     progressSubtitle: "المبيعات الفعلية مقابل الخطة، شهر بشهر.",
