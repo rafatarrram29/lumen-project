@@ -15,7 +15,84 @@
 //   who reports to whom     lumen_district_managers, this feature's only
 //                           new table.
 
+import type { MonthPoint } from "./engine";
 import type { RepAssignment } from "./repAssignments";
+
+/**
+ * The slice of the dataset a view is limited to.
+ *
+ * The org chart is a hierarchy, and every level of it narrows what should
+ * be on screen: a manager's card shows their team's areas, and a rep's
+ * block inside it shows only that rep's. Without carrying that narrowing
+ * down into the detail panels, opening an item under a rep who covers
+ * three areas listed every area in the dataset — which reads as "your rep
+ * sells in thirty governorates" and is simply untrue.
+ */
+export type AreaScope = {
+  /** The only areas this view may show. */
+  areas: string[];
+  /** Per-item monthly totals across exactly those areas. */
+  itemSeries: Record<string, MonthPoint[]>;
+  /** Whether those rows carried real quantities. */
+  hasQuantity: boolean;
+  /** What to call the comparison line — "Sara's areas", "Hala's team". */
+  label: string;
+  /** The same thing, short enough for a chart legend. */
+  shortLabel: string;
+};
+
+/**
+ * The average monthly value across a set of areas.
+ *
+ * An area's trend is drawn against a comparison line. Unscoped that is the
+ * whole line's average, which is the right benchmark on the Sales tab.
+ * Inside a rep's block the meaningful benchmark is the rep's own areas, so
+ * the same chart compares like with like.
+ */
+export function averageSeriesForAreas(
+  areaSeries: Record<string, { monthlySeries: MonthPoint[] }>,
+  areas: string[],
+): { month: number; avgValue: number }[] {
+  const byMonth = new Map<number, number[]>();
+  for (const area of areas) {
+    for (const point of areaSeries[area]?.monthlySeries ?? []) {
+      const values = byMonth.get(point.month) ?? [];
+      values.push(point.value);
+      byMonth.set(point.month, values);
+    }
+  }
+  return [...byMonth.entries()]
+    .sort((a, b) => a[0] - b[0])
+    .map(([month, values]) => ({
+      month,
+      avgValue: Math.round(values.reduce((sum, v) => sum + v, 0) / values.length),
+    }));
+}
+
+/**
+ * The "By area" list under an item, narrowed to the scope it is shown in.
+ *
+ * Unscoped this is every area that sold the item — right on the Sales tab,
+ * where the frame is the whole dataset. Under a rep it must be that rep's
+ * areas only: without the filter, opening an item beneath a rep who covers
+ * three governorates listed all thirty in the file, which read as the rep
+ * selling everywhere.
+ *
+ * An area in scope with no rows for the item drops out rather than showing
+ * a zero — it is absent from the data, not selling nothing.
+ */
+export function scopedAreaRanking<T extends { currValue: number }>(
+  areaFamilyChanges: Record<string, Record<string, T>>,
+  item: string,
+  scope: AreaScope | null | undefined,
+): [string, T][] {
+  const inScope = scope ? new Set(scope.areas) : null;
+  return Object.entries(areaFamilyChanges)
+    .filter(([area]) => !inScope || inScope.has(area))
+    .map(([area, changes]) => [area, changes[item]] as [string, T | undefined])
+    .filter((entry): entry is [string, T] => entry[1] !== undefined)
+    .sort((a, b) => b[1].currValue - a[1].currValue);
+}
 
 /** One rep reporting to one manager, for a dataset and year. */
 export type ManagerLink = {

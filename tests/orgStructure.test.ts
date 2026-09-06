@@ -12,6 +12,9 @@ import {
   areasForRep,
   buildOrgChart,
   areasUnderManager,
+  averageSeriesForAreas,
+  scopedAreaRanking,
+  type AreaScope,
   type ManagerLink,
 } from "../src/lib/lumen/orgStructure.ts";
 import type { RepAssignment } from "../src/lib/lumen/repAssignments.ts";
@@ -185,5 +188,130 @@ describe("name lists for the assignment screens", () => {
 
   test("managers are listed once each", () => {
     assert.deepEqual(knownManagers([link("Hala", "A"), link("Hala", "B"), link("Karim", "C")]), ["Hala", "Karim"]);
+  });
+});
+
+describe("the comparison line inside a scoped view", () => {
+  // An area's trend is drawn against a benchmark. On the Sales tab that is
+  // the whole line. Inside a rep's block it has to be the rep's own areas,
+  // or the chart compares three governorates against thirty.
+  const areaSeries = {
+    Cairo: { monthlySeries: [{ month: 1, value: 100, qty: 0 }, { month: 2, value: 200, qty: 0 }] },
+    Giza: { monthlySeries: [{ month: 1, value: 300, qty: 0 }, { month: 2, value: 400, qty: 0 }] },
+    Luxor: { monthlySeries: [{ month: 1, value: 900, qty: 0 }, { month: 2, value: 900, qty: 0 }] },
+  };
+
+  test("averages only the areas in scope", () => {
+    assert.deepEqual(averageSeriesForAreas(areaSeries, ["Cairo", "Giza"]), [
+      { month: 1, avgValue: 200 },
+      { month: 2, avgValue: 300 },
+    ]);
+  });
+
+  test("an area outside the scope does not move the benchmark", () => {
+    const withoutLuxor = averageSeriesForAreas(areaSeries, ["Cairo", "Giza"]);
+    const withLuxor = averageSeriesForAreas(areaSeries, ["Cairo", "Giza", "Luxor"]);
+    assert.notDeepEqual(withoutLuxor, withLuxor);
+    assert.equal(withLuxor[0].avgValue, 433);
+  });
+
+  test("a scope of one area is that area's own line", () => {
+    assert.deepEqual(averageSeriesForAreas(areaSeries, ["Luxor"]), [
+      { month: 1, avgValue: 900 },
+      { month: 2, avgValue: 900 },
+    ]);
+  });
+
+  test("a month only some areas have is averaged over the ones that do", () => {
+    const partial = {
+      A: { monthlySeries: [{ month: 1, value: 100, qty: 0 }, { month: 2, value: 200, qty: 0 }] },
+      B: { monthlySeries: [{ month: 1, value: 300, qty: 0 }] },
+    };
+    assert.deepEqual(averageSeriesForAreas(partial, ["A", "B"]), [
+      { month: 1, avgValue: 200 },
+      { month: 2, avgValue: 200 },
+    ]);
+  });
+
+  test("an unknown area contributes nothing rather than throwing", () => {
+    assert.deepEqual(averageSeriesForAreas(areaSeries, ["Nowhere"]), []);
+  });
+
+  test("months come back in order", () => {
+    const jumbled = { A: { monthlySeries: [{ month: 3, value: 30, qty: 0 }, { month: 1, value: 10, qty: 0 }] } };
+    assert.deepEqual(averageSeriesForAreas(jumbled, ["A"]).map((p) => p.month), [1, 3]);
+  });
+});
+
+describe("the \"By area\" list under an item", () => {
+  // The reported bug: opening an item beneath a rep who covers three
+  // governorates listed every area in the file. Everything under a card
+  // has to belong to that card.
+  const changes = {
+    Cairo: { Panadol: { currValue: 500 }, Brufen: { currValue: 10 } },
+    Giza: { Panadol: { currValue: 900 } },
+    Luxor: { Panadol: { currValue: 700 } },
+    Aswan: { Panadol: { currValue: 100 } },
+    Tanta: { Brufen: { currValue: 40 } },
+  };
+
+  const scopeOf = (areas: string[]): AreaScope => ({
+    areas,
+    itemSeries: {},
+    hasQuantity: false,
+    label: "Sara's areas",
+    shortLabel: "Rep's areas",
+  });
+
+  test("unscoped, every area that sold the item is listed", () => {
+    assert.deepEqual(
+      scopedAreaRanking(changes, "Panadol", null).map(([a]) => a),
+      ["Giza", "Luxor", "Cairo", "Aswan"],
+    );
+  });
+
+  test("scoped, only the areas in scope are listed", () => {
+    assert.deepEqual(
+      scopedAreaRanking(changes, "Panadol", scopeOf(["Cairo", "Aswan"])).map(([a]) => a),
+      ["Cairo", "Aswan"],
+    );
+  });
+
+  test("the scope drops areas, it does not merely reorder them", () => {
+    // The bug shipped a list that was correctly sorted and completely
+    // wrong. Ranking the same item both ways has to differ in length.
+    const all = scopedAreaRanking(changes, "Panadol", null);
+    const scoped = scopedAreaRanking(changes, "Panadol", scopeOf(["Cairo", "Aswan"]));
+    assert.equal(all.length, 4);
+    assert.equal(scoped.length, 2);
+    assert.ok(!scoped.some(([a]) => a === "Giza"));
+  });
+
+  test("figures come from the area, not from the scope", () => {
+    const scoped = scopedAreaRanking(changes, "Panadol", scopeOf(["Cairo", "Giza"]));
+    assert.deepEqual(scoped, [["Giza", { currValue: 900 }], ["Cairo", { currValue: 500 }]]);
+  });
+
+  test("an area in scope that never sold the item is left out, not shown as zero", () => {
+    const scoped = scopedAreaRanking(changes, "Brufen", scopeOf(["Cairo", "Giza", "Aswan"]));
+    assert.deepEqual(scoped.map(([a]) => a), ["Cairo"]);
+  });
+
+  test("an empty scope shows nothing rather than falling back to everything", () => {
+    assert.deepEqual(scopedAreaRanking(changes, "Panadol", scopeOf([])), []);
+  });
+
+  test("a scope naming an area with no figures at all is harmless", () => {
+    assert.deepEqual(
+      scopedAreaRanking(changes, "Panadol", scopeOf(["Cairo", "Nowhere"])).map(([a]) => a),
+      ["Cairo"],
+    );
+  });
+
+  test("ranking stays highest-first inside a scope", () => {
+    const values = scopedAreaRanking(changes, "Panadol", scopeOf(["Aswan", "Giza", "Luxor"])).map(
+      ([, c]) => c.currValue,
+    );
+    assert.deepEqual(values, [900, 700, 100]);
   });
 });

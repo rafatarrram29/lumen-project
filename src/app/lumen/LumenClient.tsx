@@ -17,7 +17,7 @@ import { colorForFamily } from "@/lib/lumen/familyColors";
 import Sidebar from "@/components/Sidebar";
 import { UploadWizardModal, type WizardChoice } from "./UploadWizardModal";
 import { UploadTargetsModal } from "./UploadTargetsModal";
-import { buildOrgChart, knownReps } from "@/lib/lumen/orgStructure";
+import { buildOrgChart, knownReps, scopedAreaRanking, type AreaScope } from "@/lib/lumen/orgStructure";
 import { AssignAreasModal } from "./AssignAreasModal";
 import { AssignManagersModal } from "./AssignManagersModal";
 import { ManagerCards } from "./ManagerCards";
@@ -850,14 +850,21 @@ export default function LumenClient({
   // all-areas "Items" list — both expand the exact same trend/ranking/root
   // cause detail for a given item, the only difference being which
   // aggregate (one area's vs. every area's) the row above it shows.
-  function renderItemDetail(item: string) {
+  /**
+   * An item's drill-down. `scope` narrows it to one part of the org chart —
+   * a rep's areas, or a manager's team — so opening an item under a rep who
+   * covers three governorates lists those three, not every area in the
+   * dataset.
+   */
+  function renderItemDetail(item: string, scope?: AreaScope | null) {
     if (!report || "error" in report) return null;
-    const itemSeries = report.itemMonthlySeries[item] ?? [];
-    const areaRanking = Object.entries(report.areaFamilyChanges)
-      .map(([a, changes]) => [a, changes[item]] as const)
-      .filter((entry): entry is [string, (typeof report.areaFamilyChanges)[string][string]] => entry[1] !== undefined)
-      .sort((a, b) => b[1].currValue - a[1].currValue);
+    // Scoped, the series comes from the areas in scope (fetched for exactly
+    // those); unscoped it is the item across the whole dataset.
+    const itemSeries = scope ? (scope.itemSeries[item] ?? []) : (report.itemMonthlySeries[item] ?? []);
+    const areaRanking = scopedAreaRanking(report.areaFamilyChanges, item, scope);
     const { areas: rootCauseAreas, lines: rootCauseLines } = findingsForItem(item);
+    const scopedUnits = scope ? scope.hasQuantity : showsUnits;
+    const scopedUnitLabel = scopedUnits ? t.units.units : t.units.value;
 
     return (
       <div className="ms-4 mt-2 space-y-3 rounded-lg bg-surf2/60 p-3">
@@ -865,7 +872,7 @@ export default function LumenClient({
           <div>
             <div className="mb-1 text-[11px] font-semibold text-white">
               {t.dashboard.trendLastMonths(itemSeries.length)} —{" "}
-              <span className="text-amber">{unitLabel}</span>
+              <span className="text-amber">{scopedUnitLabel}</span>
             </div>
             {/* Units where the file has a quantity column, money where it
                 doesn't — named either way, because a chart that silently
@@ -874,16 +881,28 @@ export default function LumenClient({
             <ItemTrendChart
               label={item}
               series={itemSeries}
-              showUnits={showsUnits}
-              unitLabel={unitLabel}
+              showUnits={scopedUnits}
+              unitLabel={scopedUnitLabel}
             />
-            {!showsUnits && <div className="mt-1 text-[10px] text-muted">{t.units.valueNote}</div>}
+            {!scopedUnits && (
+              <div className="mt-1 text-[10px] text-muted">{t.units.valueNote}</div>
+            )}
           </div>
         )}
 
         {areaRanking.length > 0 && (
           <div>
-            <div className="mb-1 text-[11px] font-semibold text-white">{t.dashboard.byAreaMonth(report.latestMonth)}</div>
+            <div className="mb-1 text-[11px] font-semibold text-white">
+              {t.dashboard.byAreaMonth(report.latestMonth)}
+              {/* Say out loud that the list is narrowed. Three rows where
+                  the Sales tab shows thirty is otherwise indistinguishable
+                  from an item that simply does not sell anywhere else. */}
+              {scope && (
+                <span className="ms-2 font-normal text-muted" dir="auto">
+                  {t.org.scopedToAreas(areaRanking.length, scope.label)}
+                </span>
+              )}
+            </div>
             <div className="space-y-1">
               {areaRanking.map(([a, changes], i) => (
                 <div key={a} className="flex items-center justify-between gap-2 text-[11px]">
@@ -948,14 +967,13 @@ export default function LumenClient({
   // Item charts plot units where the dataset has a quantity column. Named
   // on every chart rather than inferred from the size of the numbers.
   const showsUnits = Boolean(report && !hasError && report.hasQuantity);
-  const unitLabel = showsUnits ? t.units.units : t.units.value;
 
   /**
    * The full area card. The Sales list maps over this, and a district
    * manager's drill-down calls it for whichever area was tapped — so the
    * card a manager opens IS the Sales card, not a lighter copy of it.
    */
-  function renderAreaDetail(area: string, anchored = false) {
+  function renderAreaDetail(area: string, anchored = false, scope?: AreaScope | null) {
     if (!report || hasError) return null;
     const d = report.areas[area];
     // An area with no figures for this year — assigned to a rep, but
@@ -964,6 +982,7 @@ export default function LumenClient({
     return (
       <AreaDetail
         anchored={anchored}
+        scope={scope ?? null}
         area={area}
         d={d}
         report={report}
@@ -1408,7 +1427,7 @@ export default function LumenClient({
               datasetId={selectedDatasetId}
               year={year}
               hasQuantity={report.hasQuantity}
-              renderAreaDetail={renderAreaDetail}
+              renderAreaDetail={(area, scope) => renderAreaDetail(area, false, scope)}
               // Opening an area here expands it in the dashboard's own
               // state, so the card that appears is the expanded card
               // rather than its collapsed header row.
