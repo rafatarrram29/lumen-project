@@ -107,19 +107,22 @@ export async function readWorkbookSheet(file: File): Promise<RawSheet> {
 export async function readTargetsWorkbookSheet(file: File): Promise<RawSheet> {
   const sheet = await loadWorksheet(file);
 
+  // blankrows must stay at its default (kept, not dropped) here: the
+  // wide-format detector resolves merged header cells using the sheet's
+  // own `!merges`, whose row/column numbers are the workbook's real ones —
+  // dropping a blank row would shift every row below it out of step with
+  // those coordinates.
   const rawGrid = XLSX.utils.sheet_to_json<unknown[]>(sheet, {
     header: 1,
     defval: null,
-    blankrows: false,
   });
   const displayGrid = XLSX.utils.sheet_to_json<unknown[]>(sheet, {
     header: 1,
     defval: null,
-    blankrows: false,
     raw: false,
   });
 
   const { detectWideTargetsLayout } = await import("./wideTargetsFormat");
-  const wide = detectWideTargetsLayout(rawGrid, displayGrid);
+  const wide = detectWideTargetsLayout(rawGrid, displayGrid, sheet["!merges"] ?? []);
   return wide ?? sheetToRawSheet(sheet);
 }
