@@ -216,6 +216,25 @@ target by X%" alert when either falls below an adjustable threshold
 The dataset-wide targets file above is the whole district's plan. This is
 the same thing at the level people are actually held to.
 
+**The mapping fills itself in.** The dialog reads the file's headers and
+pre-selects a column for every field rather than opening on "Select a
+column…". It knows the wording plan files actually use — *Area / Region /
+Governorate / District*, *Rep / BU Rep / Medical Rep*, *Item / Parent Item
+/ Product / SKU / Brand*, *Month / Period*, *FCT / Forecast / Target /
+Plan / Budget* (preferring one qualified with *Val*, *Value* or *Amount*),
+and *Ach % / Achievement / Attainment*.
+
+Matching is whole-word, and every field-to-column pairing is scored before
+any is assigned, so a confident match always wins over a vague one. That is
+what stops "Report Month" being taken as the Rep column — "rep" is inside
+"report" — and leaving Month unmapped, which is what the older, field-by-
+field version did.
+
+Confirm a mapping and it is remembered for that dataset: upload a file of
+the same shape later and the fields come back the way you left them, with
+anything the saved mapping does not cover (a column added since) filled in
+from the guess. The dialog says which of the two happened.
+
 **Uploading from a card.** Every area card, and every rep block inside a
 district manager's card, has a **+ Add target** button. It opens the same
 targets dialog, mapped the same way — with one difference: the file does
