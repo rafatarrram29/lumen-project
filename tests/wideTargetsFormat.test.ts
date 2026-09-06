@@ -276,3 +276,181 @@ describe("detectWideTargetsLayout: unpivoting a real match", () => {
     }
   });
 });
+
+// Real Excel exports found in the wild lean on genuine cell merges for this
+// layout, and two things about them only became clear from a real file: a
+// metric can be merged wider in one month block than in the others (a
+// leftover of however the sheet was built), and a "Year Total" label can be
+// merged vertically — spanning the year row and the month-number row below
+// it — so the month-number row itself has nothing to read at that column.
+// Both must be read from the sheet's own `!merges`, not guessed from blanks.
+describe("detectWideTargetsLayout: real Excel merges, not just blank-cell guessing", () => {
+  test("a metric merged two columns wide in one month, but not the others, still unpivots to one logical column", () => {
+    // cols: 0=Item 1=Team | month1: 2-3=Sales Qty(merged) 4-5=FCT Qty(merged) 6=Sales Val 7=FCT Val 8=Ach% | month2: 9=Sales Qty 10=FCT Qty 11=Sales Val 12=FCT Val 13=Ach%
+    const groupRow = [null, null, 1, null, null, null, null, null, null, 2, null, null, null, null];
+    const metricRow = [
+      "Item", "Team",
+      "Sales Qty", null, "FCT Qty", null, "Sales Val", "FCT Val", "Ach %",
+      "Sales Qty", "FCT Qty", "Sales Val", "FCT Val", "Ach %",
+    ];
+    const dataRow = ["Widget", "Team L", 10, null, 20, null, 100, 90, 0.5, 15, 25, 150, 140, 0.6];
+    const grid = [groupRow, metricRow, dataRow];
+    const merges = [
+      { s: { r: 1, c: 2 }, e: { r: 1, c: 3 } },
+      { s: { r: 1, c: 4 }, e: { r: 1, c: 5 } },
+    ];
+
+    const result = detectWideTargetsLayout(grid, grid, merges);
+    assert.ok(result, "expected the wide layout to be detected despite the uneven merge width");
+    assert.deepEqual(result!.headers, ["Item", "Team", "Month", "Sales Qty", "FCT Qty", "Sales Val", "FCT Val", "Ach %"]);
+    assert.equal(result!.rows.length, 2);
+
+    const month1 = result!.rows.find((r) => r["Month"] === 1)!;
+    assert.deepEqual(
+      [month1["Sales Qty"], month1["FCT Qty"], month1["Sales Val"], month1["FCT Val"], month1["Ach %"]],
+      [10, 20, 100, 90, 0.5],
+    );
+    const month2 = result!.rows.find((r) => r["Month"] === 2)!;
+    assert.deepEqual(
+      [month2["Sales Qty"], month2["FCT Qty"], month2["Sales Val"], month2["FCT Val"], month2["Ach %"]],
+      [15, 25, 150, 140, 0.6],
+    );
+  });
+
+  test("a Total label merged vertically down from the row above the month numbers is still recognized and excluded", () => {
+    // row0: nothing but the Total label's anchor, merged down into row1.
+    // row1 (the real group row): month numbers 1, 2, and — at the Total's
+    // columns — nothing of its own at all (blank; its text lives in row0).
+    // row2: the metric-name row.
+    const row0 = new Array(17).fill(null);
+    row0[12] = "2026 Total";
+    const row1 = new Array(17).fill(null);
+    row1[2] = 1;
+    row1[7] = 2;
+    const metricNames = ["Sales Qty", "FCT Qty", "Sales Val", "FCT Val", "Ach %"];
+    const row2 = ["Item", "Team", ...metricNames, ...metricNames, ...metricNames];
+    const dataRow = ["Widget", "Team L", 10, 20, 100, 90, 0.5, 15, 25, 150, 140, 0.6, 999, 999, 999, 999, 9.9];
+    const grid = [row0, row1, row2, dataRow];
+    const merges = [{ s: { r: 0, c: 12 }, e: { r: 1, c: 16 } }];
+
+    const result = detectWideTargetsLayout(grid, grid, merges);
+    assert.ok(result, "expected the Total block to be recognized via its vertically-merged label");
+    assert.equal(result!.rows.length, 2, "only the 2 real months, never a 3rd 'Total' month");
+    assert.deepEqual(
+      [...new Set(result!.rows.map((r) => r["Month"]))].sort((a, b) => (a as number) - (b as number)),
+      [1, 2],
+    );
+    for (const r of result!.rows) {
+      for (const name of metricNames) assert.notEqual(r[name], 999, `Total-group sentinel leaked into ${name}`);
+    }
+  });
+
+  test("without the merge list, the vertically-merged Total case is correctly NOT detected (proves the merge data, not luck, is what resolves it)", () => {
+    const row0 = new Array(17).fill(null);
+    row0[12] = "2026 Total";
+    const row1 = new Array(17).fill(null);
+    row1[2] = 1;
+    row1[7] = 2;
+    const metricNames = ["Sales Qty", "FCT Qty", "Sales Val", "FCT Val", "Ach %"];
+    const row2 = ["Item", "Team", ...metricNames, ...metricNames, ...metricNames];
+    const dataRow = ["Widget", "Team L", 10, 20, 100, 90, 0.5, 15, 25, 150, 140, 0.6, 999, 999, 999, 999, 9.9];
+    const grid = [row0, row1, row2, dataRow];
+
+    assert.equal(detectWideTargetsLayout(grid, grid, []), null);
+    assert.equal(detectWideTargetsLayout(grid, grid), null);
+  });
+
+  test("the exact shape reported: uneven merge in month 1 AND a vertically-merged Total label together", () => {
+    // Reproduces the real file this was debugged against: Item/Team, no
+    // Area/Rep, 6 months (month 1's Sales Qty/FCT Qty double-width via a
+    // real merge, months 2-6 normal width), and a "<year> Total" block
+    // whose label is merged down from the row above the month numbers.
+    const metricNames = ["Sales Qty", "FCT Qty", "Sales Val", "FCT Val", "Ach %"];
+    const width = 2 + 7 + 5 * 5 + 5; // Item/Team + month1(7-wide) + months 2-6(5-wide each) + Total(5-wide)
+
+    const row0 = new Array(width).fill(null); // "Year" row
+    const row1 = new Array(width).fill(null); // "2026" + the Total's real label
+    row1[2] = 2026;
+    const totalStart = 2 + 7 + 5 * 5;
+    row1[totalStart] = "2026 Total";
+
+    const row2 = new Array(width).fill(null); // month numbers
+    row2[2] = 1;
+    for (let m = 2; m <= 6; m++) row2[2 + 7 + (m - 2) * 5] = m;
+
+    const row3: unknown[] = ["Item", "Team"];
+    row3.push("Sales Qty", null, "FCT Qty", null, "Sales Val", "FCT Val", "Ach %"); // month 1, double-width
+    for (let m = 2; m <= 6; m++) row3.push(...metricNames);
+    row3.push(...metricNames); // Total block
+
+    const dataRow: unknown[] = ["Glaryl 1mg", "Team L", 88, null, 63, null, 1767, 1266, 1.3962];
+    for (let m = 2; m <= 6; m++) dataRow.push(70 + m, 60 + m, 1500 + m, 1300 + m, 1 + m / 10);
+    dataRow.push(999, 999, 999, 999, 9.9); // Total sentinels
+
+    const grid = [row0, row1, row2, row3, dataRow];
+    const merges = [
+      { s: { r: 1, c: totalStart }, e: { r: 2, c: totalStart + 4 } }, // Total label spans rows 1-2
+      { s: { r: 3, c: 2 }, e: { r: 3, c: 3 } }, // Sales Qty, month 1 only
+      { s: { r: 3, c: 4 }, e: { r: 3, c: 5 } }, // FCT Qty, month 1 only
+    ];
+
+    const result = detectWideTargetsLayout(grid, grid, merges);
+    assert.ok(result, "expected the real reported shape to be detected");
+    assert.deepEqual(result!.headers, ["Item", "Team", "Month", ...metricNames]);
+    assert.equal(result!.rows.length, 6, "6 months, never a 7th for the Total block");
+
+    const month1 = result!.rows.find((r) => r["Month"] === 1)!;
+    assert.deepEqual(
+      [month1["Sales Qty"], month1["FCT Qty"], month1["Sales Val"], month1["FCT Val"], month1["Ach %"]],
+      [88, 63, 1767, 1266, 1.3962],
+    );
+    for (const r of result!.rows) {
+      for (const name of metricNames) assert.notEqual(r[name], 999, `Total-group sentinel leaked into ${name}`);
+    }
+  });
+
+  test("a cell's own value wins over a merge that happens to cover it", () => {
+    // Not expected from a well-formed export, but if a "continuation" cell
+    // of a merge somehow carries its own value, that value — not the
+    // merge's anchor — is what actually sits in that spreadsheet cell, and
+    // must not be silently overwritten by the anchor's.
+    const groupRow = [null, null, 1, null, 2, null];
+    const metricRow = ["Item", "Team", "Sales Qty", "Sales Qty Note", "Sales Qty", "Sales Qty Note"];
+    const dataRow = ["Widget", "Team L", 10, "note-m1", 15, "note-m2"];
+    const grid = [groupRow, metricRow, dataRow];
+    const merges = [
+      { s: { r: 1, c: 2 }, e: { r: 1, c: 3 } },
+      { s: { r: 1, c: 4 }, e: { r: 1, c: 5 } },
+    ];
+
+    const result = detectWideTargetsLayout(grid, grid, merges);
+    assert.ok(result);
+    assert.deepEqual(result!.headers, ["Item", "Team", "Month", "Sales Qty", "Sales Qty Note"]);
+    const month1 = result!.rows.find((r) => r["Month"] === 1)!;
+    assert.equal(month1["Sales Qty"], 10);
+    assert.equal(month1["Sales Qty Note"], "note-m1");
+    const month2 = result!.rows.find((r) => r["Month"] === 2)!;
+    assert.equal(month2["Sales Qty"], 15);
+    assert.equal(month2["Sales Qty Note"], "note-m2");
+  });
+
+  test("a month block with a genuinely unlabeled leading spacer column before its first real metric name is still read correctly", () => {
+    // cols: 0=Item 1=Team | month1: 2=(blank spacer) 3=Sales Qty 4=FCT Qty 5=Sales Val 6=FCT Val 7=Ach% | month2: normal, 5-wide
+    const groupRow = [null, null, 1, null, null, null, null, null, 2, null, null, null, null];
+    const metricRow = [
+      "Item", "Team",
+      null, "Sales Qty", "FCT Qty", "Sales Val", "FCT Val", "Ach %",
+      "Sales Qty", "FCT Qty", "Sales Val", "FCT Val", "Ach %",
+    ];
+    const dataRow = ["Widget", "Team L", null, 10, 20, 100, 90, 0.5, 15, 25, 150, 140, 0.6];
+    const grid = [groupRow, metricRow, dataRow];
+
+    const result = detectWideTargetsLayout(grid, grid, []);
+    assert.ok(result, "expected detection to succeed despite the unlabeled leading spacer");
+    const month1 = result!.rows.find((r) => r["Month"] === 1)!;
+    assert.deepEqual(
+      [month1["Sales Qty"], month1["FCT Qty"], month1["Sales Val"], month1["FCT Val"], month1["Ach %"]],
+      [10, 20, 100, 90, 0.5],
+    );
+  });
+});
