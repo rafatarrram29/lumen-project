@@ -90,6 +90,38 @@ export function achievement(sales: number, target: number): number | null {
   return Math.round((sales / target) * 1000) / 10;
 }
 
+export type ScopeReadFilters = {
+  /** Every area named by any of the request's scopes, deduplicated. */
+  areas: string[];
+  /** Every rep named by any of the request's scopes, deduplicated. */
+  reps: string[];
+  /**
+   * Whether a target row naming no area at all must also be read. inScope()
+   * below treats such a row as belonging to any scope that has no rep to
+   * check it against — true only for a bare area card viewed on its own,
+   * never for a rep's or a team's card, where every scope always names its
+   * own rep too.
+   */
+  needsNullAreaRows: boolean;
+};
+
+/**
+ * The narrowest set of rows a caller's own database read can be limited to
+ * while still being guaranteed to include everything inScope() could keep
+ * for ANY of these scopes — so the read can be scoped down from "the whole
+ * dataset" to "what this request could possibly need" without silently
+ * dropping a row a wider, unscoped read would have kept.
+ *
+ * This is the read-side mirror of inScope() itself: change one, check
+ * whether the other still holds.
+ */
+export function scopeReadFilters(scopes: ProgressScope[]): ScopeReadFilters {
+  const areas = [...new Set(scopes.flatMap((s) => s.areas ?? []))];
+  const reps = [...new Set(scopes.map((s) => s.rep).filter((r): r is string => Boolean(r)))];
+  const needsNullAreaRows = scopes.some((s) => !s.rep);
+  return { areas, reps, needsNullAreaRows };
+}
+
 function inScope(row: { area: string | null; rep: string | null }, scope: ProgressScope): boolean {
   // A row belongs to the scope when it matches on every dimension the
   // scope actually names. A target row carrying no area is a rep-level

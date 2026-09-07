@@ -19,10 +19,12 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useLanguage } from "@/lib/i18n/LanguageProvider";
 import type { MonthPoint } from "@/lib/lumen/engine";
+import type { Progress } from "@/lib/lumen/targetProgress";
 import { areasUnderManager, type AreaScope, type OrgManager, type OrgRep } from "@/lib/lumen/orgStructure";
 import { ItemTrendChart } from "./ItemTrendChart";
 import { TargetProgressPanel, type TargetEdit } from "./TargetProgressPanel";
 import { useTargetProgress } from "./useTargetProgress";
+import { LoadingBlock } from "./dashboardBits";
 import type { ReactNode } from "react";
 
 type ItemSeries = Record<string, MonthPoint[]>;
@@ -278,9 +280,15 @@ function TeamDetail({
           onAreaOpen={onAreaOpen}
           targetThreshold={targetThreshold}
           latestMonth={latestMonth}
-          targetsVersion={targetsVersion}
           onAddRepTarget={onAddRepTarget}
           onEditRepTarget={onEditRepTarget}
+          // The team-level request above already computed every rep's own
+          // progress (it scopes and rolls up each of them server-side) — a
+          // second, per-rep request here would just ask the database the
+          // same question the team fetch already answered, once per rep
+          // every time a manager's card opens.
+          progress={teamProgress.data?.members.find((m) => m.rep === rep.rep)?.progress ?? null}
+          loading={teamProgress.loading}
         />
       ))}
 
@@ -290,7 +298,7 @@ function TeamDetail({
           {itemsHaveQuantity ? t.units.unitsNote : t.units.valueNote}
         </div>
         {items === null ? (
-          <div className="h-24 animate-pulse rounded-lg bg-surf2" />
+          <LoadingBlock height="h-24" label={t.common.loading} />
         ) : Object.keys(items).length === 0 ? (
           <p className="text-xs text-muted">{t.org.noAreasForRep}</p>
         ) : (
@@ -336,9 +344,10 @@ function RepBlock({
   onAreaOpen,
   targetThreshold,
   latestMonth,
-  targetsVersion,
   onAddRepTarget,
   onEditRepTarget,
+  progress,
+  loading,
 }: {
   rep: OrgRep;
   datasetId: string;
@@ -350,21 +359,14 @@ function RepBlock({
   onAreaOpen: (area: string) => void;
   targetThreshold: number;
   latestMonth: number;
-  targetsVersion: number;
   onAddRepTarget: (rep: string) => void;
   onEditRepTarget: (rep: string, edit: TargetEdit) => Promise<void>;
+  /** This rep's own slice of the team-level fetch above — see TeamDetail. */
+  progress: Progress | null;
+  loading: boolean;
 }) {
   const { t } = useLanguage();
   const repAreas = useMemo(() => rep.areas.map((a) => a.area), [rep.areas]);
-  const repScopes = useMemo(() => [{ rep: rep.rep, areas: repAreas }], [rep.rep, repAreas]);
-  const repProgress = useTargetProgress({
-    datasetId,
-    year,
-    scopes: repScopes,
-    threshold: targetThreshold,
-    enabled: true,
-    version: targetsVersion,
-  });
   const ownsOpenArea = openArea !== null && repAreas.includes(openArea);
   // Only fetched once one of this rep's areas is actually open — a manager
   // with eight reps would otherwise fire eight requests on every expand.
@@ -401,10 +403,10 @@ function RepBlock({
 
       <div className="mb-2">
         <TargetProgressPanel
-          progress={repProgress.data?.members[0]?.progress ?? null}
+          progress={progress}
           threshold={targetThreshold}
           editMonth={latestMonth}
-          loading={repProgress.loading}
+          loading={loading}
           compact
           onAddTarget={() => onAddRepTarget(rep.rep)}
           onEditTarget={(edit) => onEditRepTarget(rep.rep, edit)}
@@ -457,11 +459,7 @@ function RepBlock({
                     rep's areas, so nothing inside it reaches past them. */}
                 {areaOpen && (
                   <div data-testid="manager-area-detail" className="mt-2">
-                    {scope === null ? (
-                      <div className="h-24 animate-pulse rounded-lg bg-surf2" />
-                    ) : (
-                      renderAreaDetail(area.area, scope)
-                    )}
+                    {scope === null ? <LoadingBlock height="h-24" label={t.common.loading} /> : renderAreaDetail(area.area, scope)}
                   </div>
                 )}
               </div>

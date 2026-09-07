@@ -11,6 +11,8 @@ export type Translations = {
     details: string;
     none: string;
     month: (n: number) => string;
+    loading: string;
+    uploading: string;
   };
   login: {
     title: string;
@@ -443,6 +445,8 @@ const en: Translations = {
     details: "Details",
     none: "(none)",
     month: (n) => `Month ${n}`,
+    loading: "Loading…",
+    uploading: "Uploading…",
   },
   login: {
     title: "Territory Decision Engine",
@@ -904,6 +908,8 @@ const ar: Translations = {
     details: "التفاصيل",
     none: "(بدون)",
     month: (n) => `شهر ${n}`,
+    loading: "جاري التحميل…",
+    uploading: "جاري الرفع…",
   },
   login: {
     title: "محرك قرارات المناطق",

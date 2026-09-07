@@ -13,7 +13,7 @@ import { useLanguage } from "@/lib/i18n/LanguageProvider";
 import type { Progress, TeamProgress } from "@/lib/lumen/targetProgress";
 import { EditableValue } from "./EditableValue";
 import { TargetComparisonChart } from "./TargetComparisonChart";
-import { formatNumber } from "./dashboardBits";
+import { formatNumber, LoadingBlock } from "./dashboardBits";
 
 /** Which month a hand-typed target applies to. */
 export type TargetEdit = { item: string; month: number; newValue: number };
@@ -71,7 +71,7 @@ export function TargetProgressPanel({
   const [showAllItems, setShowAllItems] = useState(false);
 
   if (loading) {
-    return <div className="h-40 animate-pulse rounded-xl bg-surf2" />;
+    return <LoadingBlock height="h-40" label={t.common.loading} />;
   }
 
   const team = progress && "members" in progress ? (progress as TeamProgress) : null;

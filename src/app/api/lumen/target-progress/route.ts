@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { requireUser } from "@/lib/lumen/requireUser";
 import { fetchAllRows } from "@/lib/lumen/fetchAllRows";
-import { buildProgress, rollUpTeam, type ActualRow, type TargetRow } from "@/lib/lumen/targetProgress";
+import { buildProgress, rollUpTeam, scopeReadFilters, type ActualRow, type TargetRow } from "@/lib/lumen/targetProgress";
 
 // Target vs Achievement for one slice of the org chart — one rep, one
 // area, or a whole team.
@@ -37,33 +37,59 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "No scopes given" }, { status: 400 });
   }
 
-  const [sales, targets] = await Promise.all([
-    fetchAllRows<{ area: string; family: string; rep: string | null; month: number; sales_value: number }>(() =>
-      supabase
-        .from("lumen_sales_records")
-        .select("area, family, rep, month, sales_value")
-        .eq("year", year)
-        .eq("dataset_id", datasetId),
-    ),
-    fetchAllRows<{
-      area: string | null;
-      rep: string | null;
-      item: string | null;
-      month: number;
-      target_value: number;
-      ach_pct: number | null;
-      is_manual: boolean;
-    }>(() =>
-      supabase
-        .from("lumen_targets")
-        .select("area, rep, item, month, target_value, ach_pct, is_manual")
-        .eq("year", year)
-        .eq("dataset_id", datasetId),
-    ),
+  type SalesRowDb = { area: string; family: string; rep: string | null; month: number; sales_value: number };
+  type TargetRowDb = {
+    id: string;
+    area: string | null;
+    rep: string | null;
+    item: string | null;
+    month: number;
+    target_value: number;
+    ach_pct: number | null;
+    is_manual: boolean;
+  };
+
+  // Scoping the read to exactly what this request could possibly need —
+  // instead of the whole dataset+year, which used to mean reading both
+  // tables in full on every card opened — see scopeReadFilters for why
+  // this can never exclude a row inScope() would otherwise have kept.
+  const { areas: allAreas, reps: allReps, needsNullAreaRows: anyScopeHasNoRep } = scopeReadFilters(scopes);
+
+  const targetsCols = "id, area, rep, item, month, target_value, ach_pct, is_manual";
+  const noRows = Promise.resolve({ data: [] as TargetRowDb[], error: null as string | null });
+
+  const [sales, targetsByArea, targetsByRep, targetsWithNoArea] = await Promise.all([
+    fetchAllRows<SalesRowDb>(() => {
+      let q = supabase.from("lumen_sales_records").select("area, family, rep, month, sales_value").eq("year", year).eq("dataset_id", datasetId);
+      if (allAreas.length > 0) q = q.in("area", allAreas);
+      return q;
+    }),
+    allAreas.length > 0
+      ? fetchAllRows<TargetRowDb>(() =>
+          supabase.from("lumen_targets").select(targetsCols).eq("year", year).eq("dataset_id", datasetId).in("area", allAreas),
+        )
+      : noRows,
+    allReps.length > 0
+      ? fetchAllRows<TargetRowDb>(() =>
+          supabase.from("lumen_targets").select(targetsCols).eq("year", year).eq("dataset_id", datasetId).in("rep", allReps),
+        )
+      : noRows,
+    anyScopeHasNoRep
+      ? fetchAllRows<TargetRowDb>(() =>
+          supabase.from("lumen_targets").select(targetsCols).eq("year", year).eq("dataset_id", datasetId).is("area", null),
+        )
+      : noRows,
   ]);
 
   if (sales.error) return NextResponse.json({ error: sales.error }, { status: 500 });
-  if (targets.error) return NextResponse.json({ error: targets.error }, { status: 500 });
+  if (targetsByArea.error) return NextResponse.json({ error: targetsByArea.error }, { status: 500 });
+  if (targetsByRep.error) return NextResponse.json({ error: targetsByRep.error }, { status: 500 });
+  if (targetsWithNoArea.error) return NextResponse.json({ error: targetsWithNoArea.error }, { status: 500 });
+
+  // The three target reads can overlap (a row matching by both area and
+  // rep, say), so de-duplicate by id rather than concatenating.
+  const targetsById = new Map<string, TargetRowDb>();
+  for (const r of [...targetsByArea.data, ...targetsByRep.data, ...targetsWithNoArea.data]) targetsById.set(r.id, r);
 
   const actualRows: ActualRow[] = sales.data.map((r) => ({
     area: r.area,
@@ -72,7 +98,7 @@ export async function POST(request: Request) {
     month: Number(r.month),
     value: Number(r.sales_value),
   }));
-  const targetRows: TargetRow[] = targets.data.map((r) => ({
+  const targetRows: TargetRow[] = [...targetsById.values()].map((r) => ({
     area: r.area,
     rep: r.rep,
     item: r.item,

@@ -10,6 +10,7 @@ import {
 } from "@/lib/lumen/columnMapping";
 import { useLanguage } from "@/lib/i18n/LanguageProvider";
 import type { Translations } from "@/lib/i18n/translations";
+import { Spinner } from "./dashboardBits";
 
 type FieldKey = keyof TargetColumnMapping;
 const FIELD_ORDER: FieldKey[] = ["area", "rep", "item", "month", "value", "achPct"];
@@ -51,9 +52,13 @@ export function UploadTargetsModal({
   /** Null for the sidebar upload, which covers the whole dataset. */
   scope?: TargetScope | null;
   onCancel: () => void;
-  onConfirm: (mapping: TargetColumnMapping) => void;
+  /** Rejects on failure — the dialog stays open and shows why, rather than
+   *  closing as if the upload had gone through. */
+  onConfirm: (mapping: TargetColumnMapping) => Promise<void>;
 }) {
   const { t } = useLanguage();
+  const [submitting, setSubmitting] = useState(false);
+  const [submitError, setSubmitError] = useState<string | null>(null);
 
   // The mapping this dataset's last targets upload was confirmed with. It
   // is reused only when every column it names is actually in this file —
@@ -130,15 +135,25 @@ export function UploadTargetsModal({
     return rep.length > 0 || area.length > 0 ? { rep, area } : null;
   }
 
-  function handleConfirm() {
-    if (!complete) return;
+  async function handleConfirm() {
+    if (!complete || submitting) return;
     const m = resolved();
     const found = findConflict(m);
     if (found && !conflict) {
       setConflict(found);
       return;
     }
-    onConfirm(m);
+    setSubmitError(null);
+    setSubmitting(true);
+    try {
+      await onConfirm(m);
+      // No state update on success: onConfirm clearing the pending file is
+      // what unmounts this dialog, and this component may already be gone
+      // by the time the promise settles.
+    } catch (err) {
+      setSubmitError(err instanceof Error ? err.message : "Targets upload failed");
+      setSubmitting(false);
+    }
   }
 
   return (
@@ -200,21 +215,27 @@ export function UploadTargetsModal({
           </p>
         )}
 
+        {submitError && (
+          <p className="mt-3 break-words rounded-lg bg-red/10 px-3 py-2 text-xs text-red">{submitError}</p>
+        )}
+
         <div className="mt-5 flex justify-end gap-2">
           <button
             type="button"
             onClick={onCancel}
-            className="rounded-lg border border-bdr px-4 py-2 text-sm text-muted hover:text-white"
+            disabled={submitting}
+            className="rounded-lg border border-bdr px-4 py-2 text-sm text-muted hover:text-white disabled:opacity-50"
           >
             {t.common.cancel}
           </button>
           <button
             type="button"
             onClick={handleConfirm}
-            disabled={!complete}
-            className="rounded-lg bg-gradient-to-br from-amber to-[var(--amber-2)] px-4 py-2 text-sm font-semibold text-on-accent disabled:opacity-50"
+            disabled={!complete || submitting}
+            className="flex items-center gap-2 rounded-lg bg-gradient-to-br from-amber to-[var(--amber-2)] px-4 py-2 text-sm font-semibold text-on-accent disabled:opacity-50"
           >
-            {conflict ? t.targets.scopeConflictConfirm : t.common.continueLabel}
+            {submitting && <Spinner className="h-3.5 w-3.5" />}
+            {submitting ? t.common.uploading : conflict ? t.targets.scopeConflictConfirm : t.common.continueLabel}
           </button>
         </div>
       </div>
