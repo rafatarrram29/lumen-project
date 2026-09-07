@@ -125,3 +125,27 @@ describe("what it declines to guess", () => {
     assert.deepEqual(guessTargetMapping(headers), guessTargetMapping(headers));
   });
 });
+
+describe("a combined Sales-vs-Target export", () => {
+  test("Sales Val/Sales Qty map to their own fields, never stealing FCT Val's spot", () => {
+    const headers = ["Item", "Team", "Month", "Sales Qty", "FCT Qty", "Sales Val", "FCT Val", "Ach %"];
+    const got = guessTargetMapping(headers);
+    assert.equal(got.value, "FCT Val");
+    assert.equal(got.salesValue, "Sales Val");
+    assert.equal(got.salesQty, "Sales Qty");
+    assert.equal(got.achPct, "Ach %");
+    // "FCT Qty" answers to nothing here — there's no target-quantity field.
+    assert.equal(Object.values(got).includes("FCT Qty"), false);
+  });
+
+  test("plain wording variants", () => {
+    assert.equal(guessTargetMapping(["Item", "Month", "FCT Val", "Actual Sales"]).salesValue, "Actual Sales");
+    assert.equal(guessTargetMapping(["Item", "Month", "FCT Val", "Actual Qty"]).salesQty, "Actual Qty");
+  });
+
+  test("a plain long-format file with no sales columns leaves both unmapped", () => {
+    const got = guessTargetMapping(["Area", "Rep", "Item", "Month", "FCT Val", "Ach %"]);
+    assert.equal(got.salesValue, undefined);
+    assert.equal(got.salesQty, undefined);
+  });
+});

@@ -20,7 +20,7 @@ const act = (area: string, item: string, month: number, value: number, rep: stri
   ({ area, item, rep, month, value });
 const tgt = (
   o: Partial<TargetRow> & { month: number; targetValue: number },
-): TargetRow => ({ area: null, rep: null, item: null, achPct: null, isManual: false, ...o });
+): TargetRow => ({ area: null, rep: null, item: null, achPct: null, isManual: false, salesValue: null, ...o });
 
 describe("achievement as a percentage", () => {
   test("sales over target, to one decimal", () => {
@@ -240,6 +240,110 @@ describe("the file's own Ach% against ours", () => {
   test("a manual row is marked so the card can show it differently", () => {
     const p = buildProgress(base, [tgt({ rep: "Sara", item: "Panadol", month: 1, targetValue: 1000, isManual: true })], scope);
     assert.equal(p.items[0].isManual, true);
+  });
+});
+
+describe("a combined Sales-vs-Target file's own sales figures", () => {
+  const scope = { rep: "Sara" };
+
+  test("with no matching row at all in the separately-uploaded Sales dataset, the file's own Sales Val still drives the numbers", () => {
+    // This is the bug report itself: a targets file with Sales Val/Sales
+    // Qty/FCT Val/Ach % all ready-made, but the separate Sales section has
+    // nothing Lumen can match it to (a different naming, a different
+    // upload, or nothing uploaded there at all) — sales must not fall to 0.
+    const noMatchingActuals: ActualRow[] = [];
+    const p = buildProgress(
+      noMatchingActuals,
+      [tgt({ rep: "Sara", item: "Panadol", month: 1, targetValue: 1266, salesValue: 1767, achPct: 139.62 })],
+      scope,
+    );
+    assert.equal(p.totalSales, 1767);
+    assert.equal(p.totalTarget, 1266);
+    assert.equal(p.achPct, 139.6);
+  });
+
+  test("the file's own sales value reconciles the mismatch that not using it produced", () => {
+    // The exact discrepancy reported: the file says 139.6%, but sales/target
+    // came out to 47.6% because sales was being matched against the wrong
+    // source. Using the file's own Sales Val, computed and file agree.
+    const p = buildProgress(
+      [],
+      [tgt({ rep: "Sara", item: "Panadol", month: 1, targetValue: 1266, salesValue: 1767, achPct: 139.62 })],
+      scope,
+    );
+    assert.deepEqual(p.mismatches, []);
+  });
+
+  test("a separately-matched actual for the same scope/month is ignored, not added on top", () => {
+    // Once the file supplies its own sales figure, mixing in a second,
+    // independently-matched actual would double-count the same sale.
+    const wouldAlsoMatch = [act("Cairo", "Panadol", 1, 500, "Sara")];
+    const p = buildProgress(
+      wouldAlsoMatch,
+      [tgt({ rep: "Sara", item: "Panadol", month: 1, targetValue: 1266, salesValue: 1767 })],
+      scope,
+    );
+    assert.equal(p.totalSales, 1767, "not 1767 + 500");
+  });
+
+  test("the item breakdown and the month chart both read from the file's own value", () => {
+    const p = buildProgress(
+      [],
+      [
+        tgt({ rep: "Sara", item: "Panadol", month: 1, targetValue: 1266, salesValue: 1767 }),
+        tgt({ rep: "Sara", item: "Amoxil", month: 1, targetValue: 500, salesValue: 600 }),
+      ],
+      scope,
+    );
+    assert.equal(p.months[0].sales, 2367);
+    const byItem = Object.fromEntries(p.items.map((i) => [i.item, i.sales]));
+    assert.deepEqual(byItem, { Panadol: 1767, Amoxil: 600 });
+  });
+
+  test("a plain targets file with no row carrying its own sales value behaves exactly as before (regression)", () => {
+    const p = buildProgress(
+      [act("Cairo", "Panadol", 1, 700, "Sara")],
+      [tgt({ rep: "Sara", item: "Panadol", month: 1, targetValue: 1000 })],
+      scope,
+    );
+    assert.equal(p.totalSales, 700);
+  });
+
+  test("a row with no readable sales value of its own contributes nothing for that cell, rather than falling back per-row", () => {
+    // hasOwnSales is a scope-wide switch, not a per-row fallback: once ANY
+    // row in scope carries its own figure, a DIFFERENT row with none is
+    // not matched against the separate Sales table either.
+    const wouldMatch = [act("Cairo", "Amoxil", 1, 999, "Sara")];
+    const p = buildProgress(
+      wouldMatch,
+      [
+        tgt({ rep: "Sara", item: "Panadol", month: 1, targetValue: 1266, salesValue: 1767 }),
+        tgt({ rep: "Sara", item: "Amoxil", month: 1, targetValue: 500, salesValue: null }),
+      ],
+      scope,
+    );
+    const amoxil = p.items.find((i) => i.item === "Amoxil")!;
+    assert.equal(amoxil.sales, 0);
+  });
+
+  test("rollUpTeam sums correctly across a team mixing self-contained and matched members", () => {
+    const sara = {
+      rep: "Sara",
+      progress: buildProgress([], [tgt({ rep: "Sara", item: "Panadol", month: 1, targetValue: 1000, salesValue: 1400 })], {
+        rep: "Sara",
+      }),
+    };
+    const ali = {
+      rep: "Ali",
+      progress: buildProgress(
+        [act("Giza", "Panadol", 1, 300, "Ali")],
+        [tgt({ rep: "Ali", item: "Panadol", month: 1, targetValue: 500 })],
+        { rep: "Ali" },
+      ),
+    };
+    const team = rollUpTeam([sara, ali], 70);
+    assert.equal(team.totalSales, 1700);
+    assert.equal(team.totalTarget, 1500);
   });
 });
 

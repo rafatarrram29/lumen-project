@@ -11,6 +11,10 @@ type IncomingTargetRow = {
   targetValue: number;
   /** The plan file's own achievement %, when it had one. */
   achPct?: number | null;
+  /** This file's own actual-sales figure for the row, when it had one — see targetProgress.ts. */
+  salesValue?: number | null;
+  /** This file's own actual-sales quantity for the row, when it had one. */
+  salesQty?: number | null;
 };
 
 export async function POST(request: Request) {
@@ -69,6 +73,8 @@ export async function POST(request: Request) {
         year,
         target_value: r.targetValue,
         ach_pct: typeof r.achPct === "number" && Number.isFinite(r.achPct) ? r.achPct : null,
+        sales_value: typeof r.salesValue === "number" && Number.isFinite(r.salesValue) ? r.salesValue : null,
+        sales_qty: typeof r.salesQty === "number" && Number.isFinite(r.salesQty) ? r.salesQty : null,
         is_manual: false,
         source_file: sourceFile,
         uploaded_at: uploadedAt,

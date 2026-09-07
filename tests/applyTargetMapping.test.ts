@@ -77,3 +77,40 @@ describe("applyTargetMapping: achPct scaling", () => {
     assert.equal(rows[0].achPct, null);
   });
 });
+
+describe("applyTargetMapping: a combined Sales-vs-Target file's own sales figures", () => {
+  const withSales: TargetColumnMapping = { ...mapping, salesValue: "Sales Val", salesQty: "Sales Qty" };
+
+  test("Sales Val/Sales Qty are read into the row alongside the plan", () => {
+    const sheet: RawSheet = {
+      headers: ["Item", "Month", "Sales Qty", "Sales Val", "FCT Val", "Ach %"],
+      rows: [{ Item: "Widget", Month: 1, "Sales Qty": 88, "Sales Val": 1767, "FCT Val": 1266, "Ach %": 1.3962 }],
+      displayRows: [{ Item: "Widget", Month: "1", "Sales Qty": "88", "Sales Val": "1,767", "FCT Val": "1,266", "Ach %": "139.62%" }],
+    };
+    const { rows } = applyTargetMapping(sheet, withSales);
+    assert.equal(rows[0].salesValue, 1767);
+    assert.equal(rows[0].salesQty, 88);
+    assert.equal(rows[0].targetValue, 1266);
+    assert.equal(rows[0].achPct, 139.62);
+  });
+
+  test("unmapped salesValue/salesQty come back null, not zero", () => {
+    const sheet: RawSheet = {
+      headers: ["Item", "Month", "FCT Val"],
+      rows: [{ Item: "Widget", Month: 1, "FCT Val": 1000 }],
+    };
+    const { rows } = applyTargetMapping(sheet, mapping);
+    assert.equal(rows[0].salesValue, null);
+    assert.equal(rows[0].salesQty, null);
+  });
+
+  test("an unreadable Sales Val cell leaves salesValue null without dropping the row", () => {
+    const sheet: RawSheet = {
+      headers: ["Item", "Month", "Sales Val", "FCT Val"],
+      rows: [{ Item: "Widget", Month: 1, "Sales Val": "n/a", "FCT Val": 1000 }],
+    };
+    const { rows } = applyTargetMapping(sheet, { ...mapping, salesValue: "Sales Val" });
+    assert.equal(rows.length, 1);
+    assert.equal(rows[0].salesValue, null);
+  });
+});

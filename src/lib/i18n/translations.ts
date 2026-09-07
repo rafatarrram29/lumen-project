@@ -69,6 +69,8 @@ export type Translations = {
     subtitle: string;
     fieldTargetValue: string;
     fieldAchPct: string;
+    fieldSalesValue: string;
+    fieldSalesQty: string;
     atLeastOneRequired: string;
     replaceWarning: string;
     scopedReplaceWarning: (scope: string) => string;
@@ -505,6 +507,8 @@ const en: Translations = {
       "Match each column to what it means. Uploading replaces every existing target for this dataset and year.",
     fieldTargetValue: "Target value (FCT)",
     fieldAchPct: "Ach % (optional)",
+    fieldSalesValue: "Sales value, from this file (optional)",
+    fieldSalesQty: "Sales quantity, from this file (optional)",
     scopedReplaceWarning: (scope) =>
       `Uploading replaces the targets already stored for ${scope} — and only those. Every other rep's plan is left alone.`,
     scopeNote: (scope) =>
@@ -966,6 +970,8 @@ const ar: Translations = {
     subtitle: "اربط كل عمود بمعناه. الرفع ده هيستبدل كل الأهداف الحالية لمجموعة البيانات والسنة دي.",
     fieldTargetValue: "قيمة التارجت (FCT)",
     fieldAchPct: "نسبة التحقيق % (اختياري)",
+    fieldSalesValue: "قيمة المبيعات من نفس الملف (اختياري)",
+    fieldSalesQty: "كمية المبيعات من نفس الملف (اختياري)",
     scopedReplaceWarning: (scope) =>
       `الرفع هيستبدل التارجت المتخزن لـ${scope} — وده بس. خطط باقي المناديب مش هتتلمس.`,
     scopeNote: (scope) =>

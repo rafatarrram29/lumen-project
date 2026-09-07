@@ -119,7 +119,7 @@ export function useSalesUploads({
       const mappingUnchanged =
         current !== null &&
         current !== undefined &&
-        (["area", "rep", "item", "month", "value", "achPct"] as const).every(
+        (["area", "rep", "item", "month", "value", "achPct", "salesValue", "salesQty"] as const).every(
           (k) => (current[k] ?? null) === (mapping[k] ?? null),
         );
 
