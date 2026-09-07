@@ -24,8 +24,6 @@ import { repResponsibleInMonth, type RepAssignment } from "@/lib/lumen/repAssign
 import { managerForRep, averageSeriesForAreas, type AreaScope, type ManagerLink } from "@/lib/lumen/orgStructure";
 import { recordsForAreaMonth, type LinkedFile, type LinkedRecord } from "@/lib/lumen/linkedFiles";
 import { EditableValue, EditableFieldValue } from "./EditableValue";
-import { TargetProgressPanel, type TargetEdit } from "./TargetProgressPanel";
-import { useTargetProgress } from "./useTargetProgress";
 import { RepHistoryPanel } from "./RepHistoryPanel";
 import { TrendChart } from "./TrendChart";
 import { areaCardId, formatNumber, Badge, PctDelta, TargetChip } from "./dashboardBits";
@@ -57,9 +55,6 @@ export function AreaDetail({
   handleEditLinkedField,
   anchored = false,
   scope = null,
-  targetsVersion = 0,
-  onAddTarget,
-  onEditTarget,
 }: {
   area: string;
   d: AreaChange;
@@ -97,24 +92,8 @@ export function AreaDetail({
    * manager's or a rep's block, where it is not.
    */
   scope?: AreaScope | null;
-  /** Bumped after a target upload or edit, so the panel refetches. */
-  targetsVersion?: number;
-  /** Opens the targets upload with this area already filled in. */
-  onAddTarget?: (area: string) => void;
-  /** Corrects one target figure for this area. */
-  onEditTarget?: (area: string, edit: TargetEdit) => Promise<void>;
 }) {
   const { t } = useLanguage();
-  // Only fetched once the card is open — a collapsed card asks for
-  // nothing, which is what keeps a thirty-area dashboard to one request.
-  const areaProgress = useTargetProgress({
-    datasetId: selectedDatasetId,
-    year,
-    scopes: [{ areas: [area] }],
-    threshold: targetThreshold,
-    enabled: isOpen && Boolean(selectedDatasetId),
-    version: targetsVersion,
-  });
               const lineSummary = report.lines[d.line];
               const areaLineSystemic = lineSummary?.isSystemicDrop ?? false;
               const causeLine =
@@ -254,16 +233,6 @@ export function AreaDetail({
                           />
                         </div>
                       )}
-
-                      <TargetProgressPanel
-                        progress={areaProgress.data?.members[0]?.progress ?? null}
-                        threshold={targetThreshold}
-                        editMonth={report.latestMonth}
-                        loading={areaProgress.loading}
-                        compact
-                        onAddTarget={onAddTarget ? () => onAddTarget(area) : undefined}
-                        onEditTarget={onEditTarget ? (edit) => onEditTarget(area, edit) : undefined}
-                      />
 
                       {(() => {
                         const familyEntries = Object.entries(report.areaFamilyChanges[area] ?? {}).sort(

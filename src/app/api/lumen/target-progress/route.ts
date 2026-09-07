@@ -54,12 +54,12 @@ export async function POST(request: Request) {
   // instead of the whole dataset+year, which used to mean reading both
   // tables in full on every card opened — see scopeReadFilters for why
   // this can never exclude a row inScope() would otherwise have kept.
-  const { areas: allAreas, reps: allReps, needsNullAreaRows: anyScopeHasNoRep } = scopeReadFilters(scopes);
+  const { areas: allAreas, reps: allReps } = scopeReadFilters(scopes);
 
   const targetsCols = "id, area, rep, item, month, target_value, ach_pct, is_manual, sales_value";
   const noRows = Promise.resolve({ data: [] as TargetRowDb[], error: null as string | null });
 
-  const [sales, targetsByArea, targetsByRep, targetsWithNoArea] = await Promise.all([
+  const [sales, targetsByArea, targetsByRep] = await Promise.all([
     fetchAllRows<SalesRowDb>(() => {
       let q = supabase.from("lumen_sales_records").select("area, family, rep, month, sales_value").eq("year", year).eq("dataset_id", datasetId);
       if (allAreas.length > 0) q = q.in("area", allAreas);
@@ -75,22 +75,16 @@ export async function POST(request: Request) {
           supabase.from("lumen_targets").select(targetsCols).eq("year", year).eq("dataset_id", datasetId).in("rep", allReps),
         )
       : noRows,
-    anyScopeHasNoRep
-      ? fetchAllRows<TargetRowDb>(() =>
-          supabase.from("lumen_targets").select(targetsCols).eq("year", year).eq("dataset_id", datasetId).is("area", null),
-        )
-      : noRows,
   ]);
 
   if (sales.error) return NextResponse.json({ error: sales.error }, { status: 500 });
   if (targetsByArea.error) return NextResponse.json({ error: targetsByArea.error }, { status: 500 });
   if (targetsByRep.error) return NextResponse.json({ error: targetsByRep.error }, { status: 500 });
-  if (targetsWithNoArea.error) return NextResponse.json({ error: targetsWithNoArea.error }, { status: 500 });
 
-  // The three target reads can overlap (a row matching by both area and
+  // The two target reads can overlap (a row matching by both area and
   // rep, say), so de-duplicate by id rather than concatenating.
   const targetsById = new Map<string, TargetRowDb>();
-  for (const r of [...targetsByArea.data, ...targetsByRep.data, ...targetsWithNoArea.data]) targetsById.set(r.id, r);
+  for (const r of [...targetsByArea.data, ...targetsByRep.data]) targetsById.set(r.id, r);
 
   const actualRows: ActualRow[] = sales.data.map((r) => ({
     area: r.area,

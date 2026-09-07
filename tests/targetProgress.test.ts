@@ -85,6 +85,26 @@ describe("scoping rows to one part of the org chart", () => {
     const targets = [tgt({ rep: "Omar", area: "Cairo", month: 1, targetValue: 100 })];
     assert.equal(targetsInScope(targets, { rep: "Sara", areas: ["Cairo"] }).length, 0);
   });
+
+  test("a rep's card-scoped plan never leaks into an unrelated area's own card (the reported bug)", () => {
+    // Exactly the reported shape: a Targets file uploaded from inside
+    // Rafat's card has no Area column at all, so every row's area is
+    // null — Rafat is the row's only identity. Opening some other area's
+    // card entirely (Gharbia 5, nothing to do with Rafat) must show
+    // nothing here, not Rafat's own numbers.
+    const rafatsPlan = [tgt({ rep: "Rafat", item: "Panadol", month: 1, targetValue: 520300 })];
+    assert.equal(targetsInScope(rafatsPlan, { areas: ["Gharbia 5"] }).length, 0);
+    // It still belongs to Rafat's own card.
+    assert.equal(targetsInScope(rafatsPlan, { rep: "Rafat" }).length, 1);
+  });
+
+  test("a sales row's own rep never keeps it out of a plain area query (the other half of the fix)", () => {
+    // Unlike a target row, a sales row always carries a real area — the
+    // rep on it is extra information, not a substitute identity. An area
+    // query with no rep at all must still see every sale made there.
+    const sales = [act("Gharbia 5", "Panadol", 1, 400000, "Rafat")];
+    assert.equal(actualsInScope(sales, { areas: ["Gharbia 5"] }).length, 1);
+  });
 });
 
 describe("one rep's comparison", () => {
@@ -467,24 +487,13 @@ describe("scopeReadFilters: narrowing a database read without narrowing inScope(
     assert.deepEqual([...f.reps].sort(), ["Ali", "Sara"]);
   });
 
-  test("a scope with no rep at all needs the null-area read; one with a rep for every scope does not", () => {
-    assert.equal(scopeReadFilters([{ areas: ["Cairo"] }]).needsNullAreaRows, true);
-    assert.equal(scopeReadFilters([{ rep: "Sara", areas: ["Cairo"] }]).needsNullAreaRows, false);
-    // Mixed: even one rep-less scope in the batch means the read must
-    // cover it, so the flag is set for the whole request.
-    assert.equal(
-      scopeReadFilters([{ rep: "Sara", areas: ["Cairo"] }, { areas: ["Giza"] }]).needsNullAreaRows,
-      true,
-    );
-  });
-
   test("a null or empty rep never counts as a real rep to filter by", () => {
     const f = scopeReadFilters([{ rep: null, areas: ["Cairo"] }, { rep: "", areas: ["Giza"] }]);
     assert.deepEqual(f.reps, []);
   });
 
   test("no scopes at all is not an error", () => {
-    assert.deepEqual(scopeReadFilters([]), { areas: [], reps: [], needsNullAreaRows: false });
+    assert.deepEqual(scopeReadFilters([]), { areas: [], reps: [] });
   });
 
   // The property that actually matters: whatever scopeReadFilters decides to
@@ -496,7 +505,6 @@ describe("scopeReadFilters: narrowing a database read without narrowing inScope(
   function passesReadFilter(row: TargetRow, f: ReturnType<typeof scopeReadFilters>): boolean {
     if (row.area !== null && f.areas.includes(row.area)) return true;
     if (row.rep !== null && f.reps.includes(row.rep)) return true;
-    if (f.needsNullAreaRows && row.area === null) return true;
     return false;
   }
 
