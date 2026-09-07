@@ -103,14 +103,6 @@ export type ScopeReadFilters = {
   areas: string[];
   /** Every rep named by any of the request's scopes, deduplicated. */
   reps: string[];
-  /**
-   * Whether a target row naming no area at all must also be read. inScope()
-   * below treats such a row as belonging to any scope that has no rep to
-   * check it against — true only for a bare area card viewed on its own,
-   * never for a rep's or a team's card, where every scope always names its
-   * own rep too.
-   */
-  needsNullAreaRows: boolean;
 };
 
 /**
@@ -121,26 +113,51 @@ export type ScopeReadFilters = {
  * dropping a row a wider, unscoped read would have kept.
  *
  * This is the read-side mirror of inScope() itself: change one, check
- * whether the other still holds.
+ * whether the other still holds. A row inScope() can ever keep for one of
+ * these scopes always names either its own area (in scope.areas) or its
+ * own rep (as scope.rep) — see inScope's own reasoning — so "area IN
+ * these areas OR rep IN these reps" alone is a safe superset; no scope
+ * needs its own bare "and every unattributed row too" carve-out.
  */
 export function scopeReadFilters(scopes: ProgressScope[]): ScopeReadFilters {
   const areas = [...new Set(scopes.flatMap((s) => s.areas ?? []))];
   const reps = [...new Set(scopes.map((s) => s.rep).filter((r): r is string => Boolean(r)))];
-  const needsNullAreaRows = scopes.some((s) => !s.rep);
-  return { areas, reps, needsNullAreaRows };
+  return { areas, reps };
 }
 
+/**
+ * Whether a row belongs to a scope.
+ *
+ * A sales row always names a real area — "which rep sold it" is an extra
+ * dimension on top, never a substitute for it, so an area-only query
+ * correctly wants every sale in that area regardless of which rep made it.
+ *
+ * A TARGET row is different: one uploaded from inside a rep's card carries
+ * no Area column at all (the card supplied the rep instead), so its area
+ * is null — and null there is not "unknown, could be anywhere," it is "this
+ * row's only identity is the rep who own it." Treating that null the same
+ * as a sales row's (impossible) blank area is exactly the bug this fixes:
+ * a bare area query with no rep of its own used to treat "row names no
+ * area" as "let it through," which meant one rep's entire card-scoped plan
+ * showed up under every unrelated area's own card, sharing nothing with
+ * that rep beyond a coincidentally blank area column.
+ *
+ * So a row with no area of its own is matched by rep alone, never by area
+ * (it has none to match); a row that does name an area is matched exactly
+ * as before — by area, and by rep too when the row names one and the scope
+ * asks for a specific one.
+ */
 function inScope(row: { area: string | null; rep: string | null }, scope: ProgressScope): boolean {
-  // A row belongs to the scope when it matches on every dimension the
-  // scope actually names. A target row carrying no area is a rep-level
-  // total and still counts toward that rep; one carrying no rep counts
-  // toward whichever areas it names.
-  if (scope.rep && row.rep && row.rep !== scope.rep) return false;
   const areas = scope.areas ?? [];
-  if (areas.length > 0 && row.area && !areas.includes(row.area)) return false;
-  // A row with neither dimension set cannot be attributed to a slice at
-  // all — it belongs to the dataset as a whole.
-  if (scope.rep || areas.length > 0) return Boolean(row.rep || row.area);
+
+  if (row.area == null) {
+    if (row.rep) return row.rep === scope.rep;
+    // Neither dimension at all: belongs only to a fully unscoped read.
+    return !scope.rep && areas.length === 0;
+  }
+
+  if (scope.rep && row.rep && row.rep !== scope.rep) return false;
+  if (areas.length > 0 && !areas.includes(row.area)) return false;
   return true;
 }
 

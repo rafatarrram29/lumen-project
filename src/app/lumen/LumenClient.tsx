@@ -704,9 +704,6 @@ export default function LumenClient({
         handleRenameSalesField={handleRenameSalesField}
         handleEditSalesCell={handleEditSalesCell}
         handleEditLinkedField={handleEditLinkedField}
-        targetsVersion={targetsVersion}
-        onAddTarget={(a) => requestScopedTargetUpload({ area: a })}
-        onEditTarget={(a, edit) => handleEditTarget({ area: a }, edit)}
       />
     );
   }
