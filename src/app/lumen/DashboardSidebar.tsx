@@ -15,6 +15,7 @@ import type { Dataset } from "@/lib/lumen/columnMapping";
 import type { Translations } from "@/lib/i18n/translations";
 import type { LinkedFile, JoinKey } from "@/lib/lumen/linkedFiles";
 import { LinkedFilesPanel } from "./LinkedFilesPanel";
+import { Spinner } from "./dashboardBits";
 
 const SHEET_TYPES = ".xlsx,.xls,.xlsm,.csv,.tsv,.txt,.ods";
 
@@ -118,7 +119,14 @@ export function DashboardSidebar({
             }}
           />
           <SidebarAction onClick={() => fileInputRef.current?.click()} disabled={uploading}>
-            {uploading ? (uploadProgress ?? t.sidebar.uploading) : t.sidebar.upload}
+            {uploading ? (
+              <span className="flex items-center justify-center gap-2">
+                <Spinner className="h-3.5 w-3.5" />
+                {uploadProgress ?? t.sidebar.uploading}
+              </span>
+            ) : (
+              t.sidebar.upload
+            )}
           </SidebarAction>
 
           {selectedDatasetId && (

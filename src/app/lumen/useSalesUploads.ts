@@ -95,9 +95,16 @@ export function useSalesUploads({
     }
   }
 
+  /**
+   * Confirming the mapping dialog. The dialog itself awaits this and stays
+   * open — showing a spinner on its own Continue button — until it
+   * resolves or rejects, so it never closes as if the upload had gone
+   * through when it hasn't: `pendingTargets` is only cleared once the
+   * upload has actually succeeded, and a failure is rethrown so the dialog
+   * can show it locally too, not just in the sidebar's status bar.
+   */
   async function handleTargetsConfirm(mapping: TargetColumnMapping) {
     const pending = pendingTargets;
-    setPendingTargets(null);
     if (!pending || !datasetId) return;
 
     status.setUploading(true);
@@ -136,8 +143,16 @@ export function useSalesUploads({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ year, datasetId, scopeRep: scope?.rep ?? null, scopeArea: scope?.area ?? null }),
       });
-      const replaceJson = await replaceRes.json();
-      if (!replaceRes.ok) throw new Error(replaceJson.error || "Could not clear existing targets");
+      // A response body that isn't valid JSON at all (a proxy's HTML error
+      // page, an empty body from a connection that dropped mid-request)
+      // used to throw its own raw parse error here — "Unexpected end of
+      // JSON input" — which is meaningless to read as an upload failure.
+      // Falling back to {} turns that into the same clean "something went
+      // wrong" message every other failure gets.
+      const replaceJson = await replaceRes.json().catch(() => ({}) as { error?: string });
+      if (!replaceRes.ok) {
+        throw new Error(replaceJson.error || `Could not clear existing targets (server said ${replaceRes.status})`);
+      }
 
       const batches = intoBatches(rows);
       let inserted = 0;
@@ -155,11 +170,16 @@ export function useSalesUploads({
             sourceFile: pending.file.name,
           }),
         });
-        const json = await res.json();
-        if (!res.ok) throw new Error(json.error || "Targets upload failed");
-        inserted += json.inserted;
+        const json = await res.json().catch(() => ({}) as { error?: string; inserted?: number });
+        if (!res.ok) throw new Error(json.error || `Targets upload failed (server said ${res.status})`);
+        inserted += json.inserted ?? 0;
       }
 
+      // The upload itself has succeeded from here on — close the dialog
+      // and say so before touching anything else, so a hiccup refreshing
+      // the report can never retroactively read back as "the upload
+      // failed" when the rows are already safely in the database.
+      setPendingTargets(null);
       status.setMessage(t.targets.uploadSuccess(inserted));
       status.setError(
         issueLine(
@@ -168,10 +188,16 @@ export function useSalesUploads({
             : null,
         ),
       );
-      await fetchReport(datasetId, year);
+      try {
+        await fetchReport(datasetId, year);
+      } catch {
+        // Already reported as a success above; a stale report refresh is
+        // not the upload's own failure to report as one.
+      }
       onTargetsChanged();
     } catch (err) {
       status.setError(errorText(err, "Targets upload failed"));
+      throw err;
     } finally {
       status.setUploading(false);
       status.setProgress(null);

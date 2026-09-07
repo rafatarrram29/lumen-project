@@ -9,9 +9,11 @@ import {
   rollUpTeam,
   actualsInScope,
   targetsInScope,
+  scopeReadFilters,
   ACH_MISMATCH_TOLERANCE,
   type ActualRow,
   type TargetRow,
+  type ProgressScope,
 } from "../src/lib/lumen/targetProgress.ts";
 
 const act = (area: string, item: string, month: number, value: number, rep: string | null = null): ActualRow =>
@@ -347,5 +349,84 @@ describe("rolling a team up to its manager", () => {
     assert.deepEqual(team.months, []);
     assert.equal(team.measuredCount, 0);
     assert.deepEqual(team.unmeasured, []);
+  });
+});
+
+describe("scopeReadFilters: narrowing a database read without narrowing inScope()", () => {
+  test("collects every area and rep named across all scopes, deduplicated", () => {
+    const scopes: ProgressScope[] = [
+      { rep: "Sara", areas: ["Cairo", "Giza"] },
+      { rep: "Ali", areas: ["Giza", "Alex"] },
+    ];
+    const f = scopeReadFilters(scopes);
+    assert.deepEqual([...f.areas].sort(), ["Alex", "Cairo", "Giza"]);
+    assert.deepEqual([...f.reps].sort(), ["Ali", "Sara"]);
+  });
+
+  test("a scope with no rep at all needs the null-area read; one with a rep for every scope does not", () => {
+    assert.equal(scopeReadFilters([{ areas: ["Cairo"] }]).needsNullAreaRows, true);
+    assert.equal(scopeReadFilters([{ rep: "Sara", areas: ["Cairo"] }]).needsNullAreaRows, false);
+    // Mixed: even one rep-less scope in the batch means the read must
+    // cover it, so the flag is set for the whole request.
+    assert.equal(
+      scopeReadFilters([{ rep: "Sara", areas: ["Cairo"] }, { areas: ["Giza"] }]).needsNullAreaRows,
+      true,
+    );
+  });
+
+  test("a null or empty rep never counts as a real rep to filter by", () => {
+    const f = scopeReadFilters([{ rep: null, areas: ["Cairo"] }, { rep: "", areas: ["Giza"] }]);
+    assert.deepEqual(f.reps, []);
+  });
+
+  test("no scopes at all is not an error", () => {
+    assert.deepEqual(scopeReadFilters([]), { areas: [], reps: [], needsNullAreaRows: false });
+  });
+
+  // The property that actually matters: whatever scopeReadFilters decides to
+  // fetch must never exclude a row targetsInScope() would have kept for ANY
+  // scope in the batch — a real database read only ever gets to apply the
+  // filter once, before targetsInScope() runs at all. This checks that
+  // superset property directly against a spread of rows and scope shapes,
+  // rather than trusting the two functions to stay in sync by hand.
+  function passesReadFilter(row: TargetRow, f: ReturnType<typeof scopeReadFilters>): boolean {
+    if (row.area !== null && f.areas.includes(row.area)) return true;
+    if (row.rep !== null && f.reps.includes(row.rep)) return true;
+    if (f.needsNullAreaRows && row.area === null) return true;
+    return false;
+  }
+
+  test("never excludes a row targetsInScope() would keep, across a spread of shapes", () => {
+    const rows: TargetRow[] = [
+      tgt({ area: "Cairo", rep: "Sara", month: 1, targetValue: 100 }),
+      tgt({ area: "Cairo", rep: null, month: 1, targetValue: 100 }),
+      tgt({ area: null, rep: "Sara", month: 1, targetValue: 100 }),
+      tgt({ area: null, rep: "Someone Else Entirely", month: 1, targetValue: 100 }),
+      tgt({ area: "Somewhere Unrelated", rep: null, month: 1, targetValue: 100 }),
+      tgt({ area: "Somewhere Unrelated", rep: "Someone Else Entirely", month: 1, targetValue: 100 }),
+      tgt({ area: null, rep: null, month: 1, targetValue: 100 }),
+    ];
+
+    const scopeSets: ProgressScope[][] = [
+      // A manager's team: every scope names its own rep and areas.
+      [{ rep: "Sara", areas: ["Cairo"] }, { rep: "Ali", areas: ["Giza"] }],
+      // One rep's own card.
+      [{ rep: "Sara", areas: ["Cairo", "Giza"] }],
+      // A bare area card, no rep at all.
+      [{ areas: ["Cairo"] }],
+    ];
+
+    for (const scopes of scopeSets) {
+      const f = scopeReadFilters(scopes);
+      for (const row of rows) {
+        const keptBySomeScope = scopes.some((s) => targetsInScope([row], s).length > 0);
+        if (keptBySomeScope) {
+          assert.ok(
+            passesReadFilter(row, f),
+            `scopeReadFilters(${JSON.stringify(scopes)}) would drop ${JSON.stringify(row)}, which targetsInScope() keeps`,
+          );
+        }
+      }
+    }
   });
 });

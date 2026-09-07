@@ -29,6 +29,42 @@ export function formatNumber(n: number): string {
   return n.toLocaleString("en-US");
 }
 
+/**
+ * A small spinning ring, for any control or panel that has been waiting on
+ * a network response long enough to say so — a bare `animate-pulse`
+ * skeleton reads as "empty" at a glance; this one only ever reads as
+ * "working".
+ */
+export function Spinner({ className = "h-4 w-4" }: { className?: string }) {
+  return (
+    <svg
+      className={`${className} animate-spin text-current`}
+      viewBox="0 0 24 24"
+      fill="none"
+      aria-hidden="true"
+    >
+      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 0 1 8-8V0C5.373 0 0 5.373 0 12h4z" />
+    </svg>
+  );
+}
+
+/**
+ * The placeholder for a card region that is still fetching its own slice
+ * of data (a manager's item charts, a rep's area detail, a target panel).
+ * Same pulsing block as before so the layout doesn't jump, plus a spinner
+ * and label so waiting on it never looks the same as there being nothing
+ * to show.
+ */
+export function LoadingBlock({ height = "h-24", label }: { height?: string; label: string }) {
+  return (
+    <div className={`flex ${height} animate-pulse items-center justify-center gap-2 rounded-lg bg-surf2 text-xs text-muted`}>
+      <Spinner className="h-3.5 w-3.5" />
+      <span>{label}</span>
+    </div>
+  );
+}
+
 export function Badge({ pctChange }: { pctChange: number | null }) {
   if (pctChange === null) {
     return (
