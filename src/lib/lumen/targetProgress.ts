@@ -22,6 +22,14 @@ export type TargetRow = {
   achPct: number | null;
   /** Typed in from a card rather than read from a file. */
   isManual: boolean;
+  /**
+   * This row's own actual-sales figure, when the file it came from carried
+   * one (a combined Sales-vs-Target export) — see
+   * supabase/lumen_targets_own_sales_migration.sql. Null for a plain
+   * targets file, in which case buildProgress falls back to matching this
+   * row's scope against the separately-uploaded ActualRow[] instead.
+   */
+  salesValue: number | null;
 };
 
 /** The sales side, at the grain the comparison needs. */
@@ -166,8 +174,16 @@ export function buildProgress(
   scope: ProgressScope,
   focus?: number,
 ): Progress {
-  const acts = actualsInScope(actuals, scope);
   const tgts = targetsInScope(targets, scope);
+
+  // A combined Sales-vs-Target export carries its own actual-sales figure
+  // on the same row as its plan (see columnMapping.ts's salesValue
+  // mapping). When any row in scope has one, that becomes the ONLY source
+  // of "sales" for this scope: matching it up against the separately
+  // uploaded Sales dataset on top would double-count, and the whole point
+  // of mapping that column is to trust the numbers the file itself named.
+  const hasOwnSales = tgts.some((t) => t.salesValue !== null);
+  const acts = hasOwnSales ? [] : actualsInScope(actuals, scope);
 
   const byMonth = new Map<number, { sales: number; target: number }>();
   const bump = (m: number, key: "sales" | "target", v: number) => {
@@ -176,7 +192,10 @@ export function buildProgress(
     byMonth.set(m, cur);
   };
   for (const a of acts) bump(a.month, "sales", a.value);
-  for (const t of tgts) bump(t.month, "target", t.targetValue);
+  for (const t of tgts) {
+    bump(t.month, "target", t.targetValue);
+    if (t.salesValue !== null) bump(t.month, "sales", t.salesValue);
+  }
 
   const months: MonthProgress[] = [...byMonth.entries()]
     .sort((a, b) => a[0] - b[0])
@@ -205,6 +224,7 @@ export function buildProgress(
     if (!t.item) continue;
     const e = itemEntry(t.item);
     e.target += t.targetValue;
+    if (t.salesValue !== null) e.sales += t.salesValue;
     if (t.achPct !== null) e.fileAch.push(t.achPct);
     if (t.isManual) e.manual = true;
   }
@@ -224,6 +244,7 @@ export function buildProgress(
     if (!t.item) continue;
     const k = cellKey(t.item, t.month);
     cellTarget.set(k, (cellTarget.get(k) ?? 0) + t.targetValue);
+    if (t.salesValue !== null) cellSales.set(k, (cellSales.get(k) ?? 0) + t.salesValue);
     if (t.achPct !== null) cellFileAch.set(k, [...(cellFileAch.get(k) ?? []), t.achPct]);
   }
   for (const [k, fileAchList] of cellFileAch) {
@@ -264,8 +285,9 @@ export function buildProgress(
       return a.item.localeCompare(b.item);
     });
 
-  // Tiles describe the focus month, like the item list under them.
-  const totalSales = focusActs.reduce((s, a) => s + a.value, 0);
+  // Tiles describe the focus month, like the item list under them — same
+  // two sources as byMonth's own sum above, just narrowed to one month.
+  const totalSales = focusActs.reduce((s, a) => s + a.value, 0) + focusTgts.reduce((s, t) => s + (t.salesValue ?? 0), 0);
   const totalTarget = focusTgts.reduce((s, t) => s + t.targetValue, 0);
 
   return {

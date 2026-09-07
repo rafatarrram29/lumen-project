@@ -13,8 +13,8 @@ import type { Translations } from "@/lib/i18n/translations";
 import { Spinner } from "./dashboardBits";
 
 type FieldKey = keyof TargetColumnMapping;
-const FIELD_ORDER: FieldKey[] = ["area", "rep", "item", "month", "value", "achPct"];
-const OPTIONAL_FIELDS: FieldKey[] = ["area", "rep", "item", "achPct"];
+const FIELD_ORDER: FieldKey[] = ["area", "rep", "item", "month", "value", "salesValue", "salesQty", "achPct"];
+const OPTIONAL_FIELDS: FieldKey[] = ["area", "rep", "item", "achPct", "salesValue", "salesQty"];
 
 /**
  * Where the upload was started from. Set when the dialog is opened inside
@@ -35,6 +35,8 @@ function fieldLabel(key: FieldKey, t: Translations): string {
     month: t.wizard.fieldMonth,
     value: t.targets.fieldTargetValue,
     achPct: t.targets.fieldAchPct,
+    salesValue: t.targets.fieldSalesValue,
+    salesQty: t.targets.fieldSalesQty,
   }[key];
 }
 
@@ -67,7 +69,16 @@ export function UploadTargetsModal({
   const savedMapping = dataset.targetColumnMapping;
   const savedMappingMatches = Boolean(
     savedMapping &&
-      [savedMapping.area, savedMapping.rep, savedMapping.item, savedMapping.month, savedMapping.value, savedMapping.achPct]
+      [
+        savedMapping.area,
+        savedMapping.rep,
+        savedMapping.item,
+        savedMapping.month,
+        savedMapping.value,
+        savedMapping.achPct,
+        savedMapping.salesValue,
+        savedMapping.salesQty,
+      ]
         .filter((v): v is string => typeof v === "string" && v !== "")
         .every((v) => sheet.headers.includes(v)),
   );
@@ -110,6 +121,8 @@ export function UploadTargetsModal({
       month: mapping.month!,
       value: mapping.value!,
       achPct: mapping.achPct ?? null,
+      salesValue: mapping.salesValue ?? null,
+      salesQty: mapping.salesQty ?? null,
     };
   }
 

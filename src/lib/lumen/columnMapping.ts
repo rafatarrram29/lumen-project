@@ -94,6 +94,18 @@ export type TargetColumnMapping = {
    * back must not turn into "the user un-mapped it".
    */
   achPct?: string | null;
+  /**
+   * This file's own actual-sales figure for the row, when it carries one —
+   * a combined Sales-vs-Target export names it something like "Sales Val"
+   * alongside its "FCT Val" plan column. Mapped, Lumen uses it as the
+   * row's own actual sales instead of matching the row against the
+   * separately-uploaded Sales dataset — see targetProgress.ts. Optional
+   * and nullable for the same reason achPct is: a mapping saved before
+   * this existed simply doesn't have the key.
+   */
+  salesValue?: string | null;
+  /** This file's own actual-sales quantity, alongside salesValue. */
+  salesQty?: string | null;
 };
 
 export type ParsedTargetRow = {
@@ -105,6 +117,10 @@ export type ParsedTargetRow = {
   /** From the file, if it had an Ach% column. Never used in place of the
    *  value Lumen computes — see targetProgress.ts. */
   achPct: number | null;
+  /** From the file, if it had its own Sales Val column — see targetProgress.ts. */
+  salesValue: number | null;
+  /** From the file, if it had its own Sales Qty column. */
+  salesQty: number | null;
 };
 
 export type Dataset = {
@@ -288,6 +304,11 @@ const TARGET_GUESS_RULES: ScoredRule<keyof TargetColumnMapping>[] = [
     bonus: ["val", "value", "amount"],
   },
   { field: "achPct", keywords: ["ach %", "ach%", "ach", "achievement", "achieved", "attainment"] },
+  // A combined Sales-vs-Target export carries its own actual-sales columns
+  // alongside the plan — "sales val"/"sales qty", never bare "val"/"qty",
+  // so these never compete with "value" for a plain "FCT Val" column.
+  { field: "salesValue", keywords: ["sales val", "sales value", "actual sales", "actual value"], bonus: ["val", "value"] },
+  { field: "salesQty", keywords: ["sales qty", "sales quantity", "actual qty", "actual quantity"], bonus: ["qty", "quantity"] },
 ];
 
 export function guessTargetMapping(headers: string[]): Partial<Record<keyof TargetColumnMapping, string>> {
@@ -332,6 +353,15 @@ export function applyTargetMapping(
     const achRaw = mapping.achPct ? r[mapping.achPct] : null;
     const achPct = achRaw != null ? percentCellValue(sheet, i, mapping.achPct!, achRaw) : null;
 
+    // Same treatment: an unreadable Sales Val/Qty cell just leaves this
+    // row without its own actual-sales figure rather than dropping the
+    // row — targetProgress.ts falls back to matching it against the
+    // separately-uploaded Sales dataset when this is null.
+    const salesValueRaw = mapping.salesValue ? r[mapping.salesValue] : null;
+    const salesValueParsed = salesValueRaw != null ? parseNumeric(salesValueRaw) : NaN;
+    const salesQtyRaw = mapping.salesQty ? r[mapping.salesQty] : null;
+    const salesQtyParsed = salesQtyRaw != null ? parseNumeric(salesQtyRaw) : NaN;
+
     rows.push({
       area: areaVal != null ? textCellValue(sheet, i, mapping.area!, areaVal) : null,
       rep: repVal != null ? textCellValue(sheet, i, mapping.rep!, repVal) : null,
@@ -339,6 +369,8 @@ export function applyTargetMapping(
       month,
       targetValue,
       achPct,
+      salesValue: Number.isNaN(salesValueParsed) ? null : salesValueParsed,
+      salesQty: Number.isNaN(salesQtyParsed) ? null : salesQtyParsed,
     });
   });
 

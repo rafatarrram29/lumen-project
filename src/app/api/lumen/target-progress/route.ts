@@ -47,6 +47,7 @@ export async function POST(request: Request) {
     target_value: number;
     ach_pct: number | null;
     is_manual: boolean;
+    sales_value: number | null;
   };
 
   // Scoping the read to exactly what this request could possibly need —
@@ -55,7 +56,7 @@ export async function POST(request: Request) {
   // this can never exclude a row inScope() would otherwise have kept.
   const { areas: allAreas, reps: allReps, needsNullAreaRows: anyScopeHasNoRep } = scopeReadFilters(scopes);
 
-  const targetsCols = "id, area, rep, item, month, target_value, ach_pct, is_manual";
+  const targetsCols = "id, area, rep, item, month, target_value, ach_pct, is_manual, sales_value";
   const noRows = Promise.resolve({ data: [] as TargetRowDb[], error: null as string | null });
 
   const [sales, targetsByArea, targetsByRep, targetsWithNoArea] = await Promise.all([
@@ -106,6 +107,7 @@ export async function POST(request: Request) {
     targetValue: Number(r.target_value),
     achPct: r.ach_pct === null || r.ach_pct === undefined ? null : Number(r.ach_pct),
     isManual: Boolean(r.is_manual),
+    salesValue: r.sales_value === null || r.sales_value === undefined ? null : Number(r.sales_value),
   }));
 
   const members = scopes.map((s) => ({
