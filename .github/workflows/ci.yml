@@ -21,4 +21,7 @@ jobs:
       - run: npm ci
       - run: npm test
       - run: npm run lint
+      # Next generates global route types (LayoutProps, PageProps) only during build/dev;
+      # generate them first so a fresh CI checkout type-checks the same as a local one.
+      - run: npx next typegen
       - run: npx tsc --noEmit
